@@ -15,7 +15,7 @@ const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm b
 export default function Leads() {
   const { user } = useAuth();
   const [data, setData] = useState({ leads: [], total: 0, totalPages: 1 });
-  const [filters, setFilters] = useState({ search: '', status: '', source: '', page: 1 });
+  const [filters, setFilters] = useState({ search: '', dateFrom: '', dateTo: '', status: '', page: 1 });
   const [salesUsers, setSalesUsers] = useState([]);
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -32,8 +32,10 @@ export default function Leads() {
     try {
       const params = { page: filters.page, limit: 15 };
       if (filters.search) params.search = filters.search;
+      if (filters.dateFrom) params.dateFrom = filters.dateFrom;
+      if (filters.dateTo) params.dateTo = filters.dateTo;
       if (filters.status) params.status = filters.status;
-      if (filters.source) params.source = filters.source;
+
       const res = await getLeads(params);
       setData(res ?? { leads: [], total: 0, totalPages: 1 });
     } catch (err) {
@@ -135,17 +137,19 @@ export default function Leads() {
         <input placeholder="Search name, phone, email..."
           className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-400 flex-1 shadow-sm"
           value={filters.search} onChange={(e) => setFilter('search', e.target.value)} />
+        <input type="date" title="From date"
+          className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-400 shadow-sm"
+          value={filters.dateFrom} onChange={(e) => setFilter('dateFrom', e.target.value)} />
+        <input type="date" title="To date"
+          className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-400 shadow-sm"
+          value={filters.dateTo} onChange={(e) => setFilter('dateTo', e.target.value)} />
         <div className="flex gap-2">
           <select value={filters.status} onChange={(e) => setFilter('status', e.target.value)}
             className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-400 shadow-sm">
             <option value="">All Statuses</option>
             {STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
           </select>
-          <select value={filters.source} onChange={(e) => setFilter('source', e.target.value)}
-            className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-400 shadow-sm">
-            <option value="">All Sources</option>
-            {SOURCES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-          </select>
+
         </div>
       </div>
 
@@ -200,8 +204,7 @@ export default function Leads() {
                       <button onClick={() => openDetail(lead)}
                         className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition"
                         style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>View</button>
-                      <button onClick={() => openEdit(lead)}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Edit</button>
+
                     </div>
                   </div>
                 </div>

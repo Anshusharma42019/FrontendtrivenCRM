@@ -11,6 +11,7 @@ import Notifications from './pages/Notifications';
 import Users from './pages/Users';
 import CNP from './pages/CNP';
 import Verification from './pages/Verification';
+import ReadyToShipment from './pages/ReadyToShipment';
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
             <Route path="cnp" element={<CNP />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="verification" element={<Verification />} />
+            <Route path="ready-to-shipment" element={<ReadyToShipment />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="users" element={
               <ProtectedRoute roles={['admin', 'manager']}>

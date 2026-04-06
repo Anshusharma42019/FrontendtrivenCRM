@@ -1,5 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getVerificationRecords, updateVerificationStatus } from '../services/task.service';
+import { useNavigate } from 'react-router-dom';
+import { getVerificationRecords, updateVerificationStatus, updateTask } from '../services/task.service';
+import { updateLead } from '../services/lead.service';
+import Modal from '../components/ui/Modal';
 
 const STATUS_STYLES = {
   pending:  'bg-amber-50 text-amber-600 border-amber-200',
@@ -8,11 +11,18 @@ const STATUS_STYLES = {
   on_hold:  'bg-gray-50 text-gray-500 border-gray-200',
 };
 
+const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition";
+
 export default function Verification() {
+  const navigate = useNavigate();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [updating, setUpdating] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -20,9 +30,7 @@ export default function Verification() {
       setRecords(Array.isArray(data) ? data : []);
     } catch (e) {
       setError(e?.response?.data?.message || e.message || 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -34,6 +42,48 @@ export default function Verification() {
       setRecords(prev => prev.map(r => r._id === id ? { ...r, status: updated.status } : r));
     } catch { /* ignore */ }
     finally { setUpdating(null); }
+  };
+
+  const openDetail = (r) => { setSelected(r); setEditMode(false); };
+
+  const startEdit = () => {
+    setEditForm({
+      description: selected.description || '',
+      cityVillageType: selected.cityVillageType || 'city',
+      cityVillage: selected.cityVillage || '',
+      houseNo: selected.houseNo || '',
+      postOffice: selected.postOffice || '',
+      district: selected.district || '',
+      landmark: selected.landmark || '',
+      pincode: selected.pincode || '',
+      state: selected.state || '',
+      reminderAt: selected.reminderAt ? selected.reminderAt.slice(0, 10) : '',
+    });
+    setEditMode(true);
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault(); setSaving(true);
+    try {
+      const taskId = selected.task?._id || selected.task;
+      await updateTask(taskId, editForm);
+      // update selected with new values so detail view shows updated data
+      setSelected(prev => ({ ...prev, ...editForm }));
+      setEditMode(false);
+      load();
+    } catch { /* ignore */ }
+    finally { setSaving(false); }
+  };
+
+  const sf = (k, v) => setEditForm(f => ({ ...f, [k]: v }));
+
+  const handleReadyToShipment = async () => {
+    try {
+      const taskId = selected.task?._id || selected.task;
+      await updateTask(taskId, { status: 'ready_to_shipment' });
+      setSelected(null);
+      navigate('/ready-to-shipment');
+    } catch { /* ignore */ }
   };
 
   if (loading) return (
@@ -79,25 +129,134 @@ export default function Verification() {
                   <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                     {r.assignedTo && <p className="text-xs text-green-600">{r.assignedTo.name}</p>}
                     {r.lead && <p className="text-xs text-gray-400">{r.lead.name} — {r.lead.phone}</p>}
-                    {r.dueDate && <p className="text-xs text-gray-400">{new Date(r.dueDate).toLocaleDateString()}</p>}
                   </div>
-                  {r.address && <p className="text-xs text-gray-400 mt-0.5">{r.address}</p>}
                 </div>
-                <select
-                  disabled={updating === r._id}
-                  value={r.status || 'pending'}
-                  onChange={(e) => handleStatusChange(r._id, e.target.value)}
-                  className={`text-xs font-semibold px-2.5 py-1.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-300 transition disabled:opacity-50 shrink-0 ${STATUS_STYLES[r.status] || STATUS_STYLES.pending}`}>
-                  <option value="pending">Pending</option>
-                  <option value="verified">Verified</option>
-                  <option value="rejected">Rejected</option>
-                  <option value="on_hold">On Hold</option>
-                </select>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => openDetail(r)}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-xl text-white transition"
+                    style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>View Detail</button>
+                  {r.lead && (
+                    <select disabled={updating === r._id} value={r.lead.status || ''}
+                      onChange={async (e) => {
+                        const val = e.target.value; setUpdating(r._id);
+                        try {
+                          await updateLead(r.lead._id, { status: val });
+                          if (val === 'closed_won') setRecords(prev => prev.filter(rec => rec._id !== r._id));
+                          else load();
+                        } catch { /* ignore */ } finally { setUpdating(null); }
+                      }}
+                      className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-300 transition disabled:opacity-50">
+                      <option value="contacted">Contacted</option>
+                      <option value="interested">Interested</option>
+                      <option value="closed_won">Converted</option>
+                      <option value="closed_lost">Lost</option>
+                    </select>
+                  )}
+                  <select disabled={updating === r._id} value={r.status || 'pending'}
+                    onChange={(e) => handleStatusChange(r._id, e.target.value)}
+                    className={`text-xs font-semibold px-2.5 py-1.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-300 transition disabled:opacity-50 ${STATUS_STYLES[r.status] || STATUS_STYLES.pending}`}>
+                    <option value="pending">Pending</option>
+                    <option value="verified">Verified</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="on_hold">On Hold</option>
+                  </select>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {selected && (
+        <Modal title={editMode ? 'Edit Task' : 'Verification Detail'} onClose={() => { setSelected(null); setEditMode(false); }}>
+          {!editMode ? (
+            <>
+              <div className="space-y-0">
+                {[
+                  { label: 'Task Title', value: selected.title },
+                  { label: 'Verification Status', value: selected.status },
+                  { label: 'Assigned To', value: selected.assignedTo?.name },
+                  { label: 'Lead Name', value: selected.lead?.name },
+                  { label: 'Lead Phone', value: selected.lead?.phone },
+                  { label: 'Lead Status', value: selected.lead?.status?.replace(/_/g, ' ') },
+                  { label: 'Description', value: selected.description },
+                  { label: selected.cityVillageType === 'village' ? 'Village' : 'City', value: selected.cityVillage },
+                  { label: 'House No', value: selected.houseNo },
+                  { label: 'Post Office', value: selected.postOffice },
+                  { label: 'District', value: selected.district },
+                  { label: 'Landmark', value: selected.landmark },
+                  { label: 'Pincode', value: selected.pincode },
+                  { label: 'State', value: selected.state },
+                  { label: 'Confirmation Call Date', value: selected.reminderAt ? new Date(selected.reminderAt).toLocaleDateString() : null },
+                ].filter(f => f.value).map(({ label, value }) => (
+                  <div key={label} className="flex gap-3 py-2.5 border-b border-gray-50 last:border-0">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-36 shrink-0 mt-0.5">{label}</p>
+                    <p className="text-sm text-gray-800 font-medium capitalize">{value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button onClick={startEdit}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition"
+                  style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)' }}>Edit</button>
+                <button onClick={handleReadyToShipment}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition"
+                  style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>Ready to Shipment</button>
+                <button onClick={() => setSelected(null)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 transition">Cancel</button>
+              </div>
+            </>
+          ) : (
+            <form onSubmit={handleSave} className="space-y-3">
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</label>
+                <textarea rows={2} className={`${inputCls} mt-1.5`} value={editForm.description} onChange={e => sf('description', e.target.value)} /></div>
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">City / Village</label>
+                <div className="flex items-center gap-3 mt-1.5 mb-1.5">
+                  <span className={`text-xs font-semibold transition ${editForm.cityVillageType === 'city' ? 'text-green-600' : 'text-gray-400'}`}>City</span>
+                  <div onClick={() => sf('cityVillageType', editForm.cityVillageType === 'city' ? 'village' : 'city')}
+                    className="relative w-12 h-6 rounded-full cursor-pointer transition-colors duration-300"
+                    style={{ background: editForm.cityVillageType === 'village' ? '#16a34a' : '#d1d5db' }}>
+                    <span className="absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-300"
+                      style={{ left: editForm.cityVillageType === 'village' ? '28px' : '4px' }} />
+                  </div>
+                  <span className={`text-xs font-semibold transition ${editForm.cityVillageType === 'village' ? 'text-green-600' : 'text-gray-400'}`}>Village</span>
+                </div>
+                <input className={inputCls} placeholder={`Enter ${editForm.cityVillageType} name`} value={editForm.cityVillage} onChange={e => sf('cityVillage', e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">House No</label>
+                  <input className={`${inputCls} mt-1.5`} placeholder="House No" value={editForm.houseNo} onChange={e => sf('houseNo', e.target.value)} /></div>
+                <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Post Office</label>
+                  <input className={`${inputCls} mt-1.5`} placeholder="Post Office" value={editForm.postOffice} onChange={e => sf('postOffice', e.target.value)} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">District</label>
+                  <input className={`${inputCls} mt-1.5`} placeholder="District" value={editForm.district} onChange={e => sf('district', e.target.value)} /></div>
+                <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Landmark</label>
+                  <input className={`${inputCls} mt-1.5`} placeholder="Landmark" value={editForm.landmark} onChange={e => sf('landmark', e.target.value)} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pincode</label>
+                  <input className={`${inputCls} mt-1.5`} placeholder="Pincode" value={editForm.pincode} onChange={e => sf('pincode', e.target.value)} /></div>
+                <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">State</label>
+                  <input className={`${inputCls} mt-1.5`} placeholder="State" value={editForm.state} onChange={e => sf('state', e.target.value)} /></div>
+              </div>
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Confirmation Call Date</label>
+                <input type="date" className={`${inputCls} mt-1.5`} value={editForm.reminderAt} onChange={e => sf('reminderAt', e.target.value)} /></div>
+              <div className="flex gap-3 pt-2">
+                <button type="submit" disabled={saving}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-60 shadow-md transition"
+                  style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+                <button type="button" onClick={() => setEditMode(false)}
+                  className="flex-1 border border-gray-200 hover:bg-gray-50 py-2.5 rounded-xl text-sm font-medium text-gray-600 transition">Back</button>
+              </div>
+            </form>
+          )}
+        </Modal>
+      )}
     </div>
   );
 }

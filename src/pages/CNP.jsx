@@ -117,7 +117,20 @@ export default function CNP() {
                     </div>
                     {task.address && <p className="text-xs text-gray-400 mt-0.5">{task.address}</p>}
                   </div>
-                  <button
+                  <div className="flex items-center gap-2 shrink-0">
+                    {task.lead && (
+                      <select
+                        disabled={updating === task._id}
+                        value={task.lead.status || ''}
+                        onChange={(e) => { setUpdating(task._id); updateLead(task.lead._id, { status: e.target.value }).then(load).catch(() => {}).finally(() => setUpdating(null)); }}
+                        className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-300 transition disabled:opacity-50">
+                        <option value="contacted">Contacted</option>
+                        <option value="interested">Interested</option>
+                        <option value="closed_won">Converted</option>
+                        <option value="closed_lost">Lost</option>
+                      </select>
+                    )}
+                    <button
                     disabled={updating === task._id || (task.cnpCount || 1) >= 3}
                     onClick={() => handleIncrementCnp(task._id)}
                     className="shrink-0 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 transition disabled:opacity-40">
@@ -126,6 +139,7 @@ export default function CNP() {
                       {task.cnpCount || 1}
                     </span>
                   </button>
+                  </div>
                 </div>
               ))}
             </div>

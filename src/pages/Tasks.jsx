@@ -10,7 +10,7 @@ import Badge from '../components/ui/Badge';
 const TYPES = ['call', 'follow_up', 'meeting', 'email', 'task'];
 const PRIORITIES = ['low', 'medium', 'high'];
 const STATUSES = ['verification', 'cnp', 'cancel_call'];
-const EMPTY = { title: '', description: '', type: 'task', lead: '', assignedTo: '', dueDate: '', priority: 'medium', reminderAt: '', address: '', status: 'pending' };
+const EMPTY = { title: '', description: '', type: 'task', lead: '', assignedTo: '', dueDate: '', priority: 'medium', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending' };
 
 const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition";
 
@@ -75,7 +75,10 @@ export default function Tasks() {
     setForm({ title: task.title, description: task.description || '', type: task.type,
       lead: task.lead?._id || '', assignedTo: task.assignedTo?._id || '',
       dueDate: task.dueDate?.slice(0, 16) || '', priority: task.priority,
-      reminderAt: task.reminderAt?.slice(0, 16) || '', address: task.address || '',
+      reminderAt: task.reminderAt?.slice(0, 16) || '',
+      cityVillageType: task.cityVillageType || 'city', cityVillage: task.cityVillage || '', houseNo: task.houseNo || '',
+      postOffice: task.postOffice || '', district: task.district || '',
+      landmark: task.landmark || '', pincode: task.pincode || '', state: task.state || '',
       status: task.status || 'pending' });
     setError(''); setModal('edit');
   };
@@ -153,14 +156,9 @@ export default function Tasks() {
 
       {/* Filters */}
       {tab === 'all' && (
-        <div className="flex gap-2">
-          <select value={filters.status} onChange={(e) => setFilters(f => ({ ...f, status: e.target.value }))}
-            className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-400 shadow-sm">
-            <option value="">All Statuses</option>
-            {['pending', 'completed', 'overdue', 'cancelled'].map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+        <div className="flex justify-end">
           <select value={filters.type} onChange={(e) => setFilters(f => ({ ...f, type: e.target.value }))}
-            className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-400 shadow-sm">
+            className="w-fit border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-400 shadow-sm">
             <option value="">All Types</option>
             {TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
           </select>
@@ -197,21 +195,7 @@ export default function Tasks() {
                     <Badge value={task.status} />
                     <Badge value={task.priority} />
                   </div>
-                  {/* Lead status update */}
-                  {task.lead && (
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-xs text-gray-400 shrink-0">Lead:</span>
-                      <select
-                        value={task.lead.status || ''}
-                        onChange={(e) => handleLeadStatus(task.lead._id, e.target.value)}
-                        className="text-xs border border-gray-200 rounded-xl px-2.5 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 font-medium">
-                        <option value="contacted">Contacted</option>
-                        <option value="interested">Interested</option>
-                        <option value="closed_won">Converted</option>
-                        <option value="closed_lost">Lost</option>
-                      </select>
-                    </div>
-                  )}
+
                 </div>
                 <div className="flex flex-row gap-1 shrink-0 items-center">
                   <button onClick={() => openDetail(task)}
@@ -267,7 +251,12 @@ export default function Tasks() {
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, label: 'Assigned To', value: selected.assignedTo?.name },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>, label: 'Lead', value: selected.lead?.name },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>, label: 'Description', value: selected.description },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'Address', value: selected.address },
+              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: selected.cityVillageType === 'village' ? 'Village' : 'City', value: selected.cityVillage },
+              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'House No', value: selected.houseNo },
+              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'Post Office', value: selected.postOffice },
+              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'District', value: selected.district },
+              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'Landmark', value: selected.landmark },
+              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'Pincode', value: selected.pincode },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>, label: 'Reminder', value: selected.reminderAt ? new Date(selected.reminderAt).toLocaleString() : null },
             ].filter(f => f.value).map(({ icon, label, value }) => (
               <div key={label} className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
@@ -316,17 +305,57 @@ export default function Tasks() {
         <Modal title={modal === 'edit' ? 'Edit Task' : 'New Task'} onClose={() => setModal(null)}>
           {error && <div className="bg-red-50 border border-red-100 text-red-600 text-sm p-3 rounded-xl mb-4">{error}</div>}
           <form onSubmit={handleSubmit} className="space-y-3">
-            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Title *</label>
-              <input required className={`${inputCls} mt-1.5`} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
+            {/* Row 1: Title + Confirmation Call Date */}
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Title *</label>
+                <input required className={`${inputCls} mt-1.5`} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Confirmation Call Date</label>
+                <input type="date" className={`${inputCls} mt-1.5`} value={form.reminderAt ? form.reminderAt.slice(0, 10) : ''} onChange={(e) => setForm({ ...form, reminderAt: e.target.value })} /></div>
+            </div>
+
+            {/* Description full width */}
             <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</label>
               <textarea rows={2} className={`${inputCls} mt-1.5`} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
 
-            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Due Date *</label>
-              <input required type="datetime-local" className={`${inputCls} mt-1.5`} value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></div>
-            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Confirmation Call Date</label>
-              <input type="date" className={`${inputCls} mt-1.5`} value={form.reminderAt ? form.reminderAt.slice(0, 10) : ''} onChange={(e) => setForm({ ...form, reminderAt: e.target.value })} /></div>
-            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Address</label>
-              <input className={`${inputCls} mt-1.5`} placeholder="Enter address..." value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
+            {/* City/Village toggle + input */}
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">City / Village</label>
+              <div className="flex items-center gap-3 mt-1.5 mb-1.5">
+                <span className={`text-xs font-semibold transition ${form.cityVillageType === 'city' ? 'text-green-600' : 'text-gray-400'}`}>City</span>
+                <div onClick={() => setForm({ ...form, cityVillageType: form.cityVillageType === 'city' ? 'village' : 'city' })}
+                  className="relative w-12 h-6 rounded-full cursor-pointer transition-colors duration-300"
+                  style={{ background: form.cityVillageType === 'village' ? '#16a34a' : '#d1d5db' }}>
+                  <span className="absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-300"
+                    style={{ left: form.cityVillageType === 'village' ? '28px' : '4px' }} />
+                </div>
+                <span className={`text-xs font-semibold transition ${form.cityVillageType === 'village' ? 'text-green-600' : 'text-gray-400'}`}>Village</span>
+              </div>
+              <input className={`${inputCls}`} placeholder={`Enter ${form.cityVillageType} name`} value={form.cityVillage} onChange={(e) => setForm({ ...form, cityVillage: e.target.value })} />
+            </div>
+
+            {/* Row: House No + Post Office */}
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">House No</label>
+                <input className={`${inputCls} mt-1.5`} placeholder="House No" value={form.houseNo} onChange={(e) => setForm({ ...form, houseNo: e.target.value })} /></div>
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Post Office</label>
+                <input className={`${inputCls} mt-1.5`} placeholder="Post Office" value={form.postOffice} onChange={(e) => setForm({ ...form, postOffice: e.target.value })} /></div>
+            </div>
+
+            {/* Row: District + Landmark */}
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">District</label>
+                <input className={`${inputCls} mt-1.5`} placeholder="District" value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} /></div>
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Landmark</label>
+                <input className={`${inputCls} mt-1.5`} placeholder="Landmark" value={form.landmark} onChange={(e) => setForm({ ...form, landmark: e.target.value })} /></div>
+            </div>
+
+            {/* Pincode + State */}
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pincode</label>
+                <input className={`${inputCls} mt-1.5`} placeholder="Pincode" value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} /></div>
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">State</label>
+                <input className={`${inputCls} mt-1.5`} placeholder="State" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} /></div>
+            </div>
 
             {modal === 'edit' && (
               <div>
