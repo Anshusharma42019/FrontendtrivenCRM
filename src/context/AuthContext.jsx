@@ -1,0 +1,34 @@
+import { createContext, useContext, useState } from 'react';
+import API from '../api';
+
+const AuthContext = createContext();
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('crmUser') || 'null'));
+
+  const login = async (email, password) => {
+    const { data } = await API.post('/auth/login', { email, password });
+    localStorage.setItem('crmUser', JSON.stringify(data.data.user));
+    localStorage.setItem('crmTokens', JSON.stringify(data.data.tokens));
+    setUser(data.data.user);
+    return data.data.user;
+  };
+
+  const logout = async () => {
+    try {
+      const tokens = JSON.parse(localStorage.getItem('crmTokens') || 'null');
+      await API.post('/auth/logout', { refreshToken: tokens?.refresh?.token });
+    } catch { /* ignore */ }
+    localStorage.removeItem('crmUser');
+    localStorage.removeItem('crmTokens');
+    setUser(null);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => useContext(AuthContext);

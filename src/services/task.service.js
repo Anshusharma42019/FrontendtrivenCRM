@@ -1,0 +1,12 @@
+import API from '../api';
+
+export const getTasks = (params) => API.get('/tasks', { params }).then(r => r.data.data);
+export const getDailyTasks = () => API.get('/tasks/daily').then(r => r.data.data);
+export const createTask = (data) => API.post('/tasks', data).then(r => r.data.data);
+export const updateTask = (id, data) => API.patch(`/tasks/${id}`, data).then(r => r.data.data);
+export const deleteTask = (id) => API.delete(`/tasks/${id}`);
+export const addTaskNote = (id, text) => API.post(`/tasks/${id}/notes`, { text }).then(r => r.data.data);
+export const getCnpRecords = () => API.get('/cnp').then(r => r.data.data);
+export const incrementCnpCount = (id) => API.patch(`/cnp/${id}/increment`).then(r => r.data.data);
+export const getVerificationRecords = () => API.get('/verification').then(r => r.data.data);
+export const updateVerificationStatus = (id, status) => API.patch(`/verification/${id}`, { status }).then(r => r.data.data);
