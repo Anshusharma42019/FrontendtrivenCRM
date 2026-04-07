@@ -39,7 +39,14 @@ export default function Verification() {
     setUpdating(id);
     try {
       const updated = await updateVerificationStatus(id, status);
-      setRecords(prev => prev.map(r => r._id === id ? { ...r, status: updated.status } : r));
+      if (status === 'verified') {
+        const record = records.find(r => r._id === id);
+        const taskId = record?.task?._id || record?.task;
+        if (taskId) await updateTask(taskId, { status: 'ready_to_shipment' });
+        setRecords(prev => prev.filter(r => r._id !== id));
+      } else {
+        setRecords(prev => prev.map(r => r._id === id ? { ...r, status: updated.status } : r));
+      }
     } catch { /* ignore */ }
     finally { setUpdating(null); }
   };
@@ -141,8 +148,11 @@ export default function Verification() {
                         const val = e.target.value; setUpdating(r._id);
                         try {
                           await updateLead(r.lead._id, { status: val });
-                          if (val === 'closed_won') setRecords(prev => prev.filter(rec => rec._id !== r._id));
-                          else load();
+                          if (val === 'closed_won') {
+                            const taskId = r.task?._id || r.task;
+                            await updateTask(taskId, { status: 'ready_to_shipment' });
+                            setRecords(prev => prev.filter(rec => rec._id !== r._id));
+                          } else load();
                         } catch { /* ignore */ } finally { setUpdating(null); }
                       }}
                       className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-300 transition disabled:opacity-50">

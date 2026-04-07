@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { getLeads, updateLead, markCNP, unmarkCNP } from '../services/lead.service';
-import { getCnpRecords, incrementCnpCount } from '../services/task.service';
+import { getCnpRecords, incrementCnpCount, updateTask } from '../services/task.service';
 
 export default function CNP() {
   const [leads, setLeads] = useState([]);
@@ -122,7 +122,19 @@ export default function CNP() {
                       <select
                         disabled={updating === task._id}
                         value={task.lead.status || ''}
-                        onChange={(e) => { setUpdating(task._id); updateLead(task.lead._id, { status: e.target.value }).then(load).catch(() => {}).finally(() => setUpdating(null)); }}
+                        onChange={async (e) => {
+                          const val = e.target.value;
+                          setUpdating(task._id);
+                          try {
+                            await updateLead(task.lead._id, { status: val });
+                            if (val === 'closed_won') {
+                              const taskId = task.task?._id || task.task;
+                              if (taskId) await updateTask(taskId, { status: 'verification' });
+                            }
+                            load();
+                          } catch { /* ignore */ }
+                          finally { setUpdating(null); }
+                        }}
                         className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-300 transition disabled:opacity-50">
                         <option value="contacted">Contacted</option>
                         <option value="interested">Interested</option>

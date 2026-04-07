@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getUsers, createUser, updateUser, deleteUser } from '../services/user.service';
+import { getUsers, createUser, updateUser, deleteUser, getStaffShipmentCounts } from '../services/user.service';
+import API from '../api';
 import Modal from '../components/ui/Modal';
 import Badge from '../components/ui/Badge';
 
@@ -14,6 +15,10 @@ const ROLE_GRADIENT = {
 
 export default function Users() {
   const [data, setData] = useState({ results: [], totalResults: 0 });
+  const [shipmentCounts, setShipmentCounts] = useState({});
+  const [viewUser, setViewUser] = useState(null);
+  const [viewTasks, setViewTasks] = useState([]);
+  const [viewLoading, setViewLoading] = useState(false);
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState(EMPTY);
@@ -21,10 +26,43 @@ export default function Users() {
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
-    try { const res = await getUsers(); setData(res); } catch { /* ignore */ }
+    getUsers().then(res => setData(res)).catch(() => {});
+    // Load shipment counts by fetching all ready_to_shipment tasks and grouping by assignedTo
+    API.get('/tasks', { params: { status: 'ready_to_shipment' } })
+      .then(res => {
+        const tasks = Array.isArray(res.data.data) ? res.data.data : [];
+        const counts = tasks.reduce((acc, t) => {
+          const id = t.assignedTo?._id || t.assignedTo;
+          if (id) acc[String(id)] = (acc[String(id)] || 0) + 1;
+          return acc;
+        }, {});
+        setShipmentCounts(counts);
+      }).catch(() => {
+        getStaffShipmentCounts().then(counts => setShipmentCounts(counts || {})).catch(() => {});
+      });
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const openView = async (u) => {
+    setViewUser(u); setViewTasks([]); setViewLoading(true); setModal('view');
+    try {
+      // Try dedicated endpoint first, fallback to tasks endpoint
+      let tasks = [];
+      try {
+        const res = await API.get(`/ready-to-shipment/by-user/${u._id}`);
+        tasks = res.data.data || [];
+      } catch {
+        const res = await API.get('/tasks', { params: { status: 'ready_to_shipment', assignedTo: u._id } });
+        tasks = Array.isArray(res.data.data) ? res.data.data : [];
+      }
+      setViewTasks(tasks);
+    } catch (e) {
+      console.error('shipment fetch error:', e.response?.data || e.message);
+    } finally {
+      setViewLoading(false);
+    }
+  };
 
   const openCreate = () => { setForm(EMPTY); setError(''); setModal('create'); };
   const openEdit = (u) => {
@@ -98,7 +136,18 @@ export default function Users() {
                   <Badge value={u.role} />
                   <span className="text-xs text-gray-300">{new Date(u.createdAt).toLocaleDateString()}</span>
                 </div>
+                {shipmentCounts[u._id] > 0 && (
+                  <div className="flex items-center gap-1.5 mb-3 px-3 py-1.5 rounded-xl bg-green-50 border border-green-100">
+                    <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    <span className="text-xs font-semibold text-green-700">{shipmentCounts[u._id]} Ready to Shipment</span>
+                  </div>
+                )}
                 <div className="flex gap-2 pt-3 border-t border-gray-50">
+                  <button onClick={() => openView(u)}
+                    className="flex-1 text-xs font-semibold text-white py-2 rounded-xl transition"
+                    style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
+                    View
+                  </button>
                   <button onClick={() => openEdit(u)}
                     className="flex-1 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 py-2 rounded-xl transition">
                     Edit
@@ -111,6 +160,85 @@ export default function Users() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* View Shipment Tasks Modal */}
+      {modal === 'view' && viewUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+            style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
+            {/* Dark header with close button */}
+            <div className="px-6 py-5" style={{ background: 'linear-gradient(135deg, #0d1f0d, #1a3a1a)' }}>
+              <div className="flex items-center gap-4">
+                <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${ROLE_GRADIENT[viewUser.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-lg font-bold shadow-lg uppercase`}>
+                  {viewUser.name?.charAt(0)}
+                </div>
+                <div className="flex-1">
+                  <p className="text-white font-bold text-base">{viewUser.name}</p>
+                  <p className="text-green-300 text-xs mt-0.5">{viewUser.email}</p>
+                </div>
+                <button onClick={() => setModal(null)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-green-300 hover:text-white hover:bg-white/10 transition text-xl leading-none">
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5 max-h-96 overflow-y-auto">
+              {viewLoading ? (
+                <div className="space-y-2">
+                  {[1,2].map(i => (
+                    <div key={i} className="rounded-2xl overflow-hidden animate-pulse" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
+                      <div className="h-1 bg-green-200" />
+                      <div className="px-4 py-3">
+                        <div className="flex justify-between mb-2"><div className="h-3 w-32 bg-gray-200 rounded-full" /><div className="h-4 w-12 bg-gray-100 rounded-full" /></div>
+                        <div className="h-2.5 w-24 bg-gray-100 rounded-full mb-1.5" />
+                        <div className="h-2.5 w-40 bg-gray-100 rounded-full" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : viewTasks.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-sm text-gray-400">No ready to shipment tasks</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {viewTasks.map((t, i) => (
+                    <div key={t._id || i} className="rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
+                      <div className="h-1 bg-gradient-to-r from-green-400 to-emerald-500" />
+                      <div className="px-4 py-3 bg-white">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-semibold text-gray-800">{t.title}</p>
+                          <span className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                            t.priority === 'high' ? 'bg-red-50 text-red-500' :
+                            t.priority === 'medium' ? 'bg-amber-50 text-amber-600' :
+                            'bg-gray-100 text-gray-500'
+                          }`}>{t.priority}</span>
+                        </div>
+                        {t.lead?.name && (
+                          <div className="flex items-center gap-1 mt-1.5">
+                            <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            <span className="text-xs text-gray-500">{t.lead.name}</span>
+                            {t.lead.phone && <span className="text-xs text-gray-400"> · {t.lead.phone}</span>}
+                          </div>
+                        )}
+                        {(t.cityVillage || t.district) && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                            <span className="text-xs text-gray-400">{[t.houseNo, t.cityVillage, t.district, t.state, t.pincode].filter(Boolean).join(', ')}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
