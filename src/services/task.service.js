@@ -9,4 +9,4 @@ export const addTaskNote = (id, text) => API.post(`/tasks/${id}/notes`, { text }
 export const getCnpRecords = () => API.get('/cnp').then(r => r.data.data);
 export const incrementCnpCount = (id) => API.patch(`/cnp/${id}/increment`).then(r => r.data.data);
 export const getVerificationRecords = () => API.get('/verification').then(r => r.data.data);
-export const updateVerificationStatus = (id, status) => API.patch(`/verification/${id}`, { status }).then(r => r.data.data);
+export const updateVerificationStatus = (id, status, onHoldUntil) => API.patch(`/verification/${id}`, { status, ...(onHoldUntil && { onHoldUntil }) }).then(r => r.data.data);

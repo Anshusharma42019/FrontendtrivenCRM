@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLocation } from 'react-router-dom';
 import { getTasks, getDailyTasks, createTask, updateTask, deleteTask, addTaskNote } from '../services/task.service';
 import API from '../api';
 import { getLeads, updateLead } from '../services/lead.service';
@@ -10,7 +11,7 @@ import Badge from '../components/ui/Badge';
 const TYPES = ['call', 'follow_up', 'meeting', 'email', 'task'];
 const PRIORITIES = ['low', 'medium', 'high'];
 const STATUSES = ['verification', 'cnp', 'cancel_call'];
-const EMPTY = { title: '', description: '', type: 'task', lead: '', assignedTo: '', dueDate: '', priority: 'medium', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending' };
+const EMPTY = { title: '', description: '', problem: '', type: 'task', lead: '', assignedTo: '', dueDate: '', priority: 'medium', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending' };
 
 const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition";
 
@@ -43,7 +44,17 @@ export default function Tasks() {
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
 
+  const location = useLocation();
   const canManage = user?.role === 'admin' || user?.role === 'manager';
+
+  useEffect(() => {
+    if (location.state?.leadId) {
+      setForm({ ...EMPTY, lead: location.state.leadId, assignedTo: location.state.assignedTo || '' });
+      setError('');
+      setModal('create');
+      window.history.replaceState({}, '');
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoadError('');
@@ -72,7 +83,7 @@ export default function Tasks() {
   const openCreate = () => { setForm(EMPTY); setError(''); setModal('create'); };
   const openEdit = (task) => {
     setSelected(task);
-    setForm({ title: task.title, description: task.description || '', type: task.type,
+    setForm({ title: task.title, description: task.description || '', problem: task.problem || '', type: task.type,
       lead: task.lead?._id || '', assignedTo: task.assignedTo?._id || '',
       dueDate: task.dueDate?.slice(0, 16) || '', priority: task.priority,
       reminderAt: task.reminderAt?.slice(0, 16) || '',
@@ -111,8 +122,13 @@ export default function Tasks() {
       if (!payload.lead) delete payload.lead;
       if (!payload.assignedTo) delete payload.assignedTo;
       if (!payload.reminderAt) delete payload.reminderAt;
-      if (modal === 'edit') await updateTask(selected._id, payload);
-      else await createTask(payload);
+      if (modal === 'edit') {
+        await updateTask(selected._id, payload);
+        // if Not Interested selected, move lead to closed_lost in pipeline
+        if (payload.status === 'cancel_call' && selected.lead?._id) {
+          await updateLead(selected.lead._id, { status: 'closed_lost' }).catch(() => {});
+        }
+      } else await createTask(payload);
       setModal(null); load();
     } catch (err) { setError(err.response?.data?.message || 'Something went wrong'); }
     finally { setLoading(false); }
@@ -251,6 +267,7 @@ export default function Tasks() {
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, label: 'Assigned To', value: selected.assignedTo?.name },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>, label: 'Lead', value: selected.lead?.name },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>, label: 'Description', value: selected.description },
+              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, label: 'Problem', value: selected.problem },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: selected.cityVillageType === 'village' ? 'Village' : 'City', value: selected.cityVillage },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'House No', value: selected.houseNo },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'Post Office', value: selected.postOffice },
@@ -313,7 +330,9 @@ export default function Tasks() {
                 <input type="date" className={`${inputCls} mt-1.5`} value={form.reminderAt ? form.reminderAt.slice(0, 10) : ''} onChange={(e) => setForm({ ...form, reminderAt: e.target.value })} /></div>
             </div>
 
-            {/* Description full width */}
+            {/* Description and Problem */}
+            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Problem</label>
+              <textarea rows={2} className={`${inputCls} mt-1.5 mb-3`} value={form.problem} onChange={(e) => setForm({ ...form, problem: e.target.value })} /></div>
             <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</label>
               <textarea rows={2} className={`${inputCls} mt-1.5`} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
 
@@ -369,7 +388,7 @@ export default function Tasks() {
                           ? 'bg-green-600 text-white border-green-600'
                           : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-green-400'
                       }`}>
-                      {s === 'cnp' ? 'CNP' : s === 'cancel_call' ? 'Cancel Call' : 'Verification'}
+                      {s === 'cnp' ? 'CNP' : s === 'cancel_call' ? 'Not Interested' : 'Verification'}
                     </button>
                   ))}
                 </div>

@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import trivenLogo from '../assets/Triven_logo.png';
 import { useAuth } from '../context/AuthContext';
 
 const NAV = [
@@ -21,9 +22,8 @@ const NAV = [
 ];
 
 export default function Sidebar({ open, onClose, unreadCount = 0 }) {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const visible = NAV.filter(item => item.roles.includes(user?.role));
-  const initials = user?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
   return (
     <>
@@ -33,12 +33,9 @@ export default function Sidebar({ open, onClose, unreadCount = 0 }) {
         style={{ background: 'linear-gradient(180deg, #0d1f0d 0%, #0f2a0f 50%, #0d1f0d 100%)' }}>
 
         {/* Logo */}
-        <div className="px-6 py-5 border-b border-white/5">
+        <div className="px-4 py-5 border-b border-white/5">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, #16a34a, #4ade80)' }}>
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" strokeLinecap="round"/><path d="M12 6v6l4 2" strokeLinecap="round"/></svg>
-            </div>
+            <img src={trivenLogo} alt="Triven Logo" className="w-10 h-10 object-contain rounded-xl" />
             <div>
               <div className="text-white font-bold text-base tracking-tight">Triven</div>
               <div className="text-green-400/60 text-xs">Ayurveda CRM</div>
@@ -66,24 +63,6 @@ export default function Sidebar({ open, onClose, unreadCount = 0 }) {
             </NavLink>
           ))}
         </nav>
-
-        {/* User */}
-        <div className="px-3 py-4 border-t border-white/5">
-          <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/5 mb-2">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white"
-              style={{ background: 'linear-gradient(135deg, #16a34a, #4ade80)' }}>
-              {initials}
-            </div>
-            <div className="min-w-0">
-              <div className="text-white text-xs font-semibold truncate">{user?.name}</div>
-              <div className="text-green-400/60 text-[10px] capitalize">{user?.role}</div>
-            </div>
-          </div>
-          <button onClick={logout}
-            className="w-full text-xs text-white/40 hover:text-red-400 hover:bg-red-500/10 py-2 rounded-xl transition-all duration-150 font-medium">
-            Sign out
-          </button>
-        </div>
       </aside>
     </>
   );

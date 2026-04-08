@@ -23,6 +23,8 @@ export default function Verification() {
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [saving, setSaving] = useState(false);
+  const [onHoldDate, setOnHoldDate] = useState('');
+  const [showOnHoldPicker, setShowOnHoldPicker] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -142,34 +144,6 @@ export default function Verification() {
                   <button onClick={() => openDetail(r)}
                     className="text-xs font-semibold px-3 py-1.5 rounded-xl text-white transition"
                     style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>View Detail</button>
-                  {r.lead && (
-                    <select disabled={updating === r._id} value={r.lead.status || ''}
-                      onChange={async (e) => {
-                        const val = e.target.value; setUpdating(r._id);
-                        try {
-                          await updateLead(r.lead._id, { status: val });
-                          if (val === 'closed_won') {
-                            const taskId = r.task?._id || r.task;
-                            await updateTask(taskId, { status: 'ready_to_shipment' });
-                            setRecords(prev => prev.filter(rec => rec._id !== r._id));
-                          } else load();
-                        } catch { /* ignore */ } finally { setUpdating(null); }
-                      }}
-                      className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-300 transition disabled:opacity-50">
-                      <option value="contacted">Contacted</option>
-                      <option value="interested">Interested</option>
-                      <option value="closed_won">Converted</option>
-                      <option value="closed_lost">Lost</option>
-                    </select>
-                  )}
-                  <select disabled={updating === r._id} value={r.status || 'pending'}
-                    onChange={(e) => handleStatusChange(r._id, e.target.value)}
-                    className={`text-xs font-semibold px-2.5 py-1.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-300 transition disabled:opacity-50 ${STATUS_STYLES[r.status] || STATUS_STYLES.pending}`}>
-                    <option value="pending">Pending</option>
-                    <option value="verified">Verified</option>
-                    <option value="rejected">Rejected</option>
-                    <option value="on_hold">On Hold</option>
-                  </select>
                 </div>
               </div>
             ))}
@@ -178,45 +152,106 @@ export default function Verification() {
       </div>
 
       {selected && (
-        <Modal title={editMode ? 'Edit Task' : 'Verification Detail'} onClose={() => { setSelected(null); setEditMode(false); }}>
+        <Modal title="" hideHeader onClose={() => { setSelected(null); setEditMode(false); }}>
           {!editMode ? (
             <>
-              <div className="space-y-0">
+              {/* Header Banner with close button */}
+              <div className="-mx-6 -mt-5 mb-5 px-6 py-5 rounded-t-2xl"
+                style={{ background: 'linear-gradient(135deg, #1e3a2f, #15803d)' }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-white font-bold text-lg">
+                    {selected.lead?.name?.charAt(0)?.toUpperCase() || 'V'}
+                  </div>
+                  <div>
+                    <p className="text-white font-bold text-base">{selected.lead?.name || selected.title}</p>
+                    <p className="text-green-200 text-xs mt-0.5">{selected.lead?.phone}</p>
+                  </div>
+                  <div className="ml-auto flex items-center gap-2">
+                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                      selected.status === 'on_hold' ? 'bg-gray-500 text-white' :
+                      selected.status === 'verified' ? 'bg-green-400 text-white' :
+                      selected.status === 'rejected' ? 'bg-red-400 text-white' :
+                      'bg-amber-400 text-white'
+                    }`}>{selected.status?.replace(/_/g, ' ')}</span>
+                    <button onClick={() => { setSelected(null); setEditMode(false); }}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/20 text-white hover:bg-white/30 transition text-lg leading-none">×</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Info Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
                 {[
                   { label: 'Task Title', value: selected.title },
-                  { label: 'Verification Status', value: selected.status },
                   { label: 'Assigned To', value: selected.assignedTo?.name },
-                  { label: 'Lead Name', value: selected.lead?.name },
-                  { label: 'Lead Phone', value: selected.lead?.phone },
                   { label: 'Lead Status', value: selected.lead?.status?.replace(/_/g, ' ') },
-                  { label: 'Description', value: selected.description },
+                  { label: 'Call Date', value: selected.reminderAt ? new Date(selected.reminderAt).toLocaleDateString() : null },
                   { label: selected.cityVillageType === 'village' ? 'Village' : 'City', value: selected.cityVillage },
-                  { label: 'House No', value: selected.houseNo },
-                  { label: 'Post Office', value: selected.postOffice },
                   { label: 'District', value: selected.district },
-                  { label: 'Landmark', value: selected.landmark },
-                  { label: 'Pincode', value: selected.pincode },
                   { label: 'State', value: selected.state },
-                  { label: 'Confirmation Call Date', value: selected.reminderAt ? new Date(selected.reminderAt).toLocaleDateString() : null },
+                  { label: 'Pincode', value: selected.pincode },
+                  { label: 'House No', value: selected.houseNo },
+                  { label: 'Landmark', value: selected.landmark },
+                  { label: 'Post Office', value: selected.postOffice },
                 ].filter(f => f.value).map(({ label, value }) => (
-                  <div key={label} className="flex gap-3 py-2.5 border-b border-gray-50 last:border-0">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-36 shrink-0 mt-0.5">{label}</p>
-                    <p className="text-sm text-gray-800 font-medium capitalize">{value}</p>
+                  <div key={label} className="bg-gray-50 rounded-xl px-3 py-2.5" style={{ border: '1px solid rgba(0,0,0,0.05)' }}>
+                    <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-0.5">{label}</p>
+                    <p className="text-sm text-gray-800 font-semibold capitalize">{value}</p>
                   </div>
                 ))}
               </div>
-              <div className="pt-4 flex gap-3">
+
+              {selected.description && (
+                <div className="bg-blue-50 rounded-xl px-4 py-3 mb-4" style={{ border: '1px solid rgba(59,130,246,0.15)' }}>
+                  <p className="text-xs text-blue-400 font-semibold uppercase tracking-wide mb-1">Description</p>
+                  <p className="text-sm text-gray-700">{selected.description}</p>
+                </div>
+              )}
+
+              <div className="pt-2 flex gap-2">
                 <button onClick={startEdit}
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition"
                   style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)' }}>Edit</button>
                 <button onClick={handleReadyToShipment}
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition"
                   style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>Ready to Shipment</button>
+                {showOnHoldPicker ? (
+                  <div className="flex-1 flex gap-2 items-center">
+                    <input type="date" value={onHoldDate} onChange={e => setOnHoldDate(e.target.value)}
+                      min={new Date().toISOString().slice(0,10)}
+                      className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400" />
+                    <button onClick={async () => {
+                      if (!onHoldDate) return;
+                      setUpdating(selected._id);
+                      try {
+                        await updateVerificationStatus(selected._id, 'on_hold', onHoldDate);
+                        if (selected.lead?._id) await updateLead(selected.lead._id, { status: 'on_hold' });
+                        setSelected(null); setShowOnHoldPicker(false); setOnHoldDate('');
+                        navigate('/pipeline', { state: { filter: 'on_hold' } });
+                      } catch { /* ignore */ }
+                      finally { setUpdating(null); }
+                    }}
+                      disabled={!onHoldDate || updating === selected._id}
+                      className="px-3 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-60"
+                      style={{ background: 'linear-gradient(135deg, #6b7280, #4b5563)' }}>Confirm</button>
+                    <button onClick={() => { setShowOnHoldPicker(false); setOnHoldDate(''); }}
+                      className="px-3 py-2 rounded-xl text-sm text-gray-500 border border-gray-200 hover:bg-gray-50">✕</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setShowOnHoldPicker(true)}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition"
+                    style={{ background: 'linear-gradient(135deg, #6b7280, #4b5563)' }}>On Hold</button>
+                )}
                 <button onClick={() => setSelected(null)}
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 transition">Cancel</button>
               </div>
             </>
           ) : (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-gray-800 text-base">Edit Task</h3>
+                <button onClick={() => setEditMode(false)} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition text-lg">×</button>
+              </div>
             <form onSubmit={handleSave} className="space-y-3">
               <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</label>
                 <textarea rows={2} className={`${inputCls} mt-1.5`} value={editForm.description} onChange={e => sf('description', e.target.value)} /></div>
@@ -264,6 +299,7 @@ export default function Verification() {
                   className="flex-1 border border-gray-200 hover:bg-gray-50 py-2.5 rounded-xl text-sm font-medium text-gray-600 transition">Back</button>
               </div>
             </form>
+            </>
           )}
         </Modal>
       )}
