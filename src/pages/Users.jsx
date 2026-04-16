@@ -3,6 +3,7 @@ import { getUsers, createUser, updateUser, deleteUser, getStaffShipmentCounts } 
 import API from '../api';
 import Modal from '../components/ui/Modal';
 import Badge from '../components/ui/Badge';
+import { useAuth } from '../context/AuthContext';
 
 const ROLES = ['manager', 'sales'];
 const EMPTY = { name: '', phone: '', password: '', role: 'manager' };
@@ -14,6 +15,8 @@ const ROLE_GRADIENT = {
 };
 
 export default function Users() {
+  const { user } = useAuth();
+  const canManage = user?.role === 'admin' || user?.role === 'manager';
   const [data, setData] = useState({ results: [], totalResults: 0 });
   const [shipmentCounts, setShipmentCounts] = useState({});
   const [viewUser, setViewUser] = useState(null);
@@ -148,14 +151,18 @@ export default function Users() {
                     style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
                     View
                   </button>
-                  <button onClick={() => openEdit(u)}
-                    className="flex-1 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 py-2 rounded-xl transition">
-                    Edit
-                  </button>
-                  <button onClick={() => handleDelete(u._id)}
-                    className="flex-1 text-xs font-semibold text-red-500 bg-red-50 hover:bg-red-100 py-2 rounded-xl transition">
-                    Delete
-                  </button>
+                  {canManage && (
+                    <>
+                      <button onClick={() => openEdit(u)}
+                        className="flex-1 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 py-2 rounded-xl transition">
+                        Edit
+                      </button>
+                      <button onClick={() => handleDelete(u._id)}
+                        className="flex-1 text-xs font-semibold text-red-500 bg-red-50 hover:bg-red-100 py-2 rounded-xl transition">
+                        Delete
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

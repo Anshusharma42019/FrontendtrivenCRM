@@ -28,6 +28,7 @@ export default function Leads() {
 
   const navigate = useNavigate();
   const canManage = user?.role === 'admin' || user?.role === 'manager';
+  const canEdit = canManage || user?.role === 'sales';
 
   const load = useCallback(async () => {
     setLoadError('');
@@ -39,7 +40,8 @@ export default function Leads() {
       if (filters.status) params.status = filters.status;
 
       const res = await getLeads(params);
-      setData(res ?? { leads: [], total: 0, totalPages: 1 });
+      const filtered = res ? { ...res, leads: res.leads.filter(l => l.status !== 'follow_up') } : { leads: [], total: 0, totalPages: 1 };
+      setData(filtered);
     } catch (err) {
       setLoadError(err.response?.data?.message || err.message || 'Failed to load leads');
     }
@@ -209,6 +211,10 @@ export default function Leads() {
                       <button onClick={() => openDetail(lead)}
                         className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition"
                         style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>View</button>
+                      {canEdit && (
+                        <button onClick={() => openEdit(lead)}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition">Edit</button>
+                      )}
                     </div>
                   </div>
                 </div>

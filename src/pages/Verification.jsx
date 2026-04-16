@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getVerificationRecords, updateVerificationStatus, updateTask } from '../services/task.service';
+import { getVerificationRecords, updateVerificationStatus, updateVerificationRecord, updateTask } from '../services/task.service';
 import { updateLead } from '../services/lead.service';
 import Modal from '../components/ui/Modal';
 
@@ -27,6 +27,7 @@ export default function Verification() {
   const [onHoldDate, setOnHoldDate] = useState('');
   const [showOnHoldPicker, setShowOnHoldPicker] = useState(false);
 
+
   const load = useCallback(async () => {
     try {
       const data = await getVerificationRecords();
@@ -44,7 +45,7 @@ export default function Verification() {
       const updated = await updateVerificationStatus(id, status);
       if (status === 'verified') {
         const record = records.find(r => r._id === id);
-        const taskId = record?.task?._id || record?.task;
+        const taskId = record?.task?._id || (typeof record?.task === 'string' ? record.task : null);
         if (taskId) await updateTask(taskId, { status: 'ready_to_shipment' });
         setRecords(prev => prev.filter(r => r._id !== id));
       } else {
@@ -54,7 +55,18 @@ export default function Verification() {
     finally { setUpdating(null); }
   };
 
-  const openDetail = (r) => { setSelected(r); setEditMode(false); };
+  const flattenRecord = (r) => ({
+    ...r,
+    ...(r.task && typeof r.task === 'object' ? r.task : {}),
+    _id: r._id,
+    status: r.status,
+    lead: r.lead,
+    assignedTo: r.assignedTo || r.task?.assignedTo,
+    title: r.title || r.task?.title,
+    task: r.task,
+  });
+
+  const openDetail = (r) => { setSelected(flattenRecord(r)); setEditMode(false); };
 
   const startEdit = () => {
     setEditForm({
@@ -76,16 +88,21 @@ export default function Verification() {
       reminderAt: selected.reminderAt ? selected.reminderAt.slice(0, 10) : '',
     });
     setEditMode(true);
+    setTimeout(() => {
+      document.querySelector('.modal-scroll-container')?.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 50);
   };
 
   const handleSave = async (e) => {
     e.preventDefault(); setSaving(true);
     try {
-      const taskId = selected.task?._id || selected.task;
-      await updateTask(taskId, editForm);
-      setSelected(prev => ({ ...prev, ...editForm }));
+      await updateVerificationRecord(selected._id, editForm);
+      const freshData = await getVerificationRecords();
+      const freshRecords = Array.isArray(freshData) ? freshData : [];
+      setRecords(freshRecords);
+      const freshSelected = freshRecords.find(r => r._id === selected._id);
+      setSelected(freshSelected ? flattenRecord(freshSelected) : prev => ({ ...prev, ...editForm }));
       setEditMode(false);
-      load();
     } catch { }
     finally { setSaving(false); }
   };
@@ -94,8 +111,8 @@ export default function Verification() {
 
   const handleReadyToShipment = async () => {
     try {
-      const taskId = selected.task?._id || selected.task;
-      await updateTask(taskId, { status: 'ready_to_shipment' });
+      const taskId = selected.task?._id || (typeof selected.task === 'string' ? selected.task : null);
+      if (taskId) await updateTask(taskId, { status: 'ready_to_shipment' });
       setSelected(null);
       navigate('/ready-to-shipment');
     } catch { }
@@ -298,6 +315,36 @@ export default function Verification() {
                 <button onClick={startEdit}
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition"
                   style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)' }}>Edit</button>
+                <button onClick={async () => {
+                  setSaving(true);
+                  try {
+                    await updateVerificationRecord(selected._id, {
+                      description: selected.description || '',
+                      problem: selected.problem || '',
+                      age: selected.age || '',
+                      weight: selected.weight || '',
+                      height: selected.height || '',
+                      otherProblems: selected.otherProblems || '',
+                      problemDuration: selected.problemDuration || '',
+                      cityVillageType: selected.cityVillageType || 'city',
+                      cityVillage: selected.cityVillage || '',
+                      houseNo: selected.houseNo || '',
+                      postOffice: selected.postOffice || '',
+                      district: selected.district || '',
+                      landmark: selected.landmark || '',
+                      pincode: selected.pincode || '',
+                      state: selected.state || '',
+                      reminderAt: selected.reminderAt ? selected.reminderAt.slice(0, 10) : '',
+                    });
+                    setSelected(null);
+                    load();
+                  } catch { }
+                  finally { setSaving(false); }
+                }} disabled={saving}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
                 <button onClick={handleReadyToShipment}
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition"
                   style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>Ready to Shipment</button>

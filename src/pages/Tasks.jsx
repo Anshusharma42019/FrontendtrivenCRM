@@ -146,7 +146,7 @@ export default function Tasks() {
     await deleteTask(id).catch(() => {}); load();
   };
 
-  const displayed = tab === 'daily' ? daily : tasks;
+  const displayed = (tab === 'daily' ? daily : tasks).filter(t => t.status !== 'cnp' && t.status !== 'verification');
 
   return (
     <div className="space-y-5">

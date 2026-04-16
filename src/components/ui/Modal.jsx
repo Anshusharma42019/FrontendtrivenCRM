@@ -13,7 +13,7 @@ export default function Modal({ title, onClose, children, hideHeader }) {
             </button>
           </div>
         )}
-        <div className="px-6 py-4 overflow-y-auto" style={{ maxHeight: hideHeader ? '95vh' : 'calc(95vh - 64px)' }}>{children}</div>
+        <div className="px-6 py-4 overflow-y-auto modal-scroll-container" style={{ maxHeight: hideHeader ? '95vh' : 'calc(95vh - 64px)' }}>{children}</div>
       </div>
     </div>
   );
