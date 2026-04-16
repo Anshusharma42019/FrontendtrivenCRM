@@ -17,6 +17,7 @@ import ShiprocketOrders from './pages/ShiprocketOrders';
 import ShiprocketShipments from './pages/ShiprocketShipments';
 import ShiprocketReturns from './pages/ShiprocketReturns';
 import FollowUp from './pages/FollowUp';
+import CallAgain from './pages/CallAgain';
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="leads" element={<Leads />} />
             <Route path="pipeline" element={<Pipeline />} />
             <Route path="cnp" element={<CNP />} />
+            <Route path="call-again" element={<CallAgain />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="follow-up" element={<FollowUp />} />
             <Route path="verification" element={<Verification />} />

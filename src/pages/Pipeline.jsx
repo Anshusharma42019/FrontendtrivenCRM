@@ -78,6 +78,8 @@ function FollowUpPanel({ lead, onUpdate }) {
 export default function Pipeline() {
   const [leads, setLeads] = useState([]);
   const [deliveredOrders, setDeliveredOrders] = useState([]);
+  const [cnpLeads, setCnpLeads] = useState([]);
+  const [callAgainLeads, setCallAgainLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(null);
   const [error, setError] = useState('');
@@ -97,14 +99,18 @@ export default function Pipeline() {
   const load = useCallback(async () => {
     setError('');
     try {
-      const [leadsRes, interestedRes, ordersRes] = await Promise.all([
+      const [leadsRes, interestedRes, ordersRes, cnpRes, callAgainRes] = await Promise.all([
         getLeads({ limit: 200 }),
         getLeads({ limit: 200, status: 'interested' }),
         API.get('/shiprocket/orders/with-followups'),
+        getLeads({ limit: 200, cnp: 'true' }),
+        getLeads({ limit: 200, status: 'follow_up' }),
       ]);
       const allLeads = [...(Array.isArray(leadsRes?.leads) ? leadsRes.leads : []), ...(Array.isArray(interestedRes?.leads) ? interestedRes.leads : [])];
       setLeads(allLeads);
       setDeliveredOrders(Array.isArray(ordersRes.data?.data) ? ordersRes.data.data : []);
+      setCnpLeads(Array.isArray(cnpRes?.leads) ? cnpRes.leads : []);
+      setCallAgainLeads(Array.isArray(callAgainRes?.leads) ? callAgainRes.leads : []);
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to load');
     } finally { setLoading(false); }
@@ -181,6 +187,8 @@ export default function Pipeline() {
             { key: 'on_hold',     label: 'On Hold',        color: 'bg-gray-500' },
             { key: 'interested',  label: 'Interested',     color: 'bg-purple-500' },
             { key: 'closed_lost', label: 'Not Interested', color: 'bg-red-400' },
+            { key: 'cnp',         label: 'CNP',            color: 'bg-red-600' },
+            { key: 'call_again',  label: 'Call Again',     color: 'bg-amber-500' },
           ].map(({ key, label, color }) => (
             <button key={key}
               onClick={() => setFilter(f => f === key ? null : key)}
@@ -199,6 +207,72 @@ export default function Pipeline() {
       <div className="space-y-4">
         {!filter ? (
           <div className="py-16 text-center text-gray-400 text-sm">Select a filter to view leads</div>
+        ) : filter === 'cnp' ? (
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
+            <div className="h-1 bg-red-500" />
+            <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-700 text-sm">CNP Leads</h3>
+              <span className="text-xs text-gray-400">{cnpLeads.length} lead{cnpLeads.length !== 1 ? 's' : ''}</span>
+            </div>
+            {cnpLeads.length === 0 ? (
+              <div className="py-12 text-center text-gray-400 text-sm">No CNP leads</div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {cnpLeads.map(lead => (
+                  <div key={lead._id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-red-50/30 transition-colors">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white bg-gradient-to-br from-red-400 to-red-600">{lead.name?.charAt(0)}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-800 text-sm">{lead.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-xs text-gray-400">{lead.phone}</p>
+                        {lead.assignedTo && <p className="text-xs text-green-600">{lead.assignedTo.name}</p>}
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
+                      <button disabled={updating === lead._id} onClick={() => handleMove(lead, 'contacted')}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100 transition disabled:opacity-40">Contacted</button>
+                      <button disabled={updating === lead._id} onClick={() => handleMove(lead, 'interested')}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-100 transition disabled:opacity-40">Interested</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : filter === 'call_again' ? (
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
+            <div className="h-1 bg-amber-500" />
+            <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-700 text-sm">Call Again Leads</h3>
+              <span className="text-xs text-gray-400">{callAgainLeads.length} lead{callAgainLeads.length !== 1 ? 's' : ''}</span>
+            </div>
+            {callAgainLeads.length === 0 ? (
+              <div className="py-12 text-center text-gray-400 text-sm">No call again leads</div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {callAgainLeads.map(lead => (
+                  <div key={lead._id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-amber-50/30 transition-colors">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white bg-gradient-to-br from-amber-400 to-amber-600">{lead.name?.charAt(0)}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-800 text-sm">{lead.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-xs text-gray-400">{lead.phone}</p>
+                        {lead.assignedTo && <p className="text-xs text-green-600">{lead.assignedTo.name}</p>}
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
+                      <button disabled={updating === lead._id} onClick={() => handleMove(lead, 'contacted')}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100 transition disabled:opacity-40">Contacted</button>
+                      <button disabled={updating === lead._id} onClick={() => handleMove(lead, 'interested')}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-100 transition disabled:opacity-40">Interested</button>
+                      <button disabled={updating === lead._id} onClick={() => handleMove(lead, 'closed_won')}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-green-50 text-green-700 hover:bg-green-100 border border-green-100 transition disabled:opacity-40">Converted</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         ) : (
           <>
             {STAGES.map(({ key, label, bar }) => {

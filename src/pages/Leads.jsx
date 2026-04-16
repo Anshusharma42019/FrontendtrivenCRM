@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getLeads, getLead, createLead, updateLead, deleteLead, assignLead, addLeadNote } from '../services/lead.service';
+import { getLeads, getLead, createLead, updateLead, deleteLead, assignLead, addLeadNote, markCNP } from '../services/lead.service';
 import { getUsers } from '../services/user.service';
 import Modal from '../components/ui/Modal';
 import Badge from '../components/ui/Badge';
@@ -25,6 +26,7 @@ export default function Leads() {
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
 
+  const navigate = useNavigate();
   const canManage = user?.role === 'admin' || user?.role === 'manager';
 
   const load = useCallback(async () => {
@@ -86,14 +88,17 @@ export default function Leads() {
     finally { setLoading(false); }
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e, action) => {
     if (e?.preventDefault) e.preventDefault();
     setLoading(true); setError('');
     try {
       const payload = { ...form, revenue: form.revenue ? Number(form.revenue) : 0 };
-      if (modal === 'edit' || modal === 'detail') await updateLead(selected._id, payload);
-      else await createLead(payload);
-      setModal(null); load();
+      let lead;
+      if (modal === 'edit' || modal === 'detail') lead = await updateLead(selected._id, payload);
+      else lead = await createLead(payload);
+      if (action === 'cnp') { await markCNP(lead._id).catch(() => {}); setModal(null); navigate('/pipeline', { state: { filter: 'cnp' } }); }
+      else if (action === 'callAgain') { await updateLead(lead._id, { status: 'follow_up' }).catch(() => {}); setModal(null); navigate('/pipeline', { state: { filter: 'call_again' } }); }
+      else { setModal(null); load(); }
     } catch (err) { setError(err.response?.data?.message || 'Something went wrong'); }
     finally { setLoading(false); }
   };
@@ -204,7 +209,6 @@ export default function Leads() {
                       <button onClick={() => openDetail(lead)}
                         className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition"
                         style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>View</button>
-
                     </div>
                   </div>
                 </div>
@@ -241,16 +245,22 @@ export default function Leads() {
             </div>
             <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Problem / Inquiry</label>
               <textarea rows={2} className={`${inputCls} mt-1.5`} value={form.problem} onChange={(e) => setForm({ ...form, problem: e.target.value })} /></div>
-            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Note</label>
-              <textarea rows={2} className={`${inputCls} mt-1.5`} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></div>
             <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</label>
                 <select className={`${inputCls} mt-1.5`} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                   {STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}</select></div>
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-2 pt-2 flex-wrap">
               <button type="submit" disabled={loading}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-60 shadow-md hover:shadow-lg transition"
                 style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
                 {loading ? 'Saving...' : modal === 'edit' ? 'Update Lead' : 'Create Lead'}
+              </button>
+              <button type="button" disabled={loading} onClick={(e) => handleSubmit(e, 'cnp')}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-60 transition">
+                CNP
+              </button>
+              <button type="button" disabled={loading} onClick={(e) => handleSubmit(e, 'callAgain')}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-60 transition">
+                Call Again
               </button>
               <button type="button" onClick={() => setModal(null)}
                 className="flex-1 border border-gray-200 hover:bg-gray-50 py-2.5 rounded-xl text-sm font-medium text-gray-600 transition">Cancel</button>

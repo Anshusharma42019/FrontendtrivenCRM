@@ -14,6 +14,7 @@ import {
 export default function CNP() {
   const [leads, setLeads] = useState([]);
   const [allLeads, setAllLeads] = useState([]);
+  const [callAgainLeads, setCallAgainLeads] = useState([]);
   const [cnpTasks, setCnpTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(null);
@@ -21,14 +22,16 @@ export default function CNP() {
 
   const load = useCallback(async () => {
     try {
-      const [cnpRes, allRes, tasksRes] = await Promise.all([
+      const [cnpRes, allRes, tasksRes, callAgainRes] = await Promise.all([
         getLeads({ cnp: "true", limit: 200 }),
         getLeads({ limit: 200 }),
         getCnpRecords(),
+        getLeads({ status: "follow_up", limit: 200 }),
       ]);
       setLeads(Array.isArray(cnpRes?.leads) ? cnpRes.leads : []);
       setAllLeads(Array.isArray(allRes?.leads) ? allRes.leads : []);
       setCnpTasks(Array.isArray(tasksRes) ? tasksRes : []);
+      setCallAgainLeads(Array.isArray(callAgainRes?.leads) ? callAgainRes.leads : []);
     } catch {
       /* ignore */
     } finally {
@@ -63,7 +66,7 @@ export default function CNP() {
     } catch { /* ignore */ } finally { setUpdating(null); }
   };
 
-  const displayed = tab === "cnp" ? leads : allLeads.filter((l) => !l.cnp);
+  const displayed = allLeads.filter((l) => !l.cnp);
 
   if (loading)
     return (
@@ -77,8 +80,7 @@ export default function CNP() {
 
   const tabs = [
     { key: "tasks", label: "CNP Tasks", count: cnpTasks.length, color: "red" },
-    { key: "cnp", label: "CNP Leads", count: leads.length, color: "orange" },
-    { key: "all", label: "Mark CNP", count: null, color: "gray" },
+    { key: "callAgain", label: "Call Again", count: callAgainLeads.length, color: "amber" },
   ];
 
   return (
@@ -129,7 +131,7 @@ export default function CNP() {
             {t.count !== null && (
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
                 tab === t.key
-                  ? t.color === "red" ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"
+                  ? t.color === "red" ? "bg-red-100 text-red-600" : t.color === "amber" ? "bg-amber-100 text-amber-600" : "bg-orange-100 text-orange-600"
                   : "bg-gray-200 text-gray-500"
               }`}>
                 {t.count}
@@ -144,13 +146,13 @@ export default function CNP() {
         {/* Card Header */}
         <div className="px-5 py-3.5 border-b border-gray-50 flex items-center justify-between bg-gray-50/50">
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${tab === "tasks" ? "bg-red-500" : tab === "cnp" ? "bg-orange-500" : "bg-gray-400"}`} />
+            <div className={`w-2 h-2 rounded-full ${tab === "tasks" ? "bg-red-500" : tab === "callAgain" ? "bg-amber-500" : "bg-gray-400"}`} />
             <h3 className="font-semibold text-gray-700 text-sm">
-              {tab === "tasks" ? "CNP Tasks" : tab === "cnp" ? "CNP Leads" : "All Leads — Mark as CNP"}
+              {tab === "tasks" ? "CNP Tasks" : "Call Again Leads"}
             </h3>
           </div>
           <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full font-medium">
-            {tab === "tasks" ? cnpTasks.length : displayed.length} {tab === "tasks" ? "task" : "lead"}{(tab === "tasks" ? cnpTasks.length : displayed.length) !== 1 ? "s" : ""}
+            {tab === "tasks" ? cnpTasks.length : callAgainLeads.length} {tab === "tasks" ? "task" : "lead"}{(tab === "tasks" ? cnpTasks.length : callAgainLeads.length) !== 1 ? "s" : ""}
           </span>
         </div>
 
@@ -228,32 +230,19 @@ export default function CNP() {
               ))}
             </div>
           )
-        ) : displayed.length === 0 ? (
-          <EmptyState message={tab === "cnp" ? "No CNP leads" : "No leads available"} />
+        ) : callAgainLeads.length === 0 ? (
+          <EmptyState message="No call again leads" />
         ) : (
           <div className="divide-y divide-gray-50">
-            {displayed.map((lead) => (
-              <div key={lead._id} className="px-5 py-4 flex items-center gap-3 hover:bg-gray-50/60 transition-colors">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white shadow-sm ${
-                  lead.cnp
-                    ? "bg-gradient-to-br from-red-400 to-red-600"
-                    : "bg-gradient-to-br from-green-400 to-green-600"
-                }`}>
+            {callAgainLeads.map((lead) => (
+              <div key={lead._id} className="px-5 py-4 flex items-center gap-3 hover:bg-amber-50/30 transition-colors">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white shadow-sm">
                   {lead.name?.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-gray-800 text-sm">{lead.name}</p>
-                    {lead.cnpCount > 0 && (
-                      <span className="text-[10px] bg-red-50 text-red-500 px-2 py-0.5 rounded-full font-bold border border-red-100">
-                        CNP ×{lead.cnpCount}
-                      </span>
-                    )}
-                  </div>
+                  <p className="font-semibold text-gray-800 text-sm">{lead.name}</p>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="text-[11px] text-gray-500 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">
-                      {lead.phone}
-                    </span>
+                    <span className="text-[11px] text-gray-500 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">{lead.phone}</span>
                     {lead.assignedTo && (
                       <span className="inline-flex items-center gap-1 text-[11px] text-green-700 bg-green-50 px-2 py-0.5 rounded-full border border-green-100">
                         <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -262,47 +251,15 @@ export default function CNP() {
                         {lead.assignedTo.name}
                       </span>
                     )}
-                    {lead.cnpAt && (
-                      <span className="text-[11px] text-gray-400">
-                        {new Date(lead.cnpAt).toLocaleDateString()}
-                      </span>
-                    )}
                   </div>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
-                  {tab === "cnp" ? (
-                    <>
-                      <button
-                        disabled={updating === lead._id}
-                        onClick={() => handleStatusChange(lead, "contacted")}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100 transition disabled:opacity-40"
-                      >
-                        Contacted
-                      </button>
-                      <button
-                        disabled={updating === lead._id}
-                        onClick={() => handleStatusChange(lead, "interested")}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-100 transition disabled:opacity-40"
-                      >
-                        Interested
-                      </button>
-                      <button
-                        disabled={updating === lead._id}
-                        onClick={() => handleUnmarkCNP(lead)}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition disabled:opacity-40"
-                      >
-                        Remove
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      disabled={updating === lead._id}
-                      onClick={() => handleMarkCNP(lead)}
-                      className="text-xs font-bold px-3 py-1.5 rounded-xl bg-red-500 text-white hover:bg-red-600 transition disabled:opacity-40 shadow-sm shadow-red-200"
-                    >
-                      Mark CNP
-                    </button>
-                  )}
+                  <button disabled={updating === lead._id} onClick={() => handleStatusChange(lead, "contacted")}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100 transition disabled:opacity-40">Contacted</button>
+                  <button disabled={updating === lead._id} onClick={() => handleStatusChange(lead, "interested")}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-100 transition disabled:opacity-40">Interested</button>
+                  <button disabled={updating === lead._id} onClick={() => handleStatusChange(lead, "closed_won")}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-green-50 text-green-700 hover:bg-green-100 border border-green-100 transition disabled:opacity-40">Converted</button>
                 </div>
               </div>
             ))}
