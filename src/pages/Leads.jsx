@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getLeads, getLead, createLead, updateLead, deleteLead, assignLead, addLeadNote, markCNP } from '../services/lead.service';
+import { getLeads, getLead, createLead, updateLead, deleteLead, assignLead, addLeadNote, markCNP, createCallAgain } from '../services/lead.service';
 import { getUsers } from '../services/user.service';
 import Modal from '../components/ui/Modal';
 import Badge from '../components/ui/Badge';
@@ -97,7 +97,7 @@ export default function Leads() {
       if (modal === 'edit' || modal === 'detail') lead = await updateLead(selected._id, payload);
       else lead = await createLead(payload);
       if (action === 'cnp') { await markCNP(lead._id).catch(() => {}); setModal(null); navigate('/pipeline', { state: { filter: 'cnp' } }); }
-      else if (action === 'callAgain') { await updateLead(lead._id, { status: 'follow_up' }).catch(() => {}); setModal(null); navigate('/pipeline', { state: { filter: 'call_again' } }); }
+      else if (action === 'callAgain') { await createCallAgain(lead._id).catch(() => {}); setModal(null); navigate('/pipeline', { state: { filter: 'call_again' } }); }
       else { setModal(null); load(); }
     } catch (err) { setError(err.response?.data?.message || 'Something went wrong'); }
     finally { setLoading(false); }

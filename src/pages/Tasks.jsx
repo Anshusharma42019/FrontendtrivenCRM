@@ -52,9 +52,9 @@ export default function Tasks() {
       setForm({ ...EMPTY, lead: location.state.leadId, assignedTo: location.state.assignedTo || '' });
       setError('');
       setModal('create');
-      window.history.replaceState({}, '');
+      window.history.replaceState({}, document.title);
     }
-  }, []);
+  }, [location.state?.leadId]);
 
   const load = useCallback(async () => {
     setLoadError('');
