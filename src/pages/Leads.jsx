@@ -241,8 +241,6 @@ export default function Leads() {
             </div>
             <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Problem / Inquiry</label>
               <textarea rows={2} className={`${inputCls} mt-1.5`} value={form.problem} onChange={(e) => setForm({ ...form, problem: e.target.value })} /></div>
-            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Address</label>
-              <input className={`${inputCls} mt-1.5`} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
             <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Note</label>
               <textarea rows={2} className={`${inputCls} mt-1.5`} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></div>
             <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</label>
