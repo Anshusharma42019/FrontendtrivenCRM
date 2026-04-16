@@ -6,8 +6,11 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('crmUser') || 'null'));
 
-  const login = async (email, password) => {
-    const { data } = await API.post('/auth/login', { email, password });
+  const login = async (form) => {
+    const payload = { role: form.role, password: form.password };
+    if (form.role === 'admin') payload.email = form.email;
+    else payload.phone = form.phone;
+    const { data } = await API.post('/auth/login', payload);
     localStorage.setItem('crmUser', JSON.stringify(data.data.user));
     localStorage.setItem('crmTokens', JSON.stringify(data.data.tokens));
     setUser(data.data.user);

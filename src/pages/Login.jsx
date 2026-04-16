@@ -10,7 +10,7 @@ const FEATURES = [
 ];
 
 export default function Login() {
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [form, setForm] = useState({ role: 'admin', email: '', phone: '', password: '' });
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,10 +21,10 @@ export default function Login() {
     e.preventDefault();
     setLoading(true); setError('');
     try {
-      await login(form.email, form.password);
+      await login(form);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Invalid email or password');
+      setError(err.response?.data?.message || 'Invalid credentials');
     } finally { setLoading(false); }
   };
 
@@ -94,11 +94,31 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Email address</label>
-              <input type="email" required placeholder="you@example.com"
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Login As</label>
+              <select required
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 transition"
-                value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                <option value="admin">Admin</option>
+                <option value="manager">Manager</option>
+                <option value="sales">Staff</option>
+              </select>
             </div>
+
+            {form.role === 'admin' ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+                <input type="email" required placeholder="you@example.com"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 transition"
+                  value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone Number</label>
+                <input type="tel" required placeholder="Enter your phone number"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 transition"
+                  value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>

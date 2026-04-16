@@ -10,8 +10,8 @@ import Badge from '../components/ui/Badge';
 
 const TYPES = ['call', 'follow_up', 'meeting', 'email', 'task'];
 const PRIORITIES = ['low', 'medium', 'high'];
-const STATUSES = ['verification', 'cnp', 'cancel_call'];
-const EMPTY = { title: '', description: '', problem: '', type: 'task', lead: '', assignedTo: '', dueDate: '', priority: 'medium', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending' };
+const STATUSES = ['verification', 'cnp', 'interested', 'cancel_call'];
+const EMPTY = { title: '', description: '', problem: '', type: 'task', lead: '', assignedTo: '', dueDate: '', priority: 'medium', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending', age: '', weight: '', height: '', otherProblems: '', problemDuration: '' };
 
 const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition";
 
@@ -90,7 +90,9 @@ export default function Tasks() {
       cityVillageType: task.cityVillageType || 'city', cityVillage: task.cityVillage || '', houseNo: task.houseNo || '',
       postOffice: task.postOffice || '', district: task.district || '',
       landmark: task.landmark || '', pincode: task.pincode || '', state: task.state || '',
-      status: task.status || 'pending' });
+      status: task.status || 'pending',
+      age: task.age || '', weight: task.weight || '', height: task.height || '',
+      otherProblems: task.otherProblems || '', problemDuration: task.problemDuration || '' });
     setError(''); setModal('edit');
   };
 
@@ -127,6 +129,9 @@ export default function Tasks() {
         // if Not Interested selected, move lead to closed_lost in pipeline
         if (payload.status === 'cancel_call' && selected.lead?._id) {
           await updateLead(selected.lead._id, { status: 'closed_lost' }).catch(() => {});
+        }
+        if (payload.status === 'interested' && selected.lead?._id) {
+          await updateLead(selected.lead._id, { status: 'interested' }).catch(() => {});
         }
       } else await createTask(payload);
       setModal(null); load();
@@ -206,11 +211,14 @@ export default function Tasks() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`font-semibold text-sm text-gray-800 ${task.status === 'completed' ? 'line-through text-gray-400' : ''}`}>
-                      {task.title}
+                      {task.title.replace(/^call\s+/i, '')}
                     </span>
                     <Badge value={task.status} />
                     <Badge value={task.priority} />
                   </div>
+                  {task.lead?.name && (
+                    <p className="text-xs text-gray-500 mt-0.5">{task.lead.name}</p>
+                  )}
 
                 </div>
                 <div className="flex flex-row gap-1 shrink-0 items-center">
@@ -268,6 +276,11 @@ export default function Tasks() {
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>, label: 'Lead', value: selected.lead?.name },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>, label: 'Description', value: selected.description },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, label: 'Problem', value: selected.problem },
+              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, label: 'Age', value: selected.age ? `${selected.age} yrs` : null },
+              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>, label: 'Weight', value: selected.weight ? `${selected.weight} kg` : null },
+              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>, label: 'Height', value: selected.height ? `${selected.height} cm` : null },
+              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, label: 'Other Problems', value: selected.otherProblems },
+              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>, label: 'Problem Duration', value: selected.problemDuration },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: selected.cityVillageType === 'village' ? 'Village' : 'City', value: selected.cityVillage },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'House No', value: selected.houseNo },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'Post Office', value: selected.postOffice },
@@ -324,17 +337,46 @@ export default function Tasks() {
           <form onSubmit={handleSubmit} className="space-y-3">
             {/* Row 1: Title + Confirmation Call Date */}
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Title *</label>
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Name *</label>
                 <input required className={`${inputCls} mt-1.5`} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
               <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Confirmation Call Date</label>
                 <input type="date" className={`${inputCls} mt-1.5`} value={form.reminderAt ? form.reminderAt.slice(0, 10) : ''} onChange={(e) => setForm({ ...form, reminderAt: e.target.value })} /></div>
             </div>
+
+            {/* Assign To — only admin/manager can assign to a specific staff */}
+            {canManage && (
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Assign To</label>
+                <select className={`${inputCls} mt-1.5`} value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}>
+                  <option value="">Auto-assign</option>
+                  {salesUsers.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
+                </select>
+              </div>
+            )}
 
             {/* Description and Problem */}
             <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Problem</label>
               <textarea rows={2} className={`${inputCls} mt-1.5 mb-3`} value={form.problem} onChange={(e) => setForm({ ...form, problem: e.target.value })} /></div>
             <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</label>
               <textarea rows={2} className={`${inputCls} mt-1.5`} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+
+            {/* Age, Weight, Height */}
+            <div className="grid grid-cols-3 gap-3">
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Age</label>
+                <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Age" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} /></div>
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Weight (kg)</label>
+                <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Weight" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} /></div>
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Height (cm)</label>
+                <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Height" value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} /></div>
+            </div>
+
+            {/* Other Problems */}
+            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Other Problems</label>
+              <textarea rows={2} className={`${inputCls} mt-1.5`} placeholder="Any other health issues..." value={form.otherProblems} onChange={(e) => setForm({ ...form, otherProblems: e.target.value })} /></div>
+
+            {/* Problem Duration */}
+            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Problem Duration</label>
+              <input className={`${inputCls} mt-1.5`} placeholder="e.g. 2 years, 6 months" value={form.problemDuration} onChange={(e) => setForm({ ...form, problemDuration: e.target.value })} /></div>
 
             {/* City/Village toggle + input */}
             <div>
@@ -388,7 +430,7 @@ export default function Tasks() {
                           ? 'bg-green-600 text-white border-green-600'
                           : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-green-400'
                       }`}>
-                      {s === 'cnp' ? 'CNP' : s === 'cancel_call' ? 'Not Interested' : 'Verification'}
+                      {s === 'cnp' ? 'CNP' : s === 'cancel_call' ? 'Not Interested' : s === 'interested' ? 'Interested' : 'Verification'}
                     </button>
                   ))}
                 </div>

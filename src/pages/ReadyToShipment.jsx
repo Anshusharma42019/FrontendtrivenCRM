@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import API from '../api';
 import Modal from '../components/ui/Modal';
 
@@ -6,6 +7,7 @@ export default function ReadyToShipment() {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
+  const navigate = useNavigate();
 
   const load = useCallback(async () => {
     try {
@@ -96,9 +98,23 @@ export default function ReadyToShipment() {
               </div>
             ))}
           </div>
-          <div className="pt-4">
+          <div className="pt-4 flex gap-2">
+            <button
+              onClick={() => {
+                setSelected(null);
+                navigate('/shiprocket', {
+                  state: {
+                    delivery_postcode: selected.pincode || '',
+                    rts: selected,
+                  }
+                });
+              }}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition"
+              style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
+              🚚 Check Serviceability
+            </button>
             <button onClick={() => setSelected(null)}
-              className="w-full border border-gray-200 hover:bg-gray-50 py-2.5 rounded-xl text-sm font-medium text-gray-600 transition">Close</button>
+              className="flex-1 border border-gray-200 hover:bg-gray-50 py-2.5 rounded-xl text-sm font-medium text-gray-600 transition">Close</button>
           </div>
         </Modal>
       )}

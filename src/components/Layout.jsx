@@ -1,9 +1,25 @@
 import { useState, useEffect, useRef } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useAuth } from '../context/AuthContext';
 import { getNotifications } from '../services/notification.service';
 import API from '../api';
+
+const PAGE_TITLES = {
+  '/dashboard': 'Dashboard',
+  '/leads': 'Leads',
+  '/pipeline': 'Pipeline',
+  '/cnp': 'CNP',
+  '/tasks': 'Tasks',
+  '/verification': 'Verification',
+  '/ready-to-shipment': 'Ready to Shipment',
+  '/shiprocket': 'Shiprocket',
+  '/shiprocket/orders': 'Orders',
+  '/shiprocket/shipments': 'Shipments & Tracking',
+  '/shiprocket/returns': 'Returns / Wallet / NDR',
+  '/notifications': 'Notifications',
+  '/users': 'Staff',
+};
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -13,8 +29,10 @@ export default function Layout() {
   const [avatarError, setAvatarError] = useState('');
   const { user, logout, updateUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const fileInputRef = useRef(null);
   const initials = user?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  const pageTitle = PAGE_TITLES[location.pathname] || '';
 
   useEffect(() => {
     let active = true;
@@ -75,7 +93,11 @@ export default function Layout() {
           </button>
           {/* Mobile brand */}
           <span className="text-sm font-bold text-green-800 md:hidden">Triven CRM</span>
-          <div className="hidden md:flex flex-1" />
+          <div className="hidden md:flex flex-1 items-center">
+            {pageTitle && (
+              <h1 className="text-lg font-bold text-gray-800 tracking-tight">{pageTitle}</h1>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {/* Notifications */}
             <button onClick={() => navigate('/notifications')}
@@ -179,7 +201,7 @@ export default function Layout() {
         </header>
 
         {/* Main content */}
-        <main className="flex-1 p-4 md:p-6 min-w-0">
+        <main className="flex-1 p-4 md:p-6 min-w-0 overflow-auto h-0">
           <Outlet />
         </main>
       </div>

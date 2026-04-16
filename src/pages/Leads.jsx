@@ -5,7 +5,7 @@ import { getUsers } from '../services/user.service';
 import Modal from '../components/ui/Modal';
 import Badge from '../components/ui/Badge';
 
-const STATUSES = ['new', 'contacted', 'interested', 'follow_up', 'closed_won', 'closed_lost'];
+const STATUSES = ['new', 'contacted', 'follow_up', 'closed_won', 'closed_lost'];
 const SOURCES = ['website', 'referral', 'social_media', 'cold_call', 'email', 'walk_in', 'other'];
 const TYPES = ['general', 'ayurveda', 'panchakarma', 'consultation', 'product', 'other'];
 const EMPTY = { name: '', phone: '', email: '', address: '', source: 'other', status: 'new', type: 'general', problem: '', note: '', revenue: '' };

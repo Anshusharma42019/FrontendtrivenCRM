@@ -4,8 +4,8 @@ import API from '../api';
 import Modal from '../components/ui/Modal';
 import Badge from '../components/ui/Badge';
 
-const ROLES = ['admin', 'manager', 'sales'];
-const EMPTY = { name: '', email: '', password: '', role: 'sales' };
+const ROLES = ['manager', 'sales'];
+const EMPTY = { name: '', phone: '', password: '', role: 'manager' };
 
 const ROLE_GRADIENT = {
   admin:   'from-purple-500 to-violet-600',
@@ -67,7 +67,7 @@ export default function Users() {
   const openCreate = () => { setForm(EMPTY); setError(''); setModal('create'); };
   const openEdit = (u) => {
     setSelected(u);
-    setForm({ name: u.name, email: u.email, password: '', role: u.role });
+    setForm({ name: u.name, phone: u.phone || '', password: '', role: u.role });
     setError(''); setModal('edit');
   };
 
@@ -129,7 +129,7 @@ export default function Users() {
                   </div>
                   <div className="min-w-0">
                     <p className="font-semibold text-gray-800 truncate text-sm">{u.name}</p>
-                    <p className="text-xs text-gray-400 truncate">{u.email}</p>
+                    <p className="text-xs text-gray-400 truncate">{u.phone || u.email}</p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between mb-4">
@@ -177,7 +177,7 @@ export default function Users() {
                 </div>
                 <div className="flex-1">
                   <p className="text-white font-bold text-base">{viewUser.name}</p>
-                  <p className="text-green-300 text-xs mt-0.5">{viewUser.email}</p>
+                  <p className="text-green-300 text-xs mt-0.5">{viewUser.phone || viewUser.email}</p>
                 </div>
                 <button onClick={() => setModal(null)}
                   className="w-7 h-7 flex items-center justify-center rounded-lg text-green-300 hover:text-white hover:bg-white/10 transition text-xl leading-none">
@@ -252,8 +252,8 @@ export default function Users() {
               <input required className={`${inputCls} mt-1.5`} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Email *</label>
-              <input required type="email" className={`${inputCls} mt-1.5`} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Phone *</label>
+              <input required type="tel" className={`${inputCls} mt-1.5`} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             </div>
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
