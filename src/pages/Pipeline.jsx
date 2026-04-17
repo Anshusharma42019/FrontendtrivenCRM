@@ -186,6 +186,18 @@ export default function Pipeline() {
   const [detailLead, setDetailLead] = useState(null);
   const [detailVerification, setDetailVerification] = useState(null);
   const [taskModal, setTaskModal] = useState(null); // { lead, assignedTo }
+  const [leadDetail, setLeadDetail] = useState(null); // for CNP/CallAgain detail popup
+  const [leadDetailLoading, setLeadDetailLoading] = useState(false);
+
+  const openLeadDetail = async (lead) => {
+    setLeadDetail(lead);
+    setLeadDetailLoading(true);
+    try {
+      const res = await API.get(`/leads/${lead._id}`);
+      setLeadDetail(res.data.data);
+    } catch { /* keep partial data */ }
+    finally { setLeadDetailLoading(false); }
+  };
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -336,6 +348,9 @@ export default function Pipeline() {
                       </div>
                     </div>
                     <div className="flex gap-1.5 shrink-0">
+                      <button onClick={() => openLeadDetail(lead)}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-xl text-white transition"
+                        style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>View Detail</button>
                       <button disabled={updating === lead._id} onClick={() => handleMove(lead, 'contacted')}
                         className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100 transition disabled:opacity-40">Contacted</button>
                       <button disabled={updating === lead._id} onClick={() => handleMove(lead, 'interested')}
@@ -368,6 +383,9 @@ export default function Pipeline() {
                       </div>
                     </div>
                     <div className="flex gap-1.5 shrink-0">
+                      <button onClick={() => openLeadDetail(record.lead)}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-xl text-white transition"
+                        style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>View Detail</button>
                       <button disabled={updating === record._id} onClick={() => setTaskModal({ lead: record.lead, assignedTo: record.assignedTo?._id || '' })}
                         className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 transition">+ Task</button>
                       <button disabled={updating === record._id} onClick={() => handleCallAgainStatus(record, 'contacted')}
@@ -617,6 +635,75 @@ export default function Pipeline() {
 
       {taskModal && (
         <TaskModal lead={taskModal.lead} assignedTo={taskModal.assignedTo} onClose={() => setTaskModal(null)} />
+      )}
+
+      {leadDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setLeadDetail(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="-mx-0 rounded-t-2xl px-6 py-5" style={{ background: 'linear-gradient(135deg, #0d1f0d, #1a3a1a)' }}>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold text-white uppercase shadow-lg"
+                  style={{ background: 'linear-gradient(135deg, #16a34a, #4ade80)' }}>
+                  {leadDetail.name?.charAt(0)}
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-white font-bold text-base">{leadDetail.name}</h3>
+                  <p className="text-green-300/70 text-sm">{leadDetail.phone}</p>
+                </div>
+                <button onClick={() => setLeadDetail(null)} className="text-gray-400 hover:text-white text-xl leading-none">×</button>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 space-y-0">
+              {leadDetailLoading ? (
+                <div className="py-8 text-center text-gray-400 text-sm">Loading...</div>
+              ) : (
+                <>
+                  {[['Email', leadDetail.email], ['Phone', leadDetail.phone], ['Address', leadDetail.address],
+                    ['Source', leadDetail.source], ['Status', leadDetail.status?.replace(/_/g,' ')],
+                    ['Type', leadDetail.type], ['Problem', leadDetail.problem],
+                    ['Revenue', leadDetail.revenue ? `₹${leadDetail.revenue}` : null],
+                    ['Assigned To', leadDetail.assignedTo?.name],
+                    ['Created By', leadDetail.createdBy?.name],
+                    ['CNP Count', leadDetail.cnpCount > 0 ? leadDetail.cnpCount : null],
+                    ['CNP At', leadDetail.cnpAt ? new Date(leadDetail.cnpAt).toLocaleString() : null],
+                    ['Created', leadDetail.createdAt ? new Date(leadDetail.createdAt).toLocaleDateString('en-IN') : null],
+                  ].filter(([, v]) => v).map(([label, value]) => (
+                    <div key={label} className="flex gap-3 py-2.5 border-b border-gray-50 last:border-0">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-28 shrink-0">{label}</p>
+                      <p className="text-sm text-gray-800 font-medium">{value}</p>
+                    </div>
+                  ))}
+
+                  {/* Note */}
+                  {leadDetail.note && (
+                    <div className="flex gap-3 py-2.5 border-b border-gray-50">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-28 shrink-0">Note</p>
+                      <p className="text-sm text-gray-800">{leadDetail.note}</p>
+                    </div>
+                  )}
+
+                  {/* Notes history */}
+                  {leadDetail.notes?.length > 0 && (
+                    <div className="pt-3">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Notes History</p>
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {[...leadDetail.notes].reverse().map((n, i) => (
+                          <div key={i} className="rounded-xl px-3 py-2.5"
+                            style={{ background: 'linear-gradient(135deg, #f0fdf4, #f7fef7)', border: '1px solid rgba(22,163,74,0.1)' }}>
+                            <p className="text-sm text-gray-700">{n.text}</p>
+                            <p className="text-xs text-gray-400 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {detailLead && (

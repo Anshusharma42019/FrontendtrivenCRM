@@ -79,6 +79,17 @@ export default function Leads() {
   };
   const openAddNote = (lead) => { setSelected(lead); setForm({ note: '' }); setError(''); setModal('note'); };
 
+  const handleLeadAction = async (action) => {
+    setLoading(true); setError('');
+    try {
+      if (action === 'cnp') { await markCNP(selected._id); setModal(null); navigate('/pipeline', { state: { filter: 'cnp' } }); }
+      else if (action === 'callAgain') { await createCallAgain(selected._id); setModal(null); navigate('/pipeline', { state: { filter: 'call_again' } }); }
+      else if (action === 'interested') { await updateLead(selected._id, { status: 'interested' }); setModal(null); load(); }
+      else if (action === 'notInterested') { await updateLead(selected._id, { status: 'closed_lost' }); setModal(null); load(); }
+    } catch (err) { setError(err.response?.data?.message || 'Action failed'); }
+    finally { setLoading(false); }
+  };
+
   const handleSaveNote = async (e) => {
     if (e?.preventDefault) e.preventDefault();
     if (!form.note?.trim()) return;
@@ -331,6 +342,44 @@ export default function Leads() {
               </div>
             </div>
           )}
+
+          {/* Add Note inline */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Add Comment</p>
+            <div className="flex gap-2">
+              <input
+                placeholder="Write a comment and press Enter..."
+                className={`${inputCls} flex-1`}
+                value={form.note}
+                onChange={(e) => setForm(f => ({ ...f, note: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSaveNote(); } }}
+              />
+              <button onClick={handleSaveNote} disabled={loading || !form.note?.trim()}
+                className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 transition shrink-0"
+                style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>Add</button>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          {error && <div className="bg-red-50 border border-red-100 text-red-600 text-sm p-3 rounded-xl mt-4">{error}</div>}
+          <div className="grid grid-cols-2 gap-2 mt-5">
+            <button disabled={loading} onClick={() => handleLeadAction('cnp')}
+              className="py-2.5 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-60 transition">
+              CNP
+            </button>
+            <button disabled={loading} onClick={() => handleLeadAction('callAgain')}
+              className="py-2.5 rounded-xl text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-60 transition">
+              Call Again
+            </button>
+            <button disabled={loading} onClick={() => handleLeadAction('interested')}
+              className="py-2.5 rounded-xl text-sm font-semibold text-white bg-purple-500 hover:bg-purple-600 disabled:opacity-60 transition">
+              Interested
+            </button>
+            <button disabled={loading} onClick={() => handleLeadAction('notInterested')}
+              className="py-2.5 rounded-xl text-sm font-semibold text-white bg-gray-500 hover:bg-gray-600 disabled:opacity-60 transition">
+              Not Interested
+            </button>
+          </div>
         </Modal>
       )}
 

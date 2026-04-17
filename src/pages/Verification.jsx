@@ -86,6 +86,7 @@ export default function Verification() {
       pincode: selected.pincode || '',
       state: selected.state || '',
       reminderAt: selected.reminderAt ? selected.reminderAt.slice(0, 10) : '',
+      price: selected.price || '',
     });
     setEditMode(true);
     setTimeout(() => {
@@ -205,6 +206,7 @@ export default function Verification() {
                   ['Assigned To', selected.assignedTo?.name],
                   ['City', selected.cityVillage],
                   ['Call Date', selected.reminderAt ? new Date(selected.reminderAt).toLocaleDateString() : null],
+                  ['Price', selected.price ? `₹${selected.price}` : null],
                 ].filter(([, v]) => v).map(([label, value]) => (
                   <div key={label} className="flex gap-1 text-sm">
                     <span className="text-gray-400 shrink-0 w-20">{label}</span>
@@ -335,6 +337,7 @@ export default function Verification() {
                       pincode: selected.pincode || '',
                       state: selected.state || '',
                       reminderAt: selected.reminderAt ? selected.reminderAt.slice(0, 10) : '',
+                      price: selected.price || '',
                     });
                     setSelected(null);
                     load();
@@ -402,6 +405,8 @@ export default function Verification() {
                   <textarea rows={2} className={`${inputCls} mt-1.5`} value={editForm.otherProblems} onChange={e => sf('otherProblems', e.target.value)} /></div>
                 <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Problem Duration</label>
                   <input className={`${inputCls} mt-1.5`} placeholder="e.g. 2 years, 6 months" value={editForm.problemDuration} onChange={e => sf('problemDuration', e.target.value)} /></div>
+                <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Price</label>
+                  <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Price" value={editForm.price || ''} onChange={e => sf('price', e.target.value)} /></div>
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">City / Village</label>
                   <div className="flex items-center gap-3 mt-1.5 mb-1.5">
