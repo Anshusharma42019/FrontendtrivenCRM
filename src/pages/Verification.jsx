@@ -26,6 +26,8 @@ export default function Verification() {
   const [saving, setSaving] = useState(false);
   const [onHoldDate, setOnHoldDate] = useState('');
   const [showOnHoldPicker, setShowOnHoldPicker] = useState(false);
+  const [dayFilter, setDayFilter] = useState('today');
+  const [customDate, setCustomDate] = useState('');
 
 
   const load = useCallback(async () => {
@@ -119,6 +121,24 @@ export default function Verification() {
     } catch { }
   };
 
+  const filterRecords = (recs) => {
+    const startOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const today = startOf(new Date());
+    if (dayFilter === 'today') return recs.filter(r => new Date(r.createdAt) >= today);
+    if (dayFilter === 'yesterday') {
+      const y = new Date(today); y.setDate(y.getDate() - 1);
+      return recs.filter(r => { const d = new Date(r.createdAt); return d >= y && d < today; });
+    }
+    if (dayFilter === 'custom' && customDate) {
+      const from = new Date(customDate);
+      const to = new Date(from); to.setDate(to.getDate() + 1);
+      return recs.filter(r => { const d = new Date(r.createdAt); return d >= from && d < to; });
+    }
+    return recs;
+  };
+
+  const filteredRecords = filterRecords(records);
+
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
@@ -132,9 +152,30 @@ export default function Verification() {
           <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Verification</h2>
           <p className="text-sm text-gray-400 mt-0.5">Tasks pending verification</p>
         </div>
-        <span className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-100">
-          {records.length} task{records.length !== 1 ? 's' : ''}
-        </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          {[['all','All'],['today','Today'],['yesterday','Yesterday']].map(([val, label]) => (
+            <button key={val} onClick={() => { setDayFilter(val); setCustomDate(''); }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+                dayFilter === val
+                  ? 'bg-green-600 text-white border-green-600'
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-green-400 hover:text-green-600'
+              }`}>{label}</button>
+          ))}
+          <input
+            type="date"
+            value={customDate}
+            max={new Date().toISOString().slice(0, 10)}
+            onChange={e => { setCustomDate(e.target.value); setDayFilter(e.target.value ? 'custom' : 'all'); }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+              dayFilter === 'custom'
+                ? 'bg-green-600 text-white border-green-600'
+                : 'bg-white text-gray-500 border-gray-200 hover:border-green-400'
+            }`}
+          />
+          <span className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-100">
+            {filteredRecords.length} task{filteredRecords.length !== 1 ? 's' : ''}
+          </span>
+        </div>
       </div>
 
       {error && <div className="bg-red-50 border border-red-100 text-red-600 text-sm p-3 rounded-xl">{error}</div>}
@@ -143,22 +184,24 @@ export default function Verification() {
         <div className="h-1 bg-blue-400" />
         <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
           <h3 className="font-semibold text-gray-700 text-sm">Verification List</h3>
-          <span className="text-xs text-gray-400">{records.length} record{records.length !== 1 ? 's' : ''}</span>
+          <span className="text-xs text-gray-400">{filteredRecords.length} record{filteredRecords.length !== 1 ? 's' : ''}</span>
         </div>
-        {records.length === 0 ? (
+        {filteredRecords.length === 0 ? (
           <div className="py-16 text-center">
             <p className="text-gray-400 text-sm">No verification tasks</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
-            {records.map(r => (
-              <div key={r._id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50/50 transition-colors">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center shrink-0 text-blue-500 font-bold text-sm">V</div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-800 text-sm">{r.title}</p>
-                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                    {r.assignedTo && <p className="text-xs text-green-600">{r.assignedTo.name}</p>}
-                    {r.lead && <p className="text-xs text-gray-400">{r.lead.name} — {r.lead.phone}</p>}
+            {filteredRecords.map(r => (
+              <div key={r._id} className="px-4 py-3.5 flex flex-col sm:flex-row sm:items-center gap-2 hover:bg-gray-50/50 transition-colors">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center shrink-0 text-blue-500 font-bold text-sm">V</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-800 text-sm">{r.title}</p>
+                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                      {r.assignedTo && <p className="text-xs text-green-600">{r.assignedTo.name}</p>}
+                      {r.lead && <p className="text-xs text-gray-400">{r.lead.name} — {r.lead.phone}</p>}
+                    </div>
                   </div>
                 </div>
                 <button onClick={() => openDetail(r)}
@@ -313,7 +356,7 @@ export default function Verification() {
               )}
 
               {/* Actions */}
-              <div className="pt-2 border-t border-gray-100 flex gap-2 flex-wrap">
+              <div className="pt-2 border-t border-gray-100 flex flex-wrap gap-2">
                 <button onClick={startEdit}
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition"
                   style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)' }}>Edit</button>

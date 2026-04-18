@@ -114,7 +114,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Dashboard</h2>
           <p className="text-sm text-gray-400 mt-0.5">Welcome back! Here's what's happening.</p>

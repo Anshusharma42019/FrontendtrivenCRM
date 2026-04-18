@@ -54,15 +54,17 @@ export default function ReadyToShipment() {
         ) : (
           <div className="divide-y divide-gray-50">
             {records.map(r => (
-              <div key={r._id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-gray-50/50 transition-colors">
-                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0 text-amber-500">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-800 text-sm">{r.title}</p>
-                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                    {r.assignedTo && <p className="text-xs text-green-600">{r.assignedTo.name}</p>}
-                    {r.lead && <p className="text-xs text-gray-400">{r.lead.name} — {r.lead.phone}</p>}
+              <div key={r._id} className="px-4 py-3.5 flex flex-col sm:flex-row sm:items-center gap-2 hover:bg-gray-50/50 transition-colors">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0 text-amber-500">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-800 text-sm">{r.title}</p>
+                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                      {r.assignedTo && <p className="text-xs text-green-600">{r.assignedTo.name}</p>}
+                      {r.lead && <p className="text-xs text-gray-400">{r.lead.name} — {r.lead.phone}</p>}
+                    </div>
                   </div>
                 </div>
                 <button onClick={() => setSelected(r)}

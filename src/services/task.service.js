@@ -8,6 +8,7 @@ export const deleteTask = (id) => API.delete(`/tasks/${id}`);
 export const addTaskNote = (id, text) => API.post(`/tasks/${id}/notes`, { text }).then(r => r.data.data);
 export const getCnpRecords = () => API.get('/cnp').then(r => r.data.data);
 export const incrementCnpCount = (id) => API.patch(`/cnp/${id}/increment`).then(r => r.data.data);
+export const deleteCnpRecord = (id) => API.delete(`/cnp/${id}`);
 export const getVerificationRecords = () => API.get('/verification').then(r => r.data.data);
 export const updateVerificationStatus = (id, status, onHoldUntil) => API.patch(`/verification/${id}`, { status, ...(onHoldUntil && { onHoldUntil }) }).then(r => r.data.data);
 export const updateVerificationRecord = (id, data) => API.patch(`/verification/${id}`, data).then(r => r.data.data);

@@ -16,7 +16,8 @@ const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm b
 export default function Leads() {
   const { user } = useAuth();
   const [data, setData] = useState({ leads: [], total: 0, totalPages: 1 });
-  const [filters, setFilters] = useState({ search: '', dateFrom: '', dateTo: '', status: '', page: 1 });
+  const today = new Date().toISOString().split('T')[0];
+  const [filters, setFilters] = useState({ search: '', dateFrom: today, dateTo: today, status: 'new', datePreset: 'today', page: 1 });
   const [salesUsers, setSalesUsers] = useState([]);
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -40,8 +41,7 @@ export default function Leads() {
       if (filters.status) params.status = filters.status;
 
       const res = await getLeads(params);
-      const filtered = res ? { ...res, leads: res.leads.filter(l => l.status !== 'follow_up') } : { leads: [], total: 0, totalPages: 1 };
-      setData(filtered);
+      setData(res || { leads: [], total: 0, totalPages: 1 });
     } catch (err) {
       setLoadError(err.response?.data?.message || err.message || 'Failed to load leads');
     }
@@ -134,6 +134,17 @@ export default function Leads() {
 
   const setFilter = (key, val) => setFilters(f => ({ ...f, [key]: val, page: 1 }));
 
+  const applyPreset = (preset) => {
+    const today = new Date();
+    const fmt = d => d.toISOString().split('T')[0];
+    let from = '', to = fmt(today);
+    if (preset === 'today') { from = fmt(today); }
+    else if (preset === 'yesterday') { const y = new Date(today); y.setDate(y.getDate() - 1); from = fmt(y); to = fmt(y); }
+    else if (preset === 'week') { const w = new Date(today); w.setDate(w.getDate() - 6); from = fmt(w); }
+    else if (preset === 'month') { const m = new Date(today); m.setDate(1); from = fmt(m); }
+    setFilters(f => ({ ...f, dateFrom: from, dateTo: to, datePreset: preset, status: preset === 'today' ? 'new' : '', page: 1 }));
+  };
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -150,28 +161,23 @@ export default function Leads() {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        <input placeholder="Search name, phone, email..."
-          className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-400 flex-1 shadow-sm"
-          value={filters.search} onChange={(e) => setFilter('search', e.target.value)} />
-        <input type="date" title="From date"
-          className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-400 shadow-sm"
-          value={filters.dateFrom} onChange={(e) => setFilter('dateFrom', e.target.value)} />
-        <input type="date" title="To date"
-          className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-400 shadow-sm"
-          value={filters.dateTo} onChange={(e) => setFilter('dateTo', e.target.value)} />
-        <div className="flex gap-2">
-          <select value={filters.status} onChange={(e) => setFilter('status', e.target.value)}
-            className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-400 shadow-sm">
-            <option value="">All Statuses</option>
-            {STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-          </select>
-
-        </div>
-      </div>
-
       {loadError && <div className="bg-red-50 border border-red-100 text-red-600 text-sm p-3 rounded-xl">{loadError}</div>}
+
+      {/* Date Preset Filter */}
+      <div className="flex flex-wrap gap-2">
+        {[['today', 'Today'], ['yesterday', 'Yesterday'], ['week', 'This Week'], ['month', 'This Month']].map(([key, label]) => (
+          <button key={key}
+            onClick={() => filters.datePreset === key
+              ? setFilters(f => ({ ...f, dateFrom: today, dateTo: today, datePreset: 'today', status: 'new', page: 1 }))
+              : applyPreset(key)}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold border transition ${
+              filters.datePreset === key ? 'text-white border-green-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+            }`}
+            style={filters.datePreset === key ? { background: 'linear-gradient(135deg, #16a34a, #15803d)' } : {}}>
+            {label}
+          </button>
+        ))}
+      </div>
 
       {/* List */}
       <div className="space-y-2">
@@ -196,7 +202,7 @@ export default function Leads() {
                 lead.status === 'contacted' ? 'bg-amber-400' : 'bg-blue-400'
               }`} />
               <div className="flex-1 px-4 py-3">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-2">
                   {/* Left */}
                   <div className="flex gap-3 items-start flex-1 min-w-0">
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white"
@@ -217,7 +223,7 @@ export default function Leads() {
                     </div>
                   </div>
                   {/* Right */}
-                  <div className="flex flex-col items-end gap-2 shrink-0">
+                  <div className="flex gap-1">
                     <div className="flex gap-1">
                       <button onClick={() => openDetail(lead)}
                         className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition"

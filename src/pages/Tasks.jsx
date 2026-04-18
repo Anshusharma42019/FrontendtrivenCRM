@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from 'react-router-dom';
-import { getTasks, getDailyTasks, createTask, updateTask, deleteTask, addTaskNote } from '../services/task.service';
+import { getTasks, getDailyTasks, createTask, updateTask, deleteTask, addTaskNote, deleteCnpRecord } from '../services/task.service';
 import API from '../api';
 import { getLeads, updateLead } from '../services/lead.service';
 import { getUsers } from '../services/user.service';
@@ -11,7 +11,7 @@ import Badge from '../components/ui/Badge';
 const TYPES = ['call', 'follow_up', 'meeting', 'email', 'task'];
 const PRIORITIES = ['low', 'medium', 'high'];
 const STATUSES = ['verification', 'cnp', 'interested', 'cancel_call'];
-const EMPTY = { title: '', description: '', problem: '', type: 'task', lead: '', assignedTo: '', dueDate: '', priority: 'medium', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending', age: '', weight: '', height: '', otherProblems: '', problemDuration: '', price: '' };
+const EMPTY = { title: '', description: '', problem: '', type: 'task', lead: '', assignedTo: '', dueDate: '', priority: 'medium', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending', age: '', weight: '', height: '', otherProblems: '', problemDuration: '', price: '', phone: '' };
 
 const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition";
 
@@ -35,7 +35,7 @@ export default function Tasks() {
   const [daily, setDaily] = useState([]);
   const [leads, setLeads] = useState([]);
   const [salesUsers, setSalesUsers] = useState([]);
-  const [tab, setTab] = useState('all');
+  const [tab, setTab] = useState('daily');
   const [filters, setFilters] = useState({ status: '', type: '' });
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -49,7 +49,30 @@ export default function Tasks() {
 
   useEffect(() => {
     if (location.state?.leadId) {
-      setForm({ ...EMPTY, lead: location.state.leadId, assignedTo: location.state.assignedTo || '' });
+      const ld = location.state.leadData || {};
+      setForm({
+        ...EMPTY,
+        lead: location.state.leadId,
+        assignedTo: location.state.assignedTo || '',
+        title: ld.name || '',
+        problem: ld.problem || '',
+        description: ld.description || '',
+        age: ld.age || '',
+        weight: ld.weight || '',
+        height: ld.height || '',
+        cityVillageType: ld.cityVillageType || 'city',
+        cityVillage: ld.cityVillage || '',
+        houseNo: ld.houseNo || '',
+        postOffice: ld.postOffice || '',
+        district: ld.district || '',
+        landmark: ld.landmark || '',
+        pincode: ld.pincode || '',
+        state: ld.state || '',
+        phone: ld.phone || '',
+        otherProblems: ld.otherProblems || '',
+        problemDuration: ld.problemDuration || '',
+        price: ld.price || '',
+      });
       setError('');
       setModal('create');
       window.history.replaceState({}, document.title);
@@ -92,7 +115,7 @@ export default function Tasks() {
       landmark: task.landmark || '', pincode: task.pincode || '', state: task.state || '',
       status: task.status || 'pending',
       age: task.age || '', weight: task.weight || '', height: task.height || '',
-      otherProblems: task.otherProblems || '', problemDuration: task.problemDuration || '', price: task.price || '' });
+      otherProblems: task.otherProblems || '', problemDuration: task.problemDuration || '', price: task.price || '', phone: task.phone || '' });
     setError(''); setModal('edit');
   };
 
@@ -126,14 +149,19 @@ export default function Tasks() {
       if (!payload.reminderAt) delete payload.reminderAt;
       if (modal === 'edit') {
         await updateTask(selected._id, payload);
-        // if Not Interested selected, move lead to closed_lost in pipeline
         if (payload.status === 'cancel_call' && selected.lead?._id) {
           await updateLead(selected.lead._id, { status: 'closed_lost' }).catch(() => {});
         }
         if (payload.status === 'interested' && selected.lead?._id) {
           await updateLead(selected.lead._id, { status: 'interested' }).catch(() => {});
         }
-      } else await createTask(payload);
+      } else {
+        await createTask(payload);
+        if (location.state?.cnpId) {
+          await deleteCnpRecord(location.state.cnpId).catch(() => {});
+          window.history.replaceState({}, document.title);
+        }
+      }
       setModal(null); load();
     } catch (err) { setError(err.response?.data?.message || 'Something went wrong'); }
     finally { setLoading(false); }
@@ -204,7 +232,7 @@ export default function Tasks() {
             <div key={task._id} className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden"
               style={{ border: '1px solid rgba(0,0,0,0.05)' }}>
               <div className={`h-1 ${s.bar}`} />
-              <div className="px-4 py-3 flex items-start gap-3">
+              <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-start gap-2">
                 <div className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center shrink-0`}>
                   {TYPE_SVG[task.type] || TYPE_SVG.task}
                 </div>
@@ -221,7 +249,7 @@ export default function Tasks() {
                   )}
 
                 </div>
-                <div className="flex flex-row gap-1 shrink-0 items-center">
+                <div className="flex flex-wrap gap-1 items-center">
                   <button onClick={() => openDetail(task)}
                     className="text-xs font-semibold px-2 py-1.5 rounded-xl text-white transition"
                     style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>View</button>
@@ -340,9 +368,12 @@ export default function Tasks() {
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Name *</label>
                 <input required className={`${inputCls} mt-1.5`} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
-              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Confirmation Call Date</label>
-                <input type="date" className={`${inputCls} mt-1.5`} value={form.reminderAt ? form.reminderAt.slice(0, 10) : ''} onChange={(e) => setForm({ ...form, reminderAt: e.target.value })} /></div>
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Phone</label>
+                <input className={`${inputCls} mt-1.5`} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
             </div>
+
+            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Confirmation Call Date</label>
+              <input type="date" className={`${inputCls} mt-1.5`} value={form.reminderAt ? form.reminderAt.slice(0, 10) : ''} onChange={(e) => setForm({ ...form, reminderAt: e.target.value })} /></div>
 
             {/* Assign To — only admin/manager can assign to a specific staff */}
             {canManage && (
@@ -367,7 +398,7 @@ export default function Tasks() {
                 <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Age" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} /></div>
               <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Weight (kg)</label>
                 <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Weight" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} /></div>
-              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Height (cm)</label>
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Height (inch)</label>
                 <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Height" value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} /></div>
             </div>
 

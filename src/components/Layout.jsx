@@ -84,7 +84,7 @@ export default function Layout() {
 
       <div className="flex-1 md:ml-64 flex flex-col min-h-screen min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="sticky top-0 z-10 px-4 py-3 flex items-center justify-between"
+        <header className="sticky top-0 z-10 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between"
           style={{ background: 'rgba(240,244,240,0.92)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
           <button onClick={() => setSidebarOpen(true)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-white shadow-sm text-gray-500 hover:text-green-700 transition md:hidden">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -201,7 +201,7 @@ export default function Layout() {
         </header>
 
         {/* Main content */}
-        <main className="flex-1 p-4 md:p-6 min-w-0 overflow-auto h-0">
+        <main className="flex-1 p-3 sm:p-4 md:p-6 min-w-0 overflow-auto h-0">
           <Outlet />
         </main>
       </div>

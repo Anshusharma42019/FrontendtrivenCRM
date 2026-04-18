@@ -22,3 +22,10 @@ body { background: #f0f4f0; }
 .btn-primary {
   @apply bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all w-full shadow-sm;
 }
+
+/* Mobile Responsive Utilities */
+@media (max-width: 768px) {
+  .modal-scroll-container { max-height: 85vh !important; }
+  h1, h2 { font-size: 1.25rem !important; }
+  h3 { font-size: 1rem !important; }
+}

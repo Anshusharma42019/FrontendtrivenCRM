@@ -188,12 +188,15 @@ export default function Pipeline() {
   const [taskModal, setTaskModal] = useState(null); // { lead, assignedTo }
   const [leadDetail, setLeadDetail] = useState(null); // for CNP/CallAgain detail popup
   const [leadDetailLoading, setLeadDetailLoading] = useState(false);
+  const [phoneSearch, setPhoneSearch] = useState('');
 
   const openLeadDetail = async (lead) => {
-    setLeadDetail(lead);
+    const leadId = lead?._id || lead?.id || lead;
+    if (!leadId) return;
+    setLeadDetail(typeof lead === 'object' ? lead : { _id: leadId });
     setLeadDetailLoading(true);
     try {
-      const res = await API.get(`/leads/${lead._id}`);
+      const res = await API.get(`/leads/${leadId}`);
       setLeadDetail(res.data.data);
     } catch { /* keep partial data */ }
     finally { setLeadDetailLoading(false); }
@@ -301,7 +304,14 @@ export default function Pipeline() {
       {error && <div className="bg-red-50 border border-red-100 text-red-600 text-sm p-3 rounded-xl">{error}</div>}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Sales Pipeline</h2>
-        <div className="flex gap-2">
+        <input
+          type="text"
+          placeholder="Search by phone..."
+          value={phoneSearch}
+          onChange={e => setPhoneSearch(e.target.value)}
+          className="border border-gray-200 rounded-xl px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-400 w-48"
+        />
+        <div className="flex flex-wrap gap-2">
           {[
             { key: 'on_hold',     label: 'On Hold',        color: 'bg-gray-500' },
             { key: 'interested',  label: 'Interested',     color: 'bg-purple-500' },
@@ -337,25 +347,33 @@ export default function Pipeline() {
               <div className="py-12 text-center text-gray-400 text-sm">No CNP leads</div>
             ) : (
               <div className="divide-y divide-gray-50">
-                {cnpLeads.map(lead => (
-                  <div key={lead._id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-red-50/30 transition-colors">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white bg-gradient-to-br from-red-400 to-red-600">{lead.name?.charAt(0)}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-800 text-sm">{lead.name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <p className="text-xs text-gray-400">{lead.phone}</p>
-                        {lead.assignedTo && <p className="text-xs text-green-600">{lead.assignedTo.name}</p>}
+                {cnpLeads.filter(l => !phoneSearch || l.phone?.includes(phoneSearch)).map(lead => (
+                  <div key={lead._id} className="px-4 py-3.5 flex flex-col sm:flex-row sm:items-center gap-2 hover:bg-red-50/30 transition-colors">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white bg-gradient-to-br from-red-400 to-red-600">{lead.name?.charAt(0)}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-800 text-sm">{lead.name}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-xs text-gray-400">{lead.phone}</p>
+                          {lead.assignedTo && <p className="text-xs text-green-600">{lead.assignedTo.name}</p>}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex gap-1.5 shrink-0">
+                    <div className="flex flex-wrap gap-1.5">
                       <button onClick={() => openLeadDetail(lead)}
                         className="text-xs font-semibold px-3 py-1.5 rounded-xl text-white transition"
                         style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>View Detail</button>
+                      <button onClick={async () => {
+                        await updateLead(lead._id, { cnp: false }).catch(() => {});
+                        navigate('/tasks', { state: { leadId: lead._id, assignedTo: lead.assignedTo?._id || '', leadName: lead.name, leadPhone: lead.phone, leadData: lead } });
+                      }}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 transition">+ Task</button>
                       <button disabled={updating === lead._id} onClick={() => handleMove(lead, 'contacted')}
                         className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100 transition disabled:opacity-40">Contacted</button>
                       <button disabled={updating === lead._id} onClick={() => handleMove(lead, 'interested')}
                         className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-100 transition disabled:opacity-40">Interested</button>
                     </div>
+
                   </div>
                 ))}
               </div>
@@ -372,21 +390,27 @@ export default function Pipeline() {
               <div className="py-12 text-center text-gray-400 text-sm">No call again leads</div>
             ) : (
               <div className="divide-y divide-gray-50">
-                {callAgainLeads.map(record => (
-                  <div key={record._id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-amber-50/30 transition-colors">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white bg-gradient-to-br from-amber-400 to-amber-600">{record.lead?.name?.charAt(0)}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-800 text-sm">{record.lead?.name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <p className="text-xs text-gray-400">{record.lead?.phone}</p>
-                        {record.assignedTo && <p className="text-xs text-green-600">{record.assignedTo.name}</p>}
+                {callAgainLeads.filter(r => !phoneSearch || r.lead?.phone?.includes(phoneSearch)).map(record => (
+                  <div key={record._id} className="px-4 py-3.5 flex flex-col sm:flex-row sm:items-center gap-2 hover:bg-amber-50/30 transition-colors">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white bg-gradient-to-br from-amber-400 to-amber-600">{record.lead?.name?.charAt(0)}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-800 text-sm">{record.lead?.name}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-xs text-gray-400">{record.lead?.phone}</p>
+                          {record.assignedTo && <p className="text-xs text-green-600">{record.assignedTo.name}</p>}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex gap-1.5 shrink-0">
+                    <div className="flex flex-wrap gap-1.5">
                       <button onClick={() => openLeadDetail(record.lead)}
                         className="text-xs font-semibold px-3 py-1.5 rounded-xl text-white transition"
                         style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>View Detail</button>
-                      <button disabled={updating === record._id} onClick={() => setTaskModal({ lead: record.lead, assignedTo: record.assignedTo?._id || '' })}
+                      <button disabled={updating === record._id} onClick={async () => {
+                        const lead = record.lead;
+                        await updateCallAgain(record._id, { status: 'contacted' }).catch(() => {});
+                        navigate('/tasks', { state: { leadId: lead?._id, assignedTo: record.assignedTo?._id || '', leadName: lead?.name, leadPhone: lead?.phone, leadData: lead } });
+                      }}
                         className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 transition">+ Task</button>
                       <button disabled={updating === record._id} onClick={() => handleCallAgainStatus(record, 'contacted')}
                         className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100 transition disabled:opacity-40">Contacted</button>
@@ -442,8 +466,8 @@ export default function Pipeline() {
                         followup_number: i + 1, scheduled_date: new Date(o.delivered_at || o.createdAt || new Date()), completed: false,
                       }));
                       return (
-                        <div key={o._id} className="px-5 py-3.5 hover:bg-orange-50/30 transition-colors">
-                          <div className="flex items-center gap-3">
+                        <div key={o._id} className="px-4 py-3.5 hover:bg-orange-50/30 transition-colors">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                             <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white"
                               style={{ background: 'linear-gradient(135deg, #ea580c, #c2410c)' }}>
                               {(o.billing_customer_name || '?').charAt(0)}
@@ -524,27 +548,29 @@ export default function Pipeline() {
                         </div>
                       );
                     })}
-                    {stageLeads.map(lead => (
-                      <div key={lead._id} className="px-5 py-3.5 hover:bg-gray-50/50 transition-colors">
+                    {stageLeads.filter(l => !phoneSearch || l.phone?.includes(phoneSearch)).map(lead => (
+                      <div key={lead._id} className="px-4 py-3.5 hover:bg-gray-50/50 transition-colors">
                         {/* Lead info + action buttons */}
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white"
-                            style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
-                            {lead.name?.charAt(0)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-gray-800 text-sm">{lead.name}</p>
-                            <div className="flex items-center gap-3 mt-0.5">
-                              <p className="text-xs text-gray-400">{lead.phone}</p>
-                              {lead.assignedTo && (
-                                <p className="text-xs text-green-600 flex items-center gap-1">
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                                  {lead.assignedTo.name}
-                                </p>
-                              )}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white"
+                              style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
+                              {lead.name?.charAt(0)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-gray-800 text-sm">{lead.name}</p>
+                              <div className="flex items-center gap-3 mt-0.5">
+                                <p className="text-xs text-gray-400">{lead.phone}</p>
+                                {lead.assignedTo && (
+                                  <p className="text-xs text-green-600 flex items-center gap-1">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                    {lead.assignedTo.name}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
-                          <div className="flex flex-wrap gap-1.5 justify-end shrink-0">
+                          <div className="flex flex-wrap gap-1.5">
                             {key === 'on_hold' ? (
                               <>
                                 <button onClick={() => openDetail(lead)}
