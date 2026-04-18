@@ -306,7 +306,7 @@ export default function Tasks() {
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, label: 'Problem', value: selected.problem },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, label: 'Age', value: selected.age ? `${selected.age} yrs` : null },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>, label: 'Weight', value: selected.weight ? `${selected.weight} kg` : null },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>, label: 'Height', value: selected.height ? `${selected.height} cm` : null },
+              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>, label: 'Height', value: selected.height ? `${selected.height} ft` : null },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, label: 'Other Problems', value: selected.otherProblems },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>, label: 'Problem Duration', value: selected.problemDuration },
               { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>, label: 'Price', value: selected.price ? `₹${selected.price}` : null },
@@ -398,7 +398,7 @@ export default function Tasks() {
                 <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Age" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} /></div>
               <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Weight (kg)</label>
                 <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Weight" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} /></div>
-              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Height (inch)</label>
+              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Height (feet)</label>
                 <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Height" value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} /></div>
             </div>
 
