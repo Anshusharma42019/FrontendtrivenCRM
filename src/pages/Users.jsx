@@ -27,9 +27,10 @@ export default function Users() {
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
 
   const load = useCallback(async () => {
-    getUsers().then(res => setData(res)).catch(() => {});
+    getUsers().then(res => setData(res)).catch(() => {}).finally(() => setPageLoading(false));
     // Load shipment counts by fetching all ready_to_shipment tasks and grouping by assignedTo
     API.get('/tasks', { params: { status: 'ready_to_shipment' } })
       .then(res => {
@@ -94,6 +95,15 @@ export default function Users() {
   };
 
   const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition";
+
+  if (pageLoading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="flex items-center gap-3 text-gray-400">
+        <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+        Loading staff...
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">

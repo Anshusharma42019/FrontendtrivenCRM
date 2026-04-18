@@ -6,7 +6,7 @@ import { getUsers } from '../services/user.service';
 import Modal from '../components/ui/Modal';
 import Badge from '../components/ui/Badge';
 
-const STATUSES = ['new', 'contacted', 'follow_up', 'closed_won', 'closed_lost'];
+const STATUSES = ['new', 'old'];
 const SOURCES = ['website', 'referral', 'social_media', 'cold_call', 'email', 'walk_in', 'other'];
 const TYPES = ['general', 'ayurveda', 'panchakarma', 'consultation', 'product', 'other'];
 const EMPTY = { name: '', phone: '', email: '', address: '', source: 'other', status: 'new', type: 'general', problem: '', note: '', revenue: '' };
@@ -24,6 +24,7 @@ export default function Leads() {
   const [form, setForm] = useState(EMPTY);
   const [assignTo, setAssignTo] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
 
@@ -44,7 +45,7 @@ export default function Leads() {
       setData(res || { leads: [], total: 0, totalPages: 1 });
     } catch (err) {
       setLoadError(err.response?.data?.message || err.message || 'Failed to load leads');
-    }
+    } finally { setPageLoading(false); }
   }, [filters]);
 
   useEffect(() => { load(); }, [load]);
@@ -144,6 +145,15 @@ export default function Leads() {
     else if (preset === 'month') { const m = new Date(today); m.setDate(1); from = fmt(m); }
     setFilters(f => ({ ...f, dateFrom: from, dateTo: to, datePreset: preset, status: preset === 'today' ? 'new' : '', page: 1 }));
   };
+
+  if (pageLoading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="flex items-center gap-3 text-gray-400">
+        <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+        Loading leads...
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-5">

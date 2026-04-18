@@ -95,7 +95,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, Number(import.meta.env.VITE_DASHBOARD_REFRESH_INTERVAL) || 30000);
+    const t = setInterval(load, Number(import.meta.env.VITE_DASHBOARD_REFRESH_INTERVAL) || 120000);
     return () => clearInterval(t);
   }, [load]);
 
@@ -120,7 +120,7 @@ export default function Dashboard() {
           <p className="text-sm text-gray-400 mt-0.5">Welcome back! Here's what's happening.</p>
         </div>
         <span className="text-xs text-gray-300 bg-white px-3 py-1.5 rounded-xl shadow-sm" style={{ border: '1px solid rgba(0,0,0,0.05)' }}>
-          Live · {(Number(import.meta.env.VITE_DASHBOARD_REFRESH_INTERVAL) || 30000) / 1000}s refresh
+          Live · {(Number(import.meta.env.VITE_DASHBOARD_REFRESH_INTERVAL) || 120000) / 1000}s refresh
         </span>
       </div>
 

@@ -1,5 +1,6 @@
 const colors = {
   new:          'bg-blue-100 text-blue-700',
+  old:          'bg-slate-100 text-slate-600',
   contacted:    'bg-yellow-100 text-yellow-700',
   interested:   'bg-purple-100 text-purple-700',
   follow_up:    'bg-orange-100 text-orange-700',

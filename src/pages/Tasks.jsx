@@ -10,7 +10,7 @@ import Badge from '../components/ui/Badge';
 
 const TYPES = ['call', 'follow_up', 'meeting', 'email', 'task'];
 const PRIORITIES = ['low', 'medium', 'high'];
-const STATUSES = ['verification', 'cnp', 'interested', 'cancel_call'];
+const STATUSES = ['new', 'old'];
 const EMPTY = { title: '', description: '', problem: '', type: 'task', lead: '', assignedTo: '', dueDate: '', priority: 'medium', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending', age: '', weight: '', height: '', otherProblems: '', problemDuration: '', price: '', phone: '' };
 
 const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition";
@@ -41,6 +41,7 @@ export default function Tasks() {
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
 
@@ -90,7 +91,7 @@ export default function Tasks() {
       setDaily(Array.isArray(day) ? day : []);
     } catch (err) {
       setLoadError(err.response?.data?.message || err.message || 'Failed to load tasks');
-    }
+    } finally { setPageLoading(false); }
   }, [filters]);
 
   useEffect(() => { load(); }, [load]);
@@ -103,7 +104,7 @@ export default function Tasks() {
     }
   }, [canManage]);
 
-  const openCreate = () => { setForm(EMPTY); setError(''); setModal('create'); };
+  const openCreate = () => { setForm(EMPTY); setError(''); setPincodeData([]); setModal('create'); };
   const openEdit = (task) => {
     setSelected(task);
     setForm({ title: task.title, description: task.description || '', problem: task.problem || '', type: task.type,
@@ -129,6 +130,27 @@ export default function Tasks() {
   };
 
   const [noteText, setNoteText] = useState('');
+  const [pincodeData, setPincodeData] = useState([]);
+  const [pincodeLoading, setPincodeLoading] = useState(false);
+
+  const handlePincodeChange = async (val) => {
+    setForm(f => ({ ...f, pincode: val, postOffice: '', district: '', state: '' }));
+    setPincodeData([]);
+    if (val.length !== 6) return;
+    setPincodeLoading(true);
+    try {
+      const res = await fetch(`https://api.postalpincode.in/pincode/${val}`);
+      const data = await res.json();
+      if (data[0]?.Status === 'Success') {
+        const offices = data[0].PostOffice || [];
+        setPincodeData(offices);
+        if (offices.length > 0) {
+          setForm(f => ({ ...f, district: offices[0].District, state: offices[0].State }));
+        }
+      }
+    } catch { /* ignore */ }
+    finally { setPincodeLoading(false); }
+  };
 
   const handleAddNote = async () => {
     if (!noteText.trim() || !selected) return;
@@ -173,6 +195,15 @@ export default function Tasks() {
     if (!confirm('Delete this task?')) return;
     await deleteTask(id).catch(() => {}); load();
   };
+
+  if (pageLoading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="flex items-center gap-3 text-gray-400">
+        <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+        Loading tasks...
+      </div>
+    </div>
+  );
 
   const displayed = (tab === 'daily' ? daily : tasks).filter(t => t.status !== 'cnp' && t.status !== 'verification');
 
@@ -242,7 +273,9 @@ export default function Tasks() {
                       {task.title.replace(/^call\s+/i, '')}
                     </span>
                     <Badge value={task.status} />
-                    <Badge value={task.priority} />
+                    {task.lead?.status && (task.lead.status === 'new' || task.lead.status === 'old') && (
+                      <Badge value={task.lead.status} />
+                    )}
                   </div>
                   {task.lead?.name && (
                     <p className="text-xs text-gray-500 mt-0.5">{task.lead.name}</p>
@@ -448,8 +481,24 @@ export default function Tasks() {
 
             {/* Pincode + State */}
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pincode</label>
-                <input className={`${inputCls} mt-1.5`} placeholder="Pincode" value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} /></div>
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pincode</label>
+                <div className="relative">
+                  <input className={`${inputCls} mt-1.5`} placeholder="Pincode" maxLength={6} value={form.pincode}
+                    onChange={(e) => handlePincodeChange(e.target.value)} />
+                  {pincodeLoading && <span className="absolute right-3 top-4 text-xs text-gray-400">...</span>}
+                </div>
+                {pincodeData.length > 0 && (
+                  <select className={`${inputCls} mt-1`} value={form.postOffice}
+                    onChange={(e) => {
+                      const o = pincodeData.find(p => p.Name === e.target.value);
+                      setForm(f => ({ ...f, postOffice: e.target.value, district: o?.District || f.district, state: o?.State || f.state }));
+                    }}>
+                    <option value="">Select Post Office</option>
+                    {pincodeData.map(p => <option key={p.Name} value={p.Name}>{p.Name}</option>)}
+                  </select>
+                )}
+              </div>
               <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">State</label>
                 <input className={`${inputCls} mt-1.5`} placeholder="State" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} /></div>
             </div>
@@ -466,7 +515,7 @@ export default function Tasks() {
                           ? 'bg-green-600 text-white border-green-600'
                           : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-green-400'
                       }`}>
-                      {s === 'cnp' ? 'CNP' : s === 'cancel_call' ? 'Not Interested' : s === 'interested' ? 'Interested' : 'Verification'}
+                      {s === 'new' ? 'New' : 'Old'}
                     </button>
                   ))}
                 </div>
