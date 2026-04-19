@@ -10,7 +10,7 @@ import Badge from '../components/ui/Badge';
 
 const TYPES = ['call', 'follow_up', 'meeting', 'email', 'task'];
 const PRIORITIES = ['low', 'medium', 'high'];
-const STATUSES = ['new', 'old'];
+const STATUSES = ['verification'];
 const EMPTY = { title: '', description: '', problem: '', type: 'task', lead: '', assignedTo: '', dueDate: '', priority: 'medium', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending', age: '', weight: '', height: '', otherProblems: '', problemDuration: '', price: '', phone: '' };
 
 const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition";
@@ -107,7 +107,14 @@ export default function Tasks() {
   const openCreate = () => { setForm(EMPTY); setError(''); setPincodeData([]); setModal('create'); };
   const openEdit = (task) => {
     setSelected(task);
-    setForm({ title: task.title, description: task.description || '', problem: task.problem || '', type: task.type,
+    // Parse phone from description if task.phone is missing (legacy format: "Phone: xxx | rest")
+    let phone = task.phone || '';
+    let description = task.description || '';
+    if (!phone && description.startsWith('Phone:')) {
+      const match = description.match(/^Phone:\s*([^|]+)(?:\|(.*))?$/);
+      if (match) { phone = match[1].trim(); description = (match[2] || '').trim(); }
+    }
+    setForm({ title: task.title, description, problem: task.problem || '', type: task.type,
       lead: task.lead?._id || '', assignedTo: task.assignedTo?._id || '',
       dueDate: task.dueDate?.slice(0, 16) || '', priority: task.priority,
       reminderAt: task.reminderAt?.slice(0, 16) || '',
@@ -116,7 +123,7 @@ export default function Tasks() {
       landmark: task.landmark || '', pincode: task.pincode || '', state: task.state || '',
       status: task.status || 'pending',
       age: task.age || '', weight: task.weight || '', height: task.height || '',
-      otherProblems: task.otherProblems || '', problemDuration: task.problemDuration || '', price: task.price || '', phone: task.phone || '' });
+      otherProblems: task.otherProblems || '', problemDuration: task.problemDuration || '', price: task.price || '', phone });
     setError(''); setModal('edit');
   };
 
@@ -515,7 +522,7 @@ export default function Tasks() {
                           ? 'bg-green-600 text-white border-green-600'
                           : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-green-400'
                       }`}>
-                      {s === 'new' ? 'New' : 'Old'}
+                      Verification
                     </button>
                   ))}
                 </div>
