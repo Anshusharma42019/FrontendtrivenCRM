@@ -303,10 +303,12 @@ export default function Leads() {
                 style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
                 {loading ? 'Saving...' : modal === 'edit' ? 'Update Lead' : 'Create Lead'}
               </button>
+              {modal === 'edit' && (
               <button type="button" disabled={loading} onClick={(e) => handleSubmit(e, 'cnp')}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-60 transition">
                 CNP
               </button>
+              )}
               <button type="button" disabled={loading} onClick={(e) => handleSubmit(e, 'callAgain')}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-60 transition">
                 Call Again
