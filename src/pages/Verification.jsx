@@ -266,7 +266,7 @@ export default function Verification() {
                     {[
                       { label: 'Age', value: selected.age ? `${selected.age} yrs` : null },
                       { label: 'Weight', value: selected.weight ? `${selected.weight} kg` : null },
-                      { label: 'Height', value: selected.height ? `${selected.height} cm` : null },
+                      { label: 'Height', value: selected.height ? `${selected.height} ft` : null },
                     ].filter(f => f.value).map(({ label, value }) => (
                       <div key={label} className="rounded-xl px-3 py-2.5 text-center" style={{ background: '#f0fdf4', border: '1px solid rgba(22,163,74,0.15)' }}>
                         <p className="text-xs text-green-600 font-bold uppercase tracking-wide">{label}</p>
@@ -441,8 +441,8 @@ export default function Verification() {
                     <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Age" value={editForm.age} onChange={e => sf('age', e.target.value)} /></div>
                   <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Weight (kg)</label>
                     <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Weight" value={editForm.weight} onChange={e => sf('weight', e.target.value)} /></div>
-                  <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Height (cm)</label>
-                    <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Height" value={editForm.height} onChange={e => sf('height', e.target.value)} /></div>
+                  <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Height (ft)</label>
+                    <input type="number" min="0" step="0.1" className={`${inputCls} mt-1.5`} placeholder="e.g. 5.6" value={editForm.height} onChange={e => sf('height', e.target.value)} /></div>
                 </div>
                 <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Other Problems</label>
                   <textarea rows={2} className={`${inputCls} mt-1.5`} value={editForm.otherProblems} onChange={e => sf('otherProblems', e.target.value)} /></div>

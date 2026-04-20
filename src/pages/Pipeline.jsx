@@ -48,8 +48,8 @@ function TaskModal({ lead, assignedTo, onClose }) {
               <input type="number" min="0" className={`${inputCls} mt-1.5`} value={form.age} onChange={e => setForm({ ...form, age: e.target.value })} /></div>
             <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Weight (kg)</label>
               <input type="number" min="0" className={`${inputCls} mt-1.5`} value={form.weight} onChange={e => setForm({ ...form, weight: e.target.value })} /></div>
-            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Height (cm)</label>
-              <input type="number" min="0" className={`${inputCls} mt-1.5`} value={form.height} onChange={e => setForm({ ...form, height: e.target.value })} /></div>
+            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Height (ft)</label>
+              <input type="number" min="0" step="0.1" className={`${inputCls} mt-1.5`} value={form.height} onChange={e => setForm({ ...form, height: e.target.value })} /></div>
           </div>
           <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Other Problems</label>
             <textarea rows={2} className={`${inputCls} mt-1.5`} value={form.otherProblems} onChange={e => setForm({ ...form, otherProblems: e.target.value })} /></div>
