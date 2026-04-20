@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getLeads, updateLead, getCallAgains, updateCallAgain } from '../services/lead.service';
-import { createTask } from '../services/task.service';
+import { createTask, getCnpRecords, deleteCnpRecord } from '../services/task.service';
 import API from '../api';
 
 const TASK_EMPTY = { title: '', description: '', problem: '', dueDate: '', priority: 'medium', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', age: '', weight: '', height: '', otherProblems: '', problemDuration: '' };
@@ -218,13 +218,13 @@ export default function Pipeline() {
         getLeads({ limit: 200 }),
         getLeads({ limit: 200, status: 'interested' }),
         API.get('/shiprocket/orders/with-followups'),
-        getLeads({ limit: 200, cnp: 'true' }),
+        getCnpRecords(),
         getCallAgains(),
       ]);
       const allLeads = [...(Array.isArray(leadsRes?.leads) ? leadsRes.leads : []), ...(Array.isArray(interestedRes?.leads) ? interestedRes.leads : [])];
       setLeads(allLeads);
       setDeliveredOrders(Array.isArray(ordersRes.data?.data) ? ordersRes.data.data : []);
-      setCnpLeads(Array.isArray(cnpRes?.leads) ? cnpRes.leads : []);
+      setCnpLeads(Array.isArray(cnpRes) ? cnpRes : []);
       setCallAgainLeads(Array.isArray(callAgainRes) ? callAgainRes : []);
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to load');
@@ -347,33 +347,50 @@ export default function Pipeline() {
               <div className="py-12 text-center text-gray-400 text-sm">No CNP leads</div>
             ) : (
               <div className="divide-y divide-gray-50">
-                {cnpLeads.filter(l => !phoneSearch || l.phone?.includes(phoneSearch)).map(lead => (
-                  <div key={lead._id} className="px-4 py-3.5 flex flex-col sm:flex-row sm:items-center gap-2 hover:bg-red-50/30 transition-colors">
+                {cnpLeads.filter(r => !phoneSearch || r.lead?.phone?.includes(phoneSearch)).map(record => (
+                  <div key={record._id} className="px-4 py-3.5 flex flex-col sm:flex-row sm:items-center gap-2 hover:bg-red-50/30 transition-colors">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white bg-gradient-to-br from-red-400 to-red-600">{lead.name?.charAt(0)}</div>
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white bg-gradient-to-br from-red-400 to-red-600">{record.lead?.name?.charAt(0)}</div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-800 text-sm">{lead.name}</p>
+                        <p className="font-semibold text-gray-800 text-sm">{record.lead?.name || record.title}</p>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <p className="text-xs text-gray-400">{lead.phone}</p>
-                          {lead.assignedTo && <p className="text-xs text-green-600">{lead.assignedTo.name}</p>}
+                          <p className="text-xs text-gray-400">{record.lead?.phone}</p>
+                          {record.assignedTo && <p className="text-xs text-green-600">{record.assignedTo.name}</p>}
+                          <span className="text-xs text-red-500 font-semibold">{record.cnpCount || 1}/3 CNP</span>
                         </div>
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      <button onClick={() => openLeadDetail(lead)}
+                      <button onClick={() => openLeadDetail(record.lead)}
                         className="text-xs font-semibold px-3 py-1.5 rounded-xl text-white transition"
                         style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>View Detail</button>
                       <button onClick={async () => {
-                        await updateLead(lead._id, { cnp: false }).catch(() => {});
-                        navigate('/tasks', { state: { leadId: lead._id, assignedTo: lead.assignedTo?._id || '', leadName: lead.name, leadPhone: lead.phone, leadData: lead } });
+                        navigate('/tasks', { state: { leadId: record.lead?._id, assignedTo: record.assignedTo?._id || '', leadName: record.lead?.name, leadPhone: record.lead?.phone, leadData: record.lead, cnpId: record._id } });
                       }}
                         className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 transition">+ Task</button>
-                      <button disabled={updating === lead._id} onClick={() => handleMove(lead, 'contacted')}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100 transition disabled:opacity-40">Contacted</button>
-                      <button disabled={updating === lead._id} onClick={() => handleMove(lead, 'interested')}
+                      <button disabled={updating === record._id} onClick={async () => {
+                        setUpdating(record._id);
+                        try {
+                          await updateLead(record.lead._id, { status: 'interested', cnp: false });
+                          await deleteCnpRecord(record._id).catch(() => {});
+                          setFilter('interested');
+                          load();
+                        } catch { load(); }
+                        finally { setUpdating(null); }
+                      }}
                         className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-100 transition disabled:opacity-40">Interested</button>
+                      <button disabled={updating === record._id} onClick={async () => {
+                        setUpdating(record._id);
+                        try {
+                          await updateLead(record.lead._id, { status: 'closed_lost', cnp: false });
+                          await deleteCnpRecord(record._id).catch(() => {});
+                          setFilter('closed_lost');
+                          load();
+                        } catch { load(); }
+                        finally { setUpdating(null); }
+                      }}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 border border-red-100 transition disabled:opacity-40">Not Interested</button>
                     </div>
-
                   </div>
                 ))}
               </div>
@@ -412,24 +429,19 @@ export default function Pipeline() {
                         navigate('/tasks', { state: { leadId: lead?._id, assignedTo: record.assignedTo?._id || '', leadName: lead?.name, leadPhone: lead?.phone, leadData: lead } });
                       }}
                         className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 transition">+ Task</button>
-                      <button disabled={updating === record._id} onClick={() => handleCallAgainStatus(record, 'contacted')}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100 transition disabled:opacity-40">Contacted</button>
                       <button disabled={updating === record._id} onClick={() => handleCallAgainStatus(record, 'interested')}
                         className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-100 transition disabled:opacity-40">Interested</button>
                       <button disabled={updating === record._id} onClick={async () => {
                         setUpdating(record._id);
                         try {
-                          await updateCallAgain(record._id, { status: 'converted' });
-                          if (record.lead?._id) {
-                            await updateLead(record.lead._id, { status: 'interested' });
-                            const { createTask } = await import('../services/task.service');
-                            await createTask({ title: record.lead.name, lead: record.lead._id, assignedTo: record.assignedTo?._id || undefined, type: 'task', status: 'verification', priority: 'medium' });
-                          }
-                          navigate('/verification');
-                        } catch { /* ignore */ }
+                          await updateCallAgain(record._id, { status: 'closed_lost' });
+                          if (record.lead?._id) await updateLead(record.lead._id, { status: 'closed_lost' });
+                          setFilter('closed_lost');
+                          load();
+                        } catch { load(); }
                         finally { setUpdating(null); }
                       }}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-green-50 text-green-700 hover:bg-green-100 border border-green-100 transition disabled:opacity-40">Converted</button>
+                        className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 border border-red-100 transition disabled:opacity-40">Not Interested</button>
                     </div>
                   </div>
                 ))}
@@ -578,6 +590,11 @@ export default function Pipeline() {
                                   style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
                                   View Detail
                                 </button>
+                                <button
+                                  onClick={() => navigate('/tasks', { state: { leadId: lead._id, assignedTo: lead.assignedTo?._id || '', leadName: lead.name, leadPhone: lead.phone, leadData: lead, afterCreateStatus: 'interested' } })}
+                                  className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 transition-all">
+                                  + Task
+                                </button>
                                 <button disabled={updating === lead._id}
                                   onClick={() => handleMove(lead, 'interested')}
                                   className="text-xs font-semibold px-3 py-1.5 rounded-xl text-white transition-all disabled:opacity-40"
@@ -593,6 +610,11 @@ export default function Pipeline() {
                               </>
                             ) : key === 'interested' ? (
                               <>
+                                <button
+                                  onClick={() => navigate('/tasks', { state: { leadId: lead._id, assignedTo: lead.assignedTo?._id || '', leadName: lead.name, leadPhone: lead.phone, leadData: lead, afterCreateStatus: 'on_hold' } })}
+                                  className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 transition-all">
+                                  + Task
+                                </button>
                                 <button disabled={updating === lead._id}
                                   onClick={() => handleMove(lead, 'on_hold')}
                                   className="text-xs font-semibold px-3 py-1.5 rounded-xl text-white transition-all disabled:opacity-40"

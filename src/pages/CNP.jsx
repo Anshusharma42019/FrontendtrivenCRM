@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   getLeads,
+  getLead,
   updateLead,
   markCNP,
   unmarkCNP,
@@ -22,6 +23,7 @@ export default function CNP() {
   const [updating, setUpdating] = useState(null);
   const [tab, setTab] = useState("tasks");
   const [leadDetail, setLeadDetail] = useState(null);
+  const [viewTask, setViewTask] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -68,6 +70,37 @@ export default function CNP() {
       setCnpTasks(prev => prev.filter(t => t._id !== task._id));
       navigate('/pipeline', { state: { filter: 'closed_lost' } });
     } catch { /* ignore */ } finally { setUpdating(null); }
+  };
+
+  const handleInterested = async (task) => {
+    if (!task.lead?._id) return;
+    setUpdating(task._id);
+    try {
+      await updateLead(task.lead._id, { status: 'interested' });
+      await deleteCnpRecord(task._id);
+      setCnpTasks(prev => prev.filter(t => t._id !== task._id));
+      navigate('/pipeline', { state: { filter: 'interested' } });
+    } catch { /* ignore */ } finally { setUpdating(null); }
+  };
+
+  const handleOnHold = async (task) => {
+    if (!task.lead?._id) return;
+    setUpdating(task._id);
+    try {
+      await updateLead(task.lead._id, { status: 'on_hold' });
+      await deleteCnpRecord(task._id);
+      setCnpTasks(prev => prev.filter(t => t._id !== task._id));
+      navigate('/pipeline', { state: { filter: 'on_hold' } });
+    } catch { /* ignore */ } finally { setUpdating(null); }
+  };
+
+  const handleViewTask = async (task) => {
+    if (!task.lead?._id) return;
+    try {
+      const lead = await getLead(task.lead._id);
+      setLeadDetail(lead);
+      setViewTask(task);
+    } catch { /* ignore */ }
   };
 
   const handleIncrementCnp = async (id) => {
@@ -222,10 +255,30 @@ export default function CNP() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <button
+                      onClick={() => handleViewTask(task)}
+                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-purple-500 text-white hover:bg-purple-600 transition shadow-sm shadow-purple-200"
+                    >
+                      View
+                    </button>
+                    <button
                       onClick={() => handleGoToTask(task)}
                       className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition shadow-sm shadow-blue-200"
                     >
                       + Task
+                    </button>
+                    <button
+                      disabled={updating === task._id}
+                      onClick={() => handleInterested(task)}
+                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-green-500 text-white hover:bg-green-600 transition shadow-sm shadow-green-200 disabled:opacity-40"
+                    >
+                      Interested
+                    </button>
+                    <button
+                      disabled={updating === task._id}
+                      onClick={() => handleOnHold(task)}
+                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition shadow-sm shadow-amber-200 disabled:opacity-40"
+                    >
+                      On Hold
                     </button>
                     <button
                       disabled={updating === task._id}
@@ -272,12 +325,11 @@ export default function CNP() {
                     )}
                   </div>
                 </div>
-                <div className="flex gap-1.5 shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
                   <button
-                    onClick={() => setLeadDetail(lead)}
-                    className="text-xs font-bold px-3 py-1.5 rounded-xl text-white transition shadow-sm"
-                    style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}
-                  >View Detail</button>
+                    onClick={() => { setLeadDetail(lead); setViewTask(null); }}
+                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-purple-500 text-white hover:bg-purple-600 transition shadow-sm shadow-purple-200"
+                  >View</button>
                   <button
                     disabled={updating === lead._id}
                     onClick={async () => {
@@ -288,8 +340,32 @@ export default function CNP() {
                         navigate('/tasks', { state: { leadId: lead._id, assignedTo: lead.assignedTo?._id || '', leadName: lead.name, leadPhone: lead.phone, leadData: lead } });
                       } catch { /* ignore */ } finally { setUpdating(null); }
                     }}
-                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition shadow-sm disabled:opacity-40"
+                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition shadow-sm shadow-blue-200 disabled:opacity-40"
                   >+ Task</button>
+                  <button
+                    disabled={updating === lead._id}
+                    onClick={async () => {
+                      setUpdating(lead._id);
+                      try {
+                        await updateLead(lead._id, { status: 'interested' });
+                        setCallAgainLeads(prev => prev.filter(l => l._id !== lead._id));
+                        navigate('/pipeline', { state: { filter: 'interested' } });
+                      } catch { /* ignore */ } finally { setUpdating(null); }
+                    }}
+                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-green-500 text-white hover:bg-green-600 transition shadow-sm shadow-green-200 disabled:opacity-40"
+                  >Interested</button>
+                  <button
+                    disabled={updating === lead._id}
+                    onClick={async () => {
+                      setUpdating(lead._id);
+                      try {
+                        await updateLead(lead._id, { status: 'on_hold' });
+                        setCallAgainLeads(prev => prev.filter(l => l._id !== lead._id));
+                        navigate('/pipeline', { state: { filter: 'on_hold' } });
+                      } catch { /* ignore */ } finally { setUpdating(null); }
+                    }}
+                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition shadow-sm shadow-amber-200 disabled:opacity-40"
+                  >On Hold</button>
                   <button
                     disabled={updating === lead._id}
                     onClick={async () => {
@@ -300,7 +376,7 @@ export default function CNP() {
                         navigate('/pipeline', { state: { filter: 'closed_lost' } });
                       } catch { /* ignore */ } finally { setUpdating(null); }
                     }}
-                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200 transition disabled:opacity-40"
+                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200 transition disabled:opacity-40"
                   >Not Interested</button>
                 </div>
               </div>
@@ -310,7 +386,7 @@ export default function CNP() {
       </div>
 
       {leadDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setLeadDetail(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { setLeadDetail(null); setViewTask(null); }}>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="rounded-t-2xl px-6 py-5" style={{ background: 'linear-gradient(135deg, #0d1f0d, #1a3a1a)' }}>
               <div className="flex items-center gap-4">
@@ -322,7 +398,7 @@ export default function CNP() {
                   <h3 className="text-white font-bold text-base">{leadDetail.name}</h3>
                   <p className="text-green-300/70 text-sm">{leadDetail.phone}</p>
                 </div>
-                <button onClick={() => setLeadDetail(null)} className="text-gray-400 hover:text-white text-xl leading-none">×</button>
+                <button onClick={() => { setLeadDetail(null); setViewTask(null); }} className="text-gray-400 hover:text-white text-xl leading-none">×</button>
               </div>
             </div>
             <div className="px-6 py-4 space-y-0">
@@ -335,6 +411,44 @@ export default function CNP() {
                   <p className="text-sm text-gray-800 font-medium">{value}</p>
                 </div>
               ))}
+
+              {/* CNP History Section */}
+              {viewTask && (
+                <div className="pt-3">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 rounded-full bg-red-500" />
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">CNP History</p>
+                    <span className="ml-auto text-[11px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">
+                      {viewTask.cnpCount || 1}/3 times
+                    </span>
+                  </div>
+                  {viewTask.cnpHistory?.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {[...viewTask.cnpHistory].reverse().map((h, i) => {
+                        const d = new Date(h.clickedAt);
+                        return (
+                          <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-red-50 border border-red-100">
+                            <div className="w-6 h-6 rounded-lg bg-red-500 flex items-center justify-center shrink-0">
+                              <span className="text-white text-[10px] font-bold">{viewTask.cnpHistory.length - i}</span>
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold text-gray-700">{d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                              <p className="text-[11px] text-gray-400">{d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="px-3 py-2 rounded-xl bg-red-50 border border-red-100">
+                      <p className="text-xs font-semibold text-gray-700">
+                        {new Date(viewTask.lastCnpAt || viewTask.createdAt).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                      </p>
+                      <p className="text-[11px] text-gray-400">CNP marked — {viewTask.cnpCount || 1} time(s)</p>
+                    </div>
+                  )}
+                </div>
+              )}
               {leadDetail.notes?.length > 0 && (
                 <div className="pt-3">
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Notes History</p>

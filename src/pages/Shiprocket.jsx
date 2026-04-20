@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import api from '../api';
+import * as srSvc from '../services/shiprocket.service';
 
 const TOKEN_KEY = 'sr_token';
 const TOKEN_EXP_KEY = 'sr_token_exp';
@@ -33,6 +34,17 @@ const Field = ({ label, children }) => (
   </div>
 );
 
+const MEDICINES = [
+  { name: 'Migraine Medicines', sku: 'MIG-001' },
+  { name: 'Ayurvedic Oil', sku: 'AYU-001' },
+  { name: 'Triven Wellness Kit', sku: 'TWK-001' },
+  { name: 'Pain Relief Oil', sku: 'PRO-001' },
+  { name: 'Immunity Booster', sku: 'IMB-001' },
+  { name: 'Digestive Care', sku: 'DGC-001' },
+  { name: 'Joint Care Oil', sku: 'JCO-001' },
+  { name: 'Stress Relief Kit', sku: 'SRK-001' },
+];
+
 export default function Shiprocket() {
   const [step, setStep] = useState(0);
   const [token, setToken] = useState(() => getSavedToken());
@@ -41,7 +53,7 @@ export default function Shiprocket() {
   const [error, setError] = useState('');
   const location = useLocation();
 
-  const [svc, setSvc] = useState({ pickup_postcode: '841223', delivery_postcode: '', weight: '1.23', cod: 0 });
+  const [svc, setSvc] = useState({ pickup_postcode: '', delivery_postcode: '', weight: '0.5', cod: 0 });
   const [couriers, setCouriers] = useState([]);
   const [recommendedCourierId, setRecommendedCourierId] = useState(null);
 
@@ -52,9 +64,9 @@ export default function Shiprocket() {
     billing_state: '', billing_country: 'India',
     billing_email: '', billing_phone: '',
     shipping_is_billing: true,
-    order_items: [{ name: '', sku: '', units: 1, selling_price: '' }],
+    order_items: [{ name: 'Migraine Medicines', sku: 'MIG-001', units: 1, selling_price: '' }],
     payment_method: 'prepaid',
-    sub_total: '', length: 10, breadth: 10, height: 10, weight: 0.5,
+    sub_total: '', length: 15, breadth: 10, height: 6, weight: 0.5,
     lead_id: '',
   });
 
@@ -67,18 +79,22 @@ export default function Shiprocket() {
   const [rtsLoading, setRtsLoading] = useState(false);
   const [pickupLocations, setPickupLocations] = useState([]);
 
-  // Load pickup locations on mount if token exists
+  // Load pickup locations on mount
   useEffect(() => {
-    // Fetch next sequential order ID from backend
-    api.get('/shiprocket/next-order-id')
-      .then(res => setO('order_id', res.data.data.order_id))
-      .catch(() => setO('order_id', ''));
+      api.get('/shiprocket/next-order-id')
+      .then(res => setOrder(p => ({ ...p, order_id: res.data.data.order_id })))
+      .catch(() => {});
 
     api.get('/shiprocket/pickup-locations')
       .then(res => {
         const locs = res.data?.data?.shipping_address || [];
         setPickupLocations(locs);
-        if (locs.length > 0) setO('pickup_location', locs[0].pickup_location);
+        if (locs.length > 0) {
+          // Prefer 'Home-1', fallback to first location
+          const preferred = locs.find(l => l.pickup_location === 'Home-1') || locs[0];
+          setOrder(p => ({ ...p, pickup_location: preferred.pickup_location }));
+          if (preferred.pin_code) setSvc(p => ({ ...p, pickup_postcode: String(preferred.pin_code) }));
+        }
       }).catch(() => {});
   }, []);
 
@@ -101,18 +117,20 @@ export default function Shiprocket() {
         billing_pincode: r.pincode || '',
         billing_state: r.state || '',
         lead_id: r.lead?._id || '',
+        ...(r.title || r.task?.title ? { order_items: [{ name: r.title || r.task?.title, sku: '', units: 1, selling_price: r.price || '' }] } : {}),
+        ...(r.price ? { sub_total: r.price } : {}),
       }));
       setRtsRecords([r]);
       if (r._id) setRtsId(r._id);
     }
     if (state.delivery_postcode) {
       const deliveryPostcode = state.delivery_postcode;
-      const svcParams = { pickup_postcode: '841223', delivery_postcode: deliveryPostcode, weight: '1.23', cod: 0 };
+      const svcParams = { pickup_postcode: svc.pickup_postcode, delivery_postcode: deliveryPostcode, weight: '0.5', cod: 0 };
       setSvc(svcParams);
       setStep(1);
       // Auto-trigger serviceability check
       setLoading(true); setError(''); setResult(null);
-      api.get('/shiprocket/serviceability', { params: { token: getSavedToken(), ...svcParams } })
+      srSvc.checkServiceability({ pickup_postcode: svc.pickup_postcode, delivery_postcode: deliveryPostcode, weight: '0.5', cod: 0 })
         .then(res => {
           const list = res.data?.data?.data?.available_courier_companies || [];
           const recommended = res.data?.data?.data?.recommended_courier_company_id;
@@ -129,8 +147,7 @@ export default function Shiprocket() {
   const getValidToken = async () => {
     const saved = getSavedToken();
     if (saved) return saved;
-    // Token expired — auto re-login
-    const res = await api.post('/shiprocket/login');
+    const res = await srSvc.login();
     const t = res.data.data.token;
     saveToken(t);
     setToken(t);
@@ -153,7 +170,7 @@ export default function Shiprocket() {
       <div className="space-y-4 max-w-md">
         <p className="text-sm text-gray-500">Logs in using Shiprocket API user credentials from the server .env file.</p>
         <button onClick={() => call(async () => {
-          const res = await api.post('/shiprocket/login');
+          const res = await srSvc.login();
           saveToken(res.data.data.token);
           setToken(res.data.data.token);
           return res.data;
@@ -174,8 +191,19 @@ export default function Shiprocket() {
       <div className="space-y-4 max-w-lg">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Pickup Pincode">
-            <input className={inp} placeholder="e.g. 110001" value={svc.pickup_postcode}
-              onChange={e => setSvc(p => ({ ...p, pickup_postcode: e.target.value }))} />
+            {pickupLocations.length > 0 ? (
+              <select className={inp} value={svc.pickup_postcode}
+                onChange={e => setSvc(p => ({ ...p, pickup_postcode: e.target.value }))}>
+                {pickupLocations.map(l => (
+                  <option key={l.id} value={String(l.pin_code)}>
+                    {l.pickup_location} | {l.address}{l.address_2 ? ', ' + l.address_2 : ''}, {l.city}, {l.state}-{l.pin_code}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input className={inp} placeholder="e.g. 110001" value={svc.pickup_postcode}
+                onChange={e => setSvc(p => ({ ...p, pickup_postcode: e.target.value }))} />
+            )}
           </Field>
           <Field label="Delivery Pincode">
             <input className={inp} placeholder="e.g. 226021" value={svc.delivery_postcode}
@@ -193,7 +221,7 @@ export default function Shiprocket() {
           </Field>
         </div>
         <button onClick={() => call(async () => {
-          const res = await api.get('/shiprocket/serviceability', { params: { token, ...svc } });
+          const res = await srSvc.checkServiceability(svc);
           const list = res.data?.data?.data?.available_courier_companies || [];
           const recommended = res.data?.data?.data?.recommended_courier_company_id;
           setCouriers(list);
@@ -279,6 +307,10 @@ export default function Shiprocket() {
                       setO('billing_pincode', r.pincode || '');
                       setO('billing_state', r.state || '');
                       setO('lead_id', r.lead?._id || '');
+                      const productName = r.title || r.task?.title || 'Migraine Medicines';
+                      const price = r.price || '';
+                      setItem('name', productName);
+                      if (price) { setItem('selling_price', price); setO('sub_total', price); }
                     }} className="text-xs font-semibold px-3 py-1.5 rounded-xl text-white bg-green-600 hover:bg-green-700 transition-all whitespace-nowrap">
                       Fill →
                     </button>
@@ -323,17 +355,48 @@ export default function Shiprocket() {
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
           <div className="h-1 bg-blue-500" />
           <div className="px-5 py-3 border-b border-gray-50">
-            <h3 className="font-semibold text-gray-700 text-sm">Billing Address</h3>
+            <h3 className="font-semibold text-gray-700 text-sm">Delivery Details</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Enter the delivery details of your buyer</p>
           </div>
-          <div className="px-5 py-4 grid grid-cols-3 gap-3">
-            {[['billing_customer_name','First Name *'],['billing_last_name','Last Name'],['billing_phone','Phone *'],
-              ['billing_email','Email'],['billing_address','Address *'],['billing_city','City *'],
-              ['billing_state','State *'],['billing_pincode','Pincode *'],['billing_country','Country'],
-            ].map(([k, label]) => (
-              <Field key={k} label={label}>
-                <input className={inp} placeholder={label.replace(' *','')} value={order[k]} onChange={e => setO(k, e.target.value)} />
+          <div className="px-5 py-4 space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Mobile Number *">
+                <div className="flex">
+                  <span className="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-gray-200 bg-gray-50 text-gray-500 text-sm">+91</span>
+                  <input className={`${inp} rounded-l-none`} placeholder="Enter mobile number" value={order.billing_phone} onChange={e => setO('billing_phone', e.target.value)} />
+                </div>
               </Field>
-            ))}
+              <Field label="Full Name *">
+                <input className={inp} placeholder="Enter Full Name" value={`${order.billing_customer_name}${order.billing_last_name ? ' ' + order.billing_last_name : ''}`}
+                  onChange={e => {
+                    const parts = e.target.value.trim().split(' ');
+                    setO('billing_customer_name', parts[0] || '');
+                    setO('billing_last_name', parts.slice(1).join(' ') || '');
+                  }} />
+              </Field>
+              <Field label="Complete Address *">
+                <input className={inp} placeholder="Enter Buyer's full address" value={order.billing_address} onChange={e => setO('billing_address', e.target.value)} />
+              </Field>
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              <Field label="Landmark (Optional)">
+                <input className={inp} placeholder="Enter any nearby landmark" value={order.billing_address_2 || ''} onChange={e => setO('billing_address_2', e.target.value)} />
+              </Field>
+              <Field label="Pincode *">
+                <input className={inp} placeholder="Enter pincode" value={order.billing_pincode} onChange={e => setO('billing_pincode', e.target.value)} />
+              </Field>
+              <Field label="City *">
+                <input className={inp} placeholder="City" value={order.billing_city} onChange={e => setO('billing_city', e.target.value)} />
+              </Field>
+              <Field label="State *">
+                <input className={inp} placeholder="State" value={order.billing_state} onChange={e => setO('billing_state', e.target.value)} />
+              </Field>
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="billing_email_row" className="w-3.5 h-3.5 accent-green-600" checked />
+              <label htmlFor="billing_email_row" className="text-xs text-gray-500">Billing Details are same as Delivery Details</label>
+              <input className={`${inp} max-w-xs ml-4`} placeholder="Email (optional)" value={order.billing_email} onChange={e => setO('billing_email', e.target.value)} />
+            </div>
           </div>
         </div>
 
@@ -343,7 +406,16 @@ export default function Shiprocket() {
             <h3 className="font-semibold text-gray-700 text-sm">Product Details</h3>
           </div>
           <div className="px-5 py-4 grid grid-cols-4 gap-3">
-            <Field label="Product Name *"><input className={inp} placeholder="Ayurvedic Oil" value={order.order_items[0].name} onChange={e => setItem('name', e.target.value)} /></Field>
+            <Field label="Product Name *">
+              <select className={inp} value={order.order_items[0].name}
+                onChange={e => {
+                  const med = MEDICINES.find(m => m.name === e.target.value);
+                  setItem('name', e.target.value);
+                  if (med) setItem('sku', med.sku);
+                }}>
+                {MEDICINES.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+              </select>
+            </Field>
             <Field label="SKU"><input className={inp} placeholder="SKU-001" value={order.order_items[0].sku} onChange={e => setItem('sku', e.target.value)} /></Field>
             <Field label="Units *"><input className={inp} type="number" min="1" value={order.order_items[0].units} onChange={e => setItem('units', Number(e.target.value))} /></Field>
             <Field label="Price (₹) *"><input className={inp} type="number" value={order.order_items[0].selling_price} onChange={e => setItem('selling_price', Number(e.target.value))} /></Field>
@@ -392,7 +464,7 @@ export default function Shiprocket() {
             height: Number(order.height),
             ...(order.lead_id ? { lead_id: order.lead_id } : {}),
           };
-          const res = await api.post('/shiprocket/order/create', payload);
+          const res = await srSvc.createOrder(payload);
           const d = res.data.data;
           if (d?.status_code >= 400) throw new Error(d?.message || 'Order creation failed');
           const sid = d?.shipment_id ?? d?.payload?.shipment_id;
@@ -463,8 +535,9 @@ export default function Shiprocket() {
                   if (!pincode) return;
                   setLoading(true);
                   try {
-                    const svcRes = await api.get('/shiprocket/serviceability', {
-                      params: { pickup_postcode: svc.pickup_postcode, delivery_postcode: pincode, weight: svc.weight || order.weight, cod: order.payment_method === 'COD' ? 1 : 0 }
+                    const svcRes = await srSvc.checkServiceability({
+                      pickup_postcode: svc.pickup_postcode, delivery_postcode: pincode,
+                      weight: svc.weight || order.weight, cod: order.payment_method === 'COD' ? 1 : 0
                     });
                     const list = svcRes.data?.data?.data?.available_courier_companies || [];
                     const recommended = svcRes.data?.data?.data?.recommended_courier_company_id;
@@ -482,10 +555,7 @@ export default function Shiprocket() {
         </div>
         <button onClick={() => call(async () => {
           await getValidToken();
-          const res = await api.post('/shiprocket/awb/assign', {
-            shipment_id: Number(shipmentId),
-            courier_id: Number(courierId),
-          });
+          const res = await srSvc.assignAWB(Number(shipmentId), Number(courierId));
           console.log('[AWB] full response:', JSON.stringify(res.data));
           const d = res.data.data;
           // Check failure: awb_assign_status=0 OR message indicates failure
@@ -496,8 +566,9 @@ export default function Shiprocket() {
             const pincode = order.billing_pincode || svc.delivery_postcode;
             if (pincode) {
               try {
-                const svcRes = await api.get('/shiprocket/serviceability', {
-                  params: { pickup_postcode: svc.pickup_postcode, delivery_postcode: pincode, weight: svc.weight || order.weight, cod: order.payment_method === 'COD' ? 1 : 0 }
+                const svcRes = await srSvc.checkServiceability({
+                  pickup_postcode: svc.pickup_postcode, delivery_postcode: pincode,
+                  weight: svc.weight || order.weight, cod: order.payment_method === 'COD' ? 1 : 0
                 });
                 const list = svcRes.data?.data?.data?.available_courier_companies || [];
                 const recommended = svcRes.data?.data?.data?.recommended_courier_company_id;
@@ -520,32 +591,32 @@ export default function Shiprocket() {
     if (step === 4) return simpleStep('Generate Pickup',
       [['Shipment ID (auto-filled)', shipmentId, setShipmentId]],
       'Generate Pickup',
-      () => call(() => api.post('/shiprocket/pickup/generate', { token, shipment_id: shipmentId }).then(r => r.data))
+      () => call(() => srSvc.generatePickup(shipmentId).then(r => r.data))
     );
     if (step === 5) return simpleStep('Generate Manifest',
       [['Shipment ID (auto-filled)', shipmentId, setShipmentId]],
       'Generate Manifest',
-      () => call(() => api.post('/shiprocket/manifest/generate', { token, shipment_id: shipmentId }).then(r => r.data))
+      () => call(() => srSvc.generateManifest(shipmentId).then(r => r.data))
     );
     if (step === 6) return simpleStep('Print Manifest',
       [['Order ID (auto-filled)', orderId, setOrderId]],
       'Print Manifest',
-      () => call(() => api.post('/shiprocket/manifest/print', { token, order_ids: [orderId] }).then(r => r.data))
+      () => call(() => srSvc.printManifest([orderId]).then(r => r.data))
     );
     if (step === 7) return simpleStep('Generate Label',
       [['Shipment ID (auto-filled)', shipmentId, setShipmentId]],
       'Generate Label',
-      () => call(() => api.post('/shiprocket/label/generate', { token, shipment_id: shipmentId }).then(r => r.data))
+      () => call(() => srSvc.generateLabel(shipmentId).then(r => r.data))
     );
     if (step === 8) return simpleStep('Print Invoice',
       [['Order ID (auto-filled)', orderId, setOrderId]],
       'Print Invoice',
-      () => call(() => api.post('/shiprocket/invoice/print', { token, ids: [orderId] }).then(r => r.data))
+      () => call(() => srSvc.printInvoice([orderId]).then(r => r.data))
     );
     if (step === 9) return simpleStep('Track AWB',
       [['AWB Code (auto-filled)', awbCode, setAwbCode]],
       'Track Shipment',
-      () => call(() => api.post(`/shiprocket/track/${awbCode}`, { token }).then(r => r.data))
+      () => call(() => srSvc.trackByAWB(awbCode).then(r => r.data))
     );
   };
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getLeads, getLead, createLead, updateLead, deleteLead, assignLead, addLeadNote, markCNP, createCallAgain } from '../services/lead.service';
 import { getUsers } from '../services/user.service';
@@ -27,8 +27,10 @@ export default function Leads() {
   const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
+  const pendingOpenId = useSearchParams()[0].get('openId');
 
   const navigate = useNavigate();
+  const [, setSearchParams] = useSearchParams();
   const canManage = user?.role === 'admin' || user?.role === 'manager';
   const canEdit = canManage || user?.role === 'sales';
 
@@ -49,6 +51,20 @@ export default function Leads() {
   }, [filters]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (pendingOpenId) {
+      getLead(pendingOpenId).then(full => {
+        setSelected(full);
+        setForm({ name: full.name, phone: full.phone, email: full.email || '', address: full.address || '',
+          source: full.source, status: full.status, type: full.type || 'general',
+          problem: full.problem || '', note: '', revenue: full.revenue || '' });
+        setModal('detail');
+        setSearchParams({}, { replace: true });
+      }).catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingOpenId]);
 
   useEffect(() => {
     if (canManage) getUsers({ role: 'sales' }).then(r => setSalesUsers(r.users || [])).catch(() => {});
@@ -146,7 +162,7 @@ export default function Leads() {
     setFilters(f => ({ ...f, dateFrom: from, dateTo: to, datePreset: preset, status: preset === 'today' ? 'new' : '', page: 1 }));
   };
 
-  if (pageLoading) return (
+  if (pageLoading && !pendingOpenId) return (
     <div className="flex items-center justify-center h-64">
       <div className="flex items-center gap-3 text-gray-400">
         <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
@@ -323,22 +339,23 @@ export default function Leads() {
             </div>
           </div>
 
-          {/* Fields */}
-          <div className="space-y-0">
+          {/* Fields - 2 column grid */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-0">
             {[
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'Address', value: selected.address },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, label: 'Problem', value: selected.problem },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, label: 'Assigned To', value: selected.assignedTo?.name },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>, label: 'Note', value: selected.note },
-            ].filter(f => f.value).map(({ icon, label, value }) => (
-              <div key={label} className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
-                <div className="w-8 h-8 rounded-lg bg-green-50 text-green-600 flex items-center justify-center shrink-0 mt-0.5">
-                  {icon}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">{label}</p>
-                  <p className="text-sm text-gray-800 font-medium">{value}</p>
-                </div>
+              { label: 'Email', value: selected.email || '—' },
+              { label: 'Source', value: selected.source ? selected.source.replace(/_/g, ' ') : '—' },
+              { label: 'Type', value: selected.type ? selected.type.replace(/_/g, ' ') : '—' },
+              { label: 'Revenue', value: selected.revenue > 0 ? `₹${Number(selected.revenue).toLocaleString()}` : '—' },
+              { label: 'Address', value: selected.address || '—' },
+              { label: 'Assigned To', value: selected.assignedTo?.name || '—' },
+              { label: 'Problem', value: selected.problem || '—', full: true },
+              { label: 'Note', value: selected.note || '—', full: true },
+              { label: 'Added On', value: new Date(selected.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) },
+              { label: 'CNP', value: selected.cnp ? 'Yes' : 'No' },
+            ].map(({ label, value, full }) => (
+              <div key={label} className={`py-2.5 border-b border-gray-50 ${full ? 'col-span-2' : ''}`}>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">{label}</p>
+                <p className="text-sm text-gray-800 font-medium capitalize">{value}</p>
               </div>
             ))}
           </div>
@@ -359,43 +376,7 @@ export default function Leads() {
             </div>
           )}
 
-          {/* Add Note inline */}
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Add Comment</p>
-            <div className="flex gap-2">
-              <input
-                placeholder="Write a comment and press Enter..."
-                className={`${inputCls} flex-1`}
-                value={form.note}
-                onChange={(e) => setForm(f => ({ ...f, note: e.target.value }))}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSaveNote(); } }}
-              />
-              <button onClick={handleSaveNote} disabled={loading || !form.note?.trim()}
-                className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 transition shrink-0"
-                style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>Add</button>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
           {error && <div className="bg-red-50 border border-red-100 text-red-600 text-sm p-3 rounded-xl mt-4">{error}</div>}
-          <div className="grid grid-cols-2 gap-2 mt-5">
-            <button disabled={loading} onClick={() => handleLeadAction('cnp')}
-              className="py-2.5 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-60 transition">
-              CNP
-            </button>
-            <button disabled={loading} onClick={() => handleLeadAction('callAgain')}
-              className="py-2.5 rounded-xl text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-60 transition">
-              Call Again
-            </button>
-            <button disabled={loading} onClick={() => handleLeadAction('interested')}
-              className="py-2.5 rounded-xl text-sm font-semibold text-white bg-purple-500 hover:bg-purple-600 disabled:opacity-60 transition">
-              Interested
-            </button>
-            <button disabled={loading} onClick={() => handleLeadAction('notInterested')}
-              className="py-2.5 rounded-xl text-sm font-semibold text-white bg-gray-500 hover:bg-gray-600 disabled:opacity-60 transition">
-              Not Interested
-            </button>
-          </div>
         </Modal>
       )}
 

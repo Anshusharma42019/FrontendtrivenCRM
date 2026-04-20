@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useAuth } from '../context/AuthContext';
 import { getNotifications } from '../services/notification.service';
+import { searchByPhone } from '../services/lead.service';
 import API from '../api';
 
 const PAGE_TITLES = {
@@ -31,8 +32,46 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = useRef(null);
+  const searchRef = useRef(null);
+  const [phoneQuery, setPhoneQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const initials = user?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const pageTitle = PAGE_TITLES[location.pathname] || '';
+
+  const STATUS_COLORS = {
+    new: 'bg-blue-100 text-blue-700',
+    contacted: 'bg-yellow-100 text-yellow-700',
+    interested: 'bg-green-100 text-green-700',
+    follow_up: 'bg-purple-100 text-purple-700',
+    closed_won: 'bg-emerald-100 text-emerald-700',
+    closed_lost: 'bg-red-100 text-red-700',
+    on_hold: 'bg-gray-100 text-gray-600',
+    old: 'bg-orange-100 text-orange-700',
+  };
+
+  const doSearch = useCallback(async (q) => {
+    if (q.trim().length < 3) { setSearchResults([]); setSearchOpen(false); return; }
+    setSearchLoading(true);
+    try {
+      const data = await searchByPhone(q.trim());
+      setSearchResults(data);
+      setSearchOpen(true);
+    } catch { setSearchResults([]); }
+    finally { setSearchLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => doSearch(phoneQuery), 350);
+    return () => clearTimeout(t);
+  }, [phoneQuery, doSearch]);
+
+  useEffect(() => {
+    const handler = (e) => { if (searchRef.current && !searchRef.current.contains(e.target)) setSearchOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -93,10 +132,86 @@ export default function Layout() {
           </button>
           {/* Mobile brand */}
           <span className="text-sm font-bold text-green-800 md:hidden">Triven CRM</span>
-          <div className="hidden md:flex flex-1 items-center">
+          <div className="hidden md:flex flex-1 items-center gap-4">
             {pageTitle && (
               <h1 className="text-lg font-bold text-gray-800 tracking-tight">{pageTitle}</h1>
             )}
+            {/* Global Phone Search */}
+            <div ref={searchRef} className="relative ml-2">
+              <div className="flex items-center gap-2 bg-white rounded-xl shadow-sm px-3 py-1.5 border border-gray-200 focus-within:border-green-400 transition-colors w-64">
+                <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                </svg>
+                <input
+                  type="text"
+                  value={phoneQuery}
+                  onChange={e => setPhoneQuery(e.target.value)}
+                  onFocus={() => phoneQuery.trim().length >= 3 && setSearchOpen(true)}
+                  placeholder="Search by phone..."
+                  className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder-gray-400"
+                />
+                {searchLoading && (
+                  <svg className="w-3.5 h-3.5 animate-spin text-green-500" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                )}
+                {phoneQuery && !searchLoading && (
+                  <button onClick={() => { setPhoneQuery(''); setSearchResults([]); setSearchOpen(false); }} className="text-gray-400 hover:text-gray-600">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  </button>
+                )}
+              </div>
+              {searchOpen && (
+                <div className="absolute top-full left-0 mt-1.5 w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+                  {searchResults.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-sm text-gray-400">No person found with this phone number</div>
+                  ) : (
+                    <div className="max-h-96 overflow-y-auto divide-y divide-gray-50">
+                      {searchResults.map(lead => (
+                        <div key={lead._id} className="px-4 py-3 hover:bg-gray-50 transition-colors">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-semibold text-gray-800 text-sm">{lead.name}</span>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${STATUS_COLORS[lead.status] || 'bg-gray-100 text-gray-600'}`}>
+                                  {lead.status?.replace('_', ' ')}
+                                </span>
+                                {lead.cnp && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-red-100 text-red-600">CNP</span>}
+                              </div>
+                              <div className="text-xs text-green-700 font-medium mt-0.5">{lead.phone}</div>
+                              {lead.email && <div className="text-xs text-gray-500 truncate">{lead.email}</div>}
+                              {lead.address && <div className="text-xs text-gray-400 truncate">{lead.address}</div>}
+                              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                {lead.source && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full capitalize">{lead.source.replace('_', ' ')}</span>}
+                                {lead.type && <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded-full capitalize">{lead.type}</span>}
+                                {lead.assignedTo && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">👤 {lead.assignedTo.name}</span>}
+                              </div>
+                              {lead.problem && <div className="text-xs text-gray-500 mt-1 italic truncate">&ldquo;{lead.problem}&rdquo;</div>}
+                            </div>
+                            {lead.revenue > 0 && (
+                              <div className="text-xs font-semibold text-emerald-600 flex-shrink-0">₹{lead.revenue.toLocaleString()}</div>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between mt-1.5">
+                            <span className="text-[10px] text-gray-400">
+                              Added {new Date(lead.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </span>
+                            <button
+                              onClick={() => { navigate(`/leads?openId=${lead._id}`); setSearchOpen(false); setPhoneQuery(''); setSearchResults([]); }}
+                              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white"
+                              style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}
+                            >
+                              View Detail
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {/* Notifications */}

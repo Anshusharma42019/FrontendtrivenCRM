@@ -10,7 +10,12 @@ import Badge from '../components/ui/Badge';
 
 const TYPES = ['call', 'follow_up', 'meeting', 'email', 'task'];
 const PRIORITIES = ['low', 'medium', 'high'];
-const STATUSES = ['verification'];
+const STATUSES = [
+  { value: 'interested', label: 'Interested', color: 'bg-green-600 border-green-600', hover: 'hover:border-green-400' },
+  { value: 'cancel_call', label: 'Not Interested', color: 'bg-red-500 border-red-500', hover: 'hover:border-red-400' },
+  { value: 'cnp', label: 'CNP', color: 'bg-orange-500 border-orange-500', hover: 'hover:border-orange-400' },
+  { value: 'verification', label: 'Verification', color: 'bg-blue-600 border-blue-600', hover: 'hover:border-blue-400' },
+];
 const EMPTY = { title: '', description: '', problem: '', type: 'task', lead: '', assignedTo: '', dueDate: '', priority: 'medium', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending', age: '', weight: '', height: '', otherProblems: '', problemDuration: '', price: '', phone: '' };
 
 const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition";
@@ -188,10 +193,15 @@ export default function Tasks() {
         await createTask(payload);
         if (location.state?.cnpId) {
           await deleteCnpRecord(location.state.cnpId).catch(() => {});
-          window.history.replaceState({}, document.title);
         }
+        if (location.state?.afterCreateStatus && location.state?.leadId) {
+          await updateLead(location.state.leadId, { status: location.state.afterCreateStatus }).catch(() => {});
+        }
+        window.history.replaceState({}, document.title);
       }
-      setModal(null); load();
+      setModal(null);
+      if (modal === 'create') setTab('all');
+      load();
     } catch (err) { setError(err.response?.data?.message || 'Something went wrong'); }
     finally { setLoading(false); }
   };
@@ -513,16 +523,16 @@ export default function Tasks() {
             {modal === 'edit' && (
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</label>
-                <div className="flex gap-2 mt-1.5">
-                  {STATUSES.map(s => (
-                    <button key={s} type="button"
-                      onClick={() => setForm({ ...form, status: s })}
-                      className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition ${
-                        form.status === s
-                          ? 'bg-green-600 text-white border-green-600'
-                          : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-green-400'
+                <div className="grid grid-cols-2 gap-2 mt-1.5">
+                  {STATUSES.map(({ value, label, color, hover }) => (
+                    <button key={value} type="button"
+                      onClick={() => setForm({ ...form, status: value })}
+                      className={`py-2 rounded-xl text-xs font-semibold border transition ${
+                        form.status === value
+                          ? `${color} text-white`
+                          : `bg-gray-50 text-gray-600 border-gray-200 ${hover}`
                       }`}>
-                      Verification
+                      {label}
                     </button>
                   ))}
                 </div>
