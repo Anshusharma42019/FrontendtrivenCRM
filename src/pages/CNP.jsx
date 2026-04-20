@@ -6,6 +6,7 @@ import {
   updateLead,
   markCNP,
   unmarkCNP,
+  getCallAgains,
 } from "../services/lead.service";
 import {
   getCnpRecords,
@@ -24,19 +25,21 @@ export default function CNP() {
   const [tab, setTab] = useState("tasks");
   const [leadDetail, setLeadDetail] = useState(null);
   const [viewTask, setViewTask] = useState(null);
+  const [dateFilter, setDateFilter] = useState('today');
+  const [callAgainDateFilter, setCallAgainDateFilter] = useState('today');
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (cnpFilter = '', caFilter = '') => {
     try {
       const [cnpRes, allRes, tasksRes, callAgainRes] = await Promise.all([
         getLeads({ cnp: "true", limit: 200 }),
         getLeads({ limit: 200 }),
-        getCnpRecords(),
-        getLeads({ status: "follow_up", limit: 200 }),
+        getCnpRecords(cnpFilter || undefined),
+        getCallAgains(caFilter || undefined),
       ]);
       setLeads(Array.isArray(cnpRes?.leads) ? cnpRes.leads : []);
       setAllLeads(Array.isArray(allRes?.leads) ? allRes.leads : []);
       setCnpTasks(Array.isArray(tasksRes) ? tasksRes.filter(t => t.lead?.status !== 'closed_lost') : []);
-      setCallAgainLeads(Array.isArray(callAgainRes?.leads) ? callAgainRes.leads : []);
+      setCallAgainLeads(Array.isArray(callAgainRes) ? callAgainRes : []);
     } catch {
       /* ignore */
     } finally {
@@ -44,21 +47,21 @@ export default function CNP() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(dateFilter, callAgainDateFilter); }, [load, dateFilter, callAgainDateFilter]);
 
   const handleMarkCNP = async (lead) => {
     setUpdating(lead._id);
-    try { await markCNP(lead._id); load(); } catch { /* ignore */ } finally { setUpdating(null); }
+    try { await markCNP(lead._id); load(dateFilter, callAgainDateFilter); } catch { /* ignore */ } finally { setUpdating(null); }
   };
 
   const handleUnmarkCNP = async (lead) => {
     setUpdating(lead._id);
-    try { await unmarkCNP(lead._id); load(); } catch { /* ignore */ } finally { setUpdating(null); }
+    try { await unmarkCNP(lead._id); load(dateFilter, callAgainDateFilter); } catch { /* ignore */ } finally { setUpdating(null); }
   };
 
   const handleStatusChange = async (lead, status) => {
     setUpdating(lead._id);
-    try { await updateLead(lead._id, { status, cnp: false }); load(); } catch { /* ignore */ } finally { setUpdating(null); }
+    try { await updateLead(lead._id, { status, cnp: false }); load(dateFilter, callAgainDateFilter); } catch { /* ignore */ } finally { setUpdating(null); }
   };
 
   const handleNotInterested = async (task) => {
@@ -214,9 +217,36 @@ export default function CNP() {
               {tab === "tasks" ? "CNP Tasks" : "Call Again Leads"}
             </h3>
           </div>
-          <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full font-medium">
-            {tab === "tasks" ? cnpTasks.length : callAgainLeads.length} {tab === "tasks" ? "task" : "lead"}{(tab === "tasks" ? cnpTasks.length : callAgainLeads.length) !== 1 ? "s" : ""}
-          </span>
+          <div className="flex items-center gap-2">
+            {[
+              { label: 'Today', value: 'today' },
+              { label: 'Yesterday', value: 'yesterday' },
+              { label: 'This Week', value: 'this_week' },
+              { label: 'This Month', value: 'this_month' },
+            ].map(f => {
+              const isTask = tab === 'tasks';
+              const active = isTask ? dateFilter === f.value : callAgainDateFilter === f.value;
+              const activeColor = isTask ? 'bg-red-500 border-red-500' : 'bg-amber-500 border-amber-500';
+              const hoverColor = isTask ? 'hover:border-red-300 hover:text-red-500' : 'hover:border-amber-300 hover:text-amber-500';
+              return (
+                <button
+                  key={f.value}
+                  onClick={() => isTask
+                    ? setDateFilter(prev => prev === f.value ? '' : f.value)
+                    : setCallAgainDateFilter(prev => prev === f.value ? '' : f.value)
+                  }
+                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition ${
+                    active ? `${activeColor} text-white` : `bg-white text-gray-500 border-gray-200 ${hoverColor}`
+                  }`}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+            <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full font-medium">
+              {tab === "tasks" ? cnpTasks.length : callAgainLeads.length} {tab === "tasks" ? "task" : "lead"}{(tab === "tasks" ? cnpTasks.length : callAgainLeads.length) !== 1 ? "s" : ""}
+            </span>
+          </div>
         </div>
 
         {/* Tasks Tab */}
@@ -306,8 +336,10 @@ export default function CNP() {
           <EmptyState message="No call again leads" />
         ) : (
           <div className="divide-y divide-gray-50">
-            {callAgainLeads.map((lead) => (
-              <div key={lead._id} className="px-5 py-4 flex items-center gap-3 hover:bg-amber-50/30 transition-colors">
+            {callAgainLeads.map((record) => {
+              const lead = record.lead || {};
+              return (
+              <div key={record._id} className="px-5 py-4 flex items-center gap-3 hover:bg-amber-50/30 transition-colors">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white shadow-sm">
                   {lead.name?.charAt(0)}
                 </div>
@@ -315,12 +347,12 @@ export default function CNP() {
                   <p className="font-semibold text-gray-800 text-sm">{lead.name}</p>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className="text-[11px] text-gray-500 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">{lead.phone}</span>
-                    {lead.assignedTo && (
+                    {record.assignedTo && (
                       <span className="inline-flex items-center gap-1 text-[11px] text-green-700 bg-green-50 px-2 py-0.5 rounded-full border border-green-100">
                         <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
                         </svg>
-                        {lead.assignedTo.name}
+                        {record.assignedTo.name}
                       </span>
                     )}
                   </div>
@@ -331,48 +363,48 @@ export default function CNP() {
                     className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-purple-500 text-white hover:bg-purple-600 transition shadow-sm shadow-purple-200"
                   >View</button>
                   <button
-                    disabled={updating === lead._id}
+                    disabled={updating === record._id}
                     onClick={async () => {
-                      setUpdating(lead._id);
+                      setUpdating(record._id);
                       try {
                         await updateLead(lead._id, { status: 'contacted' });
-                        setCallAgainLeads(prev => prev.filter(l => l._id !== lead._id));
-                        navigate('/tasks', { state: { leadId: lead._id, assignedTo: lead.assignedTo?._id || '', leadName: lead.name, leadPhone: lead.phone, leadData: lead } });
+                        setCallAgainLeads(prev => prev.filter(r => r._id !== record._id));
+                        navigate('/tasks', { state: { leadId: lead._id, assignedTo: record.assignedTo?._id || '', leadName: lead.name, leadPhone: lead.phone, leadData: lead } });
                       } catch { /* ignore */ } finally { setUpdating(null); }
                     }}
                     className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition shadow-sm shadow-blue-200 disabled:opacity-40"
                   >+ Task</button>
                   <button
-                    disabled={updating === lead._id}
+                    disabled={updating === record._id}
                     onClick={async () => {
-                      setUpdating(lead._id);
+                      setUpdating(record._id);
                       try {
                         await updateLead(lead._id, { status: 'interested' });
-                        setCallAgainLeads(prev => prev.filter(l => l._id !== lead._id));
+                        setCallAgainLeads(prev => prev.filter(r => r._id !== record._id));
                         navigate('/pipeline', { state: { filter: 'interested' } });
                       } catch { /* ignore */ } finally { setUpdating(null); }
                     }}
                     className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-green-500 text-white hover:bg-green-600 transition shadow-sm shadow-green-200 disabled:opacity-40"
                   >Interested</button>
                   <button
-                    disabled={updating === lead._id}
+                    disabled={updating === record._id}
                     onClick={async () => {
-                      setUpdating(lead._id);
+                      setUpdating(record._id);
                       try {
                         await updateLead(lead._id, { status: 'on_hold' });
-                        setCallAgainLeads(prev => prev.filter(l => l._id !== lead._id));
+                        setCallAgainLeads(prev => prev.filter(r => r._id !== record._id));
                         navigate('/pipeline', { state: { filter: 'on_hold' } });
                       } catch { /* ignore */ } finally { setUpdating(null); }
                     }}
                     className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition shadow-sm shadow-amber-200 disabled:opacity-40"
                   >On Hold</button>
                   <button
-                    disabled={updating === lead._id}
+                    disabled={updating === record._id}
                     onClick={async () => {
-                      setUpdating(lead._id);
+                      setUpdating(record._id);
                       try {
                         await updateLead(lead._id, { status: 'closed_lost' });
-                        setCallAgainLeads(prev => prev.filter(l => l._id !== lead._id));
+                        setCallAgainLeads(prev => prev.filter(r => r._id !== record._id));
                         navigate('/pipeline', { state: { filter: 'closed_lost' } });
                       } catch { /* ignore */ } finally { setUpdating(null); }
                     }}
@@ -380,7 +412,8 @@ export default function CNP() {
                   >Not Interested</button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

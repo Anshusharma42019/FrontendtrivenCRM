@@ -72,6 +72,8 @@ export default function Verification() {
 
   const startEdit = () => {
     setEditForm({
+      name: selected.lead?.name || '',
+      phone: selected.lead?.phone || '',
       description: selected.description || '',
       problem: selected.problem || '',
       age: selected.age || '',
@@ -99,12 +101,16 @@ export default function Verification() {
   const handleSave = async (e) => {
     e.preventDefault(); setSaving(true);
     try {
-      await updateVerificationRecord(selected._id, editForm);
+      const { name, phone, ...verificationFields } = editForm;
+      await updateVerificationRecord(selected._id, verificationFields);
+      if (selected.lead?._id) await updateLead(selected.lead._id, { name, phone });
       const freshData = await getVerificationRecords();
       const freshRecords = Array.isArray(freshData) ? freshData : [];
       setRecords(freshRecords);
       const freshSelected = freshRecords.find(r => r._id === selected._id);
-      setSelected(freshSelected ? flattenRecord(freshSelected) : prev => ({ ...prev, ...editForm }));
+      const flattened = freshSelected ? flattenRecord(freshSelected) : { ...selected, ...verificationFields };
+      // Ensure updated lead name/phone are reflected immediately
+      setSelected({ ...flattened, lead: { ...(flattened.lead || selected.lead || {}), name, phone } });
       setEditMode(false);
     } catch { }
     finally { setSaving(false); }
@@ -432,6 +438,12 @@ export default function Verification() {
                 <button onClick={() => setEditMode(false)} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition text-lg">×</button>
               </div>
               <form onSubmit={handleSave} className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</label>
+                    <input className={`${inputCls} mt-1.5`} placeholder="Name" value={editForm.name} onChange={e => sf('name', e.target.value)} /></div>
+                  <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Phone</label>
+                    <input className={`${inputCls} mt-1.5`} placeholder="Phone" value={editForm.phone} onChange={e => sf('phone', e.target.value)} /></div>
+                </div>
                 <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Problem</label>
                   <textarea rows={2} className={`${inputCls} mt-1.5`} value={editForm.problem} onChange={e => sf('problem', e.target.value)} /></div>
                 <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</label>
