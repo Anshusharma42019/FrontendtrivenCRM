@@ -258,7 +258,7 @@ export default function Leads() {
                         <button onClick={() => openEdit(lead)}
                           className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition">Edit</button>
                       )}
-                      <button
+                      {false && (<button
                         onClick={() => navigate('/shiprocket', {
                           state: {
                             rts: {
@@ -272,7 +272,7 @@ export default function Leads() {
                         style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}
                       >
                         🛒 Order
-                      </button>
+                      </button>)}
                     </div>
                   </div>
                 </div>
