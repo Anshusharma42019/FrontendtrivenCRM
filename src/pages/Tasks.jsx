@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { getTasks, getDailyTasks, createTask, updateTask, deleteTask, addTaskNote, deleteCnpRecord } from '../services/task.service';
 import API from '../api';
 import { getLeads, updateLead } from '../services/lead.service';
@@ -51,6 +51,7 @@ export default function Tasks() {
   const [loadError, setLoadError] = useState('');
 
   const location = useLocation();
+  const navigate = useNavigate();
   const canManage = user?.role === 'admin' || user?.role === 'manager';
 
   useEffect(() => {
@@ -183,11 +184,22 @@ export default function Tasks() {
       if (!payload.reminderAt) delete payload.reminderAt;
       if (modal === 'edit') {
         await updateTask(selected._id, payload);
-        if (payload.status === 'cancel_call' && selected.lead?._id) {
-          await updateLead(selected.lead._id, { status: 'closed_lost' }).catch(() => {});
-        }
-        if (payload.status === 'interested' && selected.lead?._id) {
-          await updateLead(selected.lead._id, { status: 'interested' }).catch(() => {});
+        const leadId = selected.lead?._id || selected.lead;
+        if (payload.status === 'cancel_call') {
+          if (leadId) await updateLead(leadId, { status: 'closed_lost' }).catch(() => {});
+          setModal(null);
+          navigate('/pipeline', { state: { filter: 'closed_lost' } });
+          return;
+        } else if (payload.status === 'interested') {
+          if (leadId) await updateLead(leadId, { status: 'interested' }).catch(() => {});
+          setModal(null);
+          navigate('/pipeline', { state: { filter: 'interested' } });
+          return;
+        } else if (payload.status === 'cnp') {
+          if (leadId) await updateLead(leadId, { cnp: true }).catch(() => {});
+          setModal(null);
+          navigate('/cnp');
+          return;
         }
       } else {
         await createTask(payload);
@@ -222,7 +234,7 @@ export default function Tasks() {
     </div>
   );
 
-  const displayed = (tab === 'daily' ? daily : tasks).filter(t => t.status !== 'cnp' && t.status !== 'verification');
+  const displayed = (tab === 'daily' ? daily : tasks).filter(t => !['cnp', 'verification', 'interested', 'cancel_call'].includes(t.status));
 
   return (
     <div className="space-y-5">

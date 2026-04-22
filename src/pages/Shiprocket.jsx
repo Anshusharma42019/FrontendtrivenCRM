@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../api';
 import * as srSvc from '../services/shiprocket.service';
+
+
 
 const TOKEN_KEY = 'sr_token';
 const TOKEN_EXP_KEY = 'sr_token_exp';
@@ -52,6 +54,7 @@ export default function Shiprocket() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [svc, setSvc] = useState({ pickup_postcode: '', delivery_postcode: '', weight: '0.5', cod: 0 });
   const [couriers, setCouriers] = useState([]);
@@ -624,19 +627,6 @@ export default function Shiprocket() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Shiprocket Integration</h2>
-        {(shipmentId || orderId || awbCode || courierId) && (
-          <div className="flex flex-wrap gap-2">
-            {courierId && <span className="flex items-center gap-1 text-xs bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-xl font-medium shadow-sm">🚚 Courier: {courierId}</span>}
-            {orderId && <span className="flex items-center gap-1 text-xs bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-xl font-medium shadow-sm">📦 Order: {orderId}</span>}
-            {shipmentId && <span className="flex items-center gap-1 text-xs bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-xl font-medium shadow-sm">🏷 Shipment: {shipmentId}</span>}
-            {awbCode && <span className="flex items-center gap-1 text-xs bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-xl font-medium shadow-sm">📍 AWB: {awbCode}</span>}
-          </div>
-        )}
-      </div>
-
       {/* Step Tabs */}
       <div className="flex flex-wrap gap-2">
         {STEPS.map((s, i) => (

@@ -176,6 +176,7 @@ function FollowUpPanel({ lead, onUpdate }) {
 
 export default function Pipeline() {
   const [leads, setLeads] = useState([]);
+  const [closedLostLeads, setClosedLostLeads] = useState([]);
   const [deliveredOrders, setDeliveredOrders] = useState([]);
   const [cnpLeads, setCnpLeads] = useState([]);
   const [callAgainLeads, setCallAgainLeads] = useState([]);
@@ -214,15 +215,20 @@ export default function Pipeline() {
   const load = useCallback(async () => {
     setError('');
     try {
-      const [leadsRes, interestedRes, ordersRes, cnpRes, callAgainRes] = await Promise.all([
+      const [leadsRes, interestedRes, closedLostRes, ordersRes, cnpRes, callAgainRes] = await Promise.all([
         getLeads({ limit: 200 }),
         getLeads({ limit: 200, status: 'interested' }),
+        getLeads({ limit: 200, status: 'closed_lost' }),
         API.get('/shiprocket/orders/with-followups'),
         getCnpRecords(),
         getCallAgains(),
       ]);
-      const allLeads = [...(Array.isArray(leadsRes?.leads) ? leadsRes.leads : []), ...(Array.isArray(interestedRes?.leads) ? interestedRes.leads : [])];
+      const allLeads = [
+        ...(Array.isArray(leadsRes?.leads) ? leadsRes.leads : []),
+        ...(Array.isArray(interestedRes?.leads) ? interestedRes.leads : []),
+      ];
       setLeads(allLeads);
+      setClosedLostLeads(Array.isArray(closedLostRes?.leads) ? closedLostRes.leads : []);
       setDeliveredOrders(Array.isArray(ordersRes.data?.data) ? ordersRes.data.data : []);
       setCnpLeads(Array.isArray(cnpRes) ? cnpRes : []);
       setCallAgainLeads(Array.isArray(callAgainRes) ? callAgainRes : []);
@@ -233,7 +239,10 @@ export default function Pipeline() {
 
   useEffect(() => { load(); }, [load]);
 
-  const byStage = (stage) => leads.filter(l => l.status === stage);
+  const byStage = (stage) => {
+    if (stage === 'closed_lost') return closedLostLeads;
+    return leads.filter(l => l.status === stage);
+  };
 
   const openDetail = async (lead) => {
     setDetailLead(lead);

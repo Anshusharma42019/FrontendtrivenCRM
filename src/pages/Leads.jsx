@@ -258,6 +258,21 @@ export default function Leads() {
                         <button onClick={() => openEdit(lead)}
                           className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition">Edit</button>
                       )}
+                      <button
+                        onClick={() => navigate('/shiprocket', {
+                          state: {
+                            rts: {
+                              lead: { _id: lead._id, name: lead.name, phone: lead.phone, email: lead.email || '', address: lead.address || '' },
+                              houseNo: '', postOffice: '', landmark: '', cityVillage: '', district: '', state: '', pincode: '', price: lead.revenue || '',
+                              title: lead.type ? lead.type.replace(/_/g, ' ') : 'Order',
+                            }
+                          }
+                        })}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition"
+                        style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}
+                      >
+                        🛒 Order
+                      </button>
                     </div>
                   </div>
                 </div>

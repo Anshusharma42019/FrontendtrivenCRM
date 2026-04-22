@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { getUsers, createUser, updateUser, deleteUser, getStaffShipmentCounts } from '../services/user.service';
+import { fetchAllStaffStats } from '../services/dashboard.service';
 import API from '../api';
 import Modal from '../components/ui/Modal';
 import Badge from '../components/ui/Badge';
@@ -19,6 +20,7 @@ export default function Users() {
   const canManage = user?.role === 'admin' || user?.role === 'manager';
   const [data, setData] = useState({ results: [], totalResults: 0 });
   const [shipmentCounts, setShipmentCounts] = useState({});
+  const [staffStats, setStaffStats] = useState({});
   const [viewUser, setViewUser] = useState(null);
   const [viewTasks, setViewTasks] = useState([]);
   const [viewLoading, setViewLoading] = useState(false);
@@ -31,6 +33,11 @@ export default function Users() {
 
   const load = useCallback(async () => {
     getUsers().then(res => setData(res)).catch(() => {}).finally(() => setPageLoading(false));
+    fetchAllStaffStats().then(stats => {
+      const map = {};
+      stats.forEach(s => { map[s.user._id] = s; });
+      setStaffStats(map);
+    }).catch(() => {});
     // Load shipment counts by fetching all ready_to_shipment tasks and grouping by assignedTo
     API.get('/tasks', { params: { status: 'ready_to_shipment' } })
       .then(res => {
@@ -204,7 +211,49 @@ export default function Users() {
             </div>
 
             {/* Body */}
-            <div className="px-6 py-5 max-h-96 overflow-y-auto">
+            <div className="px-6 py-5 max-h-[80vh] overflow-y-auto">
+              {/* Staff stats if sales role */}
+              {viewUser.role === 'sales' && staffStats[viewUser._id] && (() => {
+                const s = staffStats[viewUser._id];
+                const done = s.todayVerifications || 0;
+                const target = s.todayTarget || 0;
+                const remaining = target > 0 ? Math.max(target - done, 0) : 0;
+                return (
+                  <div className="mb-5 space-y-3">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Today's Performance</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[['Done', done, 'text-green-600', '#f0fdf4', 'rgba(22,163,74,0.15)'],
+                        ['Remaining', target > 0 ? remaining : '—', 'text-orange-500', '#fff7ed', 'rgba(251,146,60,0.2)'],
+                        ['Target', target || '—', 'text-blue-600', '#eff6ff', 'rgba(59,130,246,0.15)']
+                      ].map(([label, val, tc, bg, border]) => (
+                        <div key={label} className="rounded-2xl p-3 text-center" style={{ background: bg, border: `1px solid ${border}` }}>
+                          <p className={`text-2xl font-bold ${tc}`}>{val}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[['CNP', s.todayCnp, 'text-red-500', 'bg-red-50'],
+                        ['Call Again', s.todayCallAgain, 'text-yellow-600', 'bg-yellow-50'],
+                        ['Interested', s.todayInterested, 'text-green-600', 'bg-green-50'],
+                        ['Not Int.', s.todayNotInterested, 'text-gray-500', 'bg-gray-50']
+                      ].map(([label, val, tc, bg]) => (
+                        <div key={label} className={`${bg} rounded-xl p-2 text-center`}>
+                          <p className={`text-lg font-bold ${tc}`}>{val}</p>
+                          <p className="text-[10px] text-gray-500">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-400 px-1">
+                      <span>Month verifications: <span className="font-semibold text-gray-600">{s.monthVerifications}</span></span>
+                      <span>Pending tasks: <span className="font-semibold text-gray-600">{s.pendingTasks}</span></span>
+                    </div>
+                    <div className="border-t border-gray-100 pt-3">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Ready to Shipment Tasks</p>
+                    </div>
+                  </div>
+                );
+              })()}
               {viewLoading ? (
                 <div className="space-y-2">
                   {[1,2].map(i => (
