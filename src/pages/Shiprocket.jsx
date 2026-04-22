@@ -84,6 +84,8 @@ const MEDICINES = [
   { name: 'Stress Relief Kit', sku: 'SRK-001' },
 ];
 
+const getMedicineSku = (name) => MEDICINES.find(m => m.name === name)?.sku || '';
+
 export default function Shiprocket({ initialSection, initialReturnsTab = 'returns' }) {
   const [step, setStep] = useState(0);
   const [section, setSection] = useState(initialSection || 'actions');
@@ -105,7 +107,7 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
     }
   }, [location.state]);
 
-  const [svc, setSvc] = useState({ pickup_postcode: '', delivery_postcode: '', weight: '0.5', cod: 0 });
+  const [svc, setSvc] = useState({ pickup_postcode: '', delivery_postcode: '', weight: '0.5', cod: 1 });
   const [couriers, setCouriers] = useState([]);
   const [recommendedCourierId, setRecommendedCourierId] = useState(null);
 
@@ -116,8 +118,8 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
     billing_state: '', billing_country: 'India',
     billing_email: '', billing_phone: '',
     shipping_is_billing: true,
-    order_items: [{ name: 'Migraine Medicines', sku: 'MIG-001', units: 1, selling_price: '' }],
-    payment_method: 'prepaid',
+    order_items: [{ name: 'Migraine Medicines', sku: getMedicineSku('Migraine Medicines'), units: 1, selling_price: '' }],
+    payment_method: 'COD',
     sub_total: '', length: 15, breadth: 10, height: 6, weight: 0.5,
     lead_id: '',
   });
@@ -174,7 +176,14 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
         billing_pincode: r.pincode || '',
         billing_state: r.state || '',
         lead_id: r.lead?._id || '',
-        ...(r.title || r.task?.title ? { order_items: [{ name: r.title || r.task?.title, sku: '', units: 1, selling_price: r.price || '' }] } : {}),
+        ...(r.title || r.task?.title ? {
+          order_items: [{
+            name: r.title || r.task?.title,
+            sku: getMedicineSku(r.title || r.task?.title),
+            units: 1,
+            selling_price: r.price || '',
+          }],
+        } : {}),
         ...(r.price ? { sub_total: r.price } : {}),
       }));
       setRtsRecords([r]);
@@ -182,12 +191,12 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
     }
     if (state.delivery_postcode) {
       const deliveryPostcode = state.delivery_postcode;
-      const svcParams = { pickup_postcode: svc.pickup_postcode, delivery_postcode: deliveryPostcode, weight: '0.5', cod: 0 };
+      const svcParams = { pickup_postcode: svc.pickup_postcode, delivery_postcode: deliveryPostcode, weight: '0.5', cod: 1 };
       setSvc(svcParams);
       setStep(1);
       // Auto-trigger serviceability check
       setLoading(true); setError(''); setResult(null);
-      srSvc.checkServiceability({ pickup_postcode: svc.pickup_postcode, delivery_postcode: deliveryPostcode, weight: '0.5', cod: 0 })
+      srSvc.checkServiceability({ pickup_postcode: svc.pickup_postcode, delivery_postcode: deliveryPostcode, weight: '0.5', cod: 1 })
         .then(res => {
           const list = res.data?.data?.data?.available_courier_companies || [];
           const recommended = res.data?.data?.data?.recommended_courier_company_id;
@@ -271,7 +280,7 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
               onChange={e => setSvc(p => ({ ...p, weight: e.target.value }))} />
           </Field>
           <Field label="Payment Type">
-            <select className={inp} value={svc.cod} onChange={e => setSvc(p => ({ ...p, cod: e.target.value }))}>
+            <select className={inp} value={svc.cod} onChange={e => setSvc(p => ({ ...p, cod: Number(e.target.value) }))}>
               <option value={0}>Prepaid</option>
               <option value={1}>COD</option>
             </select>
@@ -367,7 +376,14 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
                       setO('lead_id', r.lead?._id || '');
                       const productName = r.title || r.task?.title || 'Migraine Medicines';
                       const price = r.price || '';
-                      setItem('name', productName);
+                      setOrder(p => ({
+                        ...p,
+                        order_items: [{
+                          ...p.order_items[0],
+                          name: productName,
+                          sku: getMedicineSku(productName),
+                        }],
+                      }));
                       if (price) { setItem('selling_price', price); setO('sub_total', price); }
                     }} className="text-xs font-semibold px-3 py-1.5 rounded-xl text-white bg-green-600 hover:bg-green-700 transition-all whitespace-nowrap">
                       Fill →
@@ -467,9 +483,15 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
             <Field label="Product Name *">
               <select className={inp} value={order.order_items[0].name}
                 onChange={e => {
-                  const med = MEDICINES.find(m => m.name === e.target.value);
-                  setItem('name', e.target.value);
-                  if (med) setItem('sku', med.sku);
+                  const productName = e.target.value;
+                  setOrder(p => ({
+                    ...p,
+                    order_items: [{
+                      ...p.order_items[0],
+                      name: productName,
+                      sku: getMedicineSku(productName),
+                    }],
+                  }));
                 }}>
                 {MEDICINES.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
               </select>
