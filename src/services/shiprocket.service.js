@@ -40,6 +40,8 @@ export const getOrders = (params) => api.get(`${BASE}/orders`, { params });
 export const getDeliveredOrders = (params) => api.get(`${BASE}/orders/delivered`, { params });
 export const getDeliveredOrdersLive = () => api.get(`${BASE}/orders/delivered-live`);
 export const getDeliveredStats = (params) => api.get(`${BASE}/orders/delivered-stats`, { params });
+export const getStatusOrders = (params) => api.get(`${BASE}/orders/status-details`, { params });
+export const getLocalOrderLookup = (params) => api.get(`${BASE}/orders/local-lookup`, { params });
 export const syncShiprocket = () => api.post(`${BASE}/orders/sync`);
 export const getOrder = (id) => api.get(`${BASE}/orders/show/${id}`);
 

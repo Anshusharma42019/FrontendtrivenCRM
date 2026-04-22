@@ -18,6 +18,8 @@ const PAGE_TITLES = {
   '/shiprocket/orders': 'Orders',
   '/shiprocket/shipments': 'Shipments & Tracking',
   '/shiprocket/returns': 'Returns / Wallet / NDR',
+  '/shiprocket/ndr': 'NDR',
+  '/shiprocket/ndr/detail': 'NDR Details',
   '/notifications': 'Notifications',
   '/users': 'Staff',
 };

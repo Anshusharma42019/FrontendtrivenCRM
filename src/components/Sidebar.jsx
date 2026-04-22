@@ -21,6 +21,8 @@ const NAV = [
     icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg> },
   { to: '/shiprocket', label: 'Shiprocket', roles: ['admin', 'manager', 'sales'], end: true,
     icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> },
+  { to: '/shiprocket/ndr', label: 'NDR', roles: ['admin', 'manager', 'sales'],
+    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg> },
   { to: '/shiprocket/orders', label: '↳ Orders', roles: ['admin', 'manager', 'sales'],
     icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg> },
   { to: '/shiprocket/shipments', label: '↳ Shipments & Track', roles: ['admin', 'manager', 'sales'],
@@ -33,7 +35,8 @@ const NAV = [
 
 export default function Sidebar({ open, onClose, unreadCount = 0 }) {
   const { user } = useAuth();
-  const visible = NAV.filter(item => item.roles.includes(user?.role));
+  const hiddenSidebarLinks = new Set(['/shiprocket/orders', '/shiprocket/shipments', '/shiprocket/returns']);
+  const visible = NAV.filter(item => item.roles.includes(user?.role) && !hiddenSidebarLinks.has(item.to));
 
   return (
     <>

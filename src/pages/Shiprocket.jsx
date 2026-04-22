@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../api';
 import * as srSvc from '../services/shiprocket.service';
+import ShiprocketOrders from './ShiprocketOrders';
+import ShiprocketShipments from './ShiprocketShipments';
+import ShiprocketReturns from './ShiprocketReturns';
 
 
 
@@ -28,6 +31,40 @@ const STEPS = [
   'Generate Label', 'Print Invoice', 'Track AWB',
 ];
 
+const SECTIONS = [
+  {
+    id: 'actions',
+    label: 'Actions',
+    path: '/shiprocket',
+    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>,
+  },
+  {
+    id: 'orders',
+    label: 'Orders',
+    path: '/shiprocket/orders',
+    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>,
+  },
+  {
+    id: 'shipments',
+    label: 'Shipments & Track',
+    path: '/shiprocket/shipments',
+    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+  },
+  {
+    id: 'returns',
+    label: 'Returns / Wallet / NDR',
+    path: '/shiprocket/returns',
+    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>,
+  },
+];
+
+const getSectionFromPath = (pathname) => {
+  if (pathname.endsWith('/orders')) return 'orders';
+  if (pathname.endsWith('/shipments')) return 'shipments';
+  if (pathname.endsWith('/returns')) return 'returns';
+  return 'actions';
+};
+
 const inp = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 bg-white placeholder-gray-400';
 const Field = ({ label, children }) => (
   <div>
@@ -47,14 +84,26 @@ const MEDICINES = [
   { name: 'Stress Relief Kit', sku: 'SRK-001' },
 ];
 
-export default function Shiprocket() {
+export default function Shiprocket({ initialSection, initialReturnsTab = 'returns' }) {
   const [step, setStep] = useState(0);
+  const [section, setSection] = useState(initialSection || 'actions');
   const [token, setToken] = useState(() => getSavedToken());
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const location = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    setSection(initialSection || getSectionFromPath(location.pathname));
+  }, [initialSection, location.pathname]);
+
+  useEffect(() => {
+    if (Number.isInteger(location.state?.shiprocketStep)) {
+      setSection('actions');
+      setStep(location.state.shiprocketStep);
+    }
+  }, [location.state]);
 
   const [svc, setSvc] = useState({ pickup_postcode: '', delivery_postcode: '', weight: '0.5', cod: 0 });
   const [couriers, setCouriers] = useState([]);
@@ -63,7 +112,7 @@ export default function Shiprocket() {
   const [order, setOrder] = useState({
     order_id: '', order_date: new Date().toISOString().split('T')[0], pickup_location: 'home',
     billing_customer_name: '', billing_last_name: '',
-    billing_address: '', billing_city: '', billing_pincode: '',
+    billing_address: '', billing_address_2: '', billing_city: '', billing_pincode: '',
     billing_state: '', billing_country: 'India',
     billing_email: '', billing_phone: '',
     shipping_is_billing: true,
@@ -105,10 +154,14 @@ export default function Shiprocket() {
   useEffect(() => {
     const state = location.state;
     if (!state) return;
+    if (Number.isInteger(state.shiprocketStep)) {
+      setStep(state.shiprocketStep);
+      setSection('actions');
+    }
     if (state.rts) {
       const r = state.rts;
       const nameParts = (r.lead?.name || '').trim().split(' ');
-      const address = [r.houseNo, r.postOffice, r.landmark].filter(Boolean).join(', ');
+      const address = [r.houseNo, r.postOffice].filter(Boolean).join(', ');
       setOrder(p => ({
         ...p,
         billing_customer_name: nameParts[0] || '',
@@ -116,6 +169,7 @@ export default function Shiprocket() {
         billing_phone: r.lead?.phone || '',
         billing_email: r.lead?.email || '',
         billing_address: address || r.lead?.address || '',
+        billing_address_2: r.landmark || '',
         billing_city: r.cityVillage || r.district || '',
         billing_pincode: r.pincode || '',
         billing_state: r.state || '',
@@ -289,7 +343,7 @@ export default function Shiprocket() {
                 const nameParts = (r.lead?.name || '').trim().split(' ');
                 const firstName = nameParts[0] || '';
                 const lastName = nameParts.slice(1).join(' ') || '';
-                const address = [r.houseNo, r.postOffice, r.landmark].filter(Boolean).join(', ');
+                const address = [r.houseNo, r.postOffice].filter(Boolean).join(', ');
                 return (
                   <div key={r._id} className="px-5 py-3 flex items-center gap-3 hover:bg-gray-50/50 transition-colors">
                     <div className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 text-white uppercase"
@@ -306,6 +360,7 @@ export default function Shiprocket() {
                       setO('billing_phone', r.lead?.phone || '');
                       setO('billing_email', r.lead?.email || '');
                       setO('billing_address', address || r.lead?.address || '');
+                      setO('billing_address_2', r.landmark || '');
                       setO('billing_city', r.cityVillage || r.district || '');
                       setO('billing_pincode', r.pincode || '');
                       setO('billing_state', r.state || '');
@@ -419,7 +474,7 @@ export default function Shiprocket() {
                 {MEDICINES.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
               </select>
             </Field>
-            <Field label="SKU"><input className={inp} placeholder="SKU-001" value={order.order_items[0].sku} onChange={e => setItem('sku', e.target.value)} /></Field>
+            <Field label="SKU (Optional)"><input className={inp} placeholder="Auto / optional" value={order.order_items[0].sku} onChange={e => setItem('sku', e.target.value)} /></Field>
             <Field label="Units *"><input className={inp} type="number" min="1" value={order.order_items[0].units} onChange={e => setItem('units', Number(e.target.value))} /></Field>
             <Field label="Price (₹) *"><input className={inp} type="number" value={order.order_items[0].selling_price} onChange={e => setItem('selling_price', Number(e.target.value))} /></Field>
           </div>
@@ -450,6 +505,7 @@ export default function Shiprocket() {
             billing_customer_name: order.billing_customer_name,
             billing_last_name: order.billing_last_name,
             billing_address: order.billing_address,
+            billing_address_2: order.billing_address_2,
             billing_city: order.billing_city,
             billing_pincode: order.billing_pincode,
             billing_state: order.billing_state,
@@ -478,7 +534,10 @@ export default function Shiprocket() {
           if (sid) setShipmentId(String(sid));
           if (oid) setOrderId(String(oid));
           if (sid || oid) setTimeout(() => goStep(3), 1500);
-          if (rtsId) api.patch(`/ready-to-shipment/${rtsId}/sent`).catch(() => {});
+          if (rtsId) {
+            api.patch(`/ready-to-shipment/${rtsId}/sent`).catch(() => {});
+            setRtsRecords(prev => prev.filter(r => r._id !== rtsId));
+          }
           return res.data;
         })} className="btn-primary">Create Order → Auto-proceed to Assign AWB</button>
       </div>
@@ -625,19 +684,79 @@ export default function Shiprocket() {
 
   const pdfUrl = result?.data?.label_url || result?.data?.manifest_url || result?.data?.invoice_url;
 
+  const openSection = (nextSection) => {
+    const target = SECTIONS.find(s => s.id === nextSection);
+    setSection(nextSection);
+    if (target) navigate(target.path);
+  };
+
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <div className="inline-flex flex-wrap justify-end gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
+          {SECTIONS.map(item => {
+            const active = section === item.id;
+            return (
+              <button key={item.id} onClick={() => openSection(item.id)}
+                className={`h-9 rounded-lg px-3 text-xs font-semibold transition-all inline-flex items-center gap-2 ${
+                  active
+                    ? 'bg-green-600 text-white shadow-sm'
+                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+                }`}>
+                <span className={`grid h-5 w-5 place-items-center rounded-md ${
+                  active ? 'bg-white/15 text-white' : 'bg-green-50 text-green-600'
+                }`}>
+                  {item.icon}
+                </span>
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {section === 'orders' && <ShiprocketOrders />}
+      {section === 'shipments' && <ShiprocketShipments />}
+      {section === 'returns' && <ShiprocketReturns initialTab={initialReturnsTab} />}
+
+      {section === 'actions' && (
+        <>
       {/* Step Tabs */}
-      <div className="flex flex-wrap gap-2">
-        {STEPS.map((s, i) => (
-          <button key={i} onClick={() => goStep(i)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-              step === i ? 'bg-gray-800 text-white border-gray-800 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-            }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${step === i ? 'bg-white' : 'bg-green-500'}`} />
-            {i + 1}. {s}
-          </button>
-        ))}
+      <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+        <div className="flex gap-2 overflow-x-auto pb-1">
+        {STEPS.map((s, i) => {
+          const active = step === i;
+          const completed = i < step;
+          return (
+            <button key={i} onClick={() => goStep(i)}
+              className={`group relative flex min-w-[150px] items-center gap-2 rounded-lg border px-3 py-2.5 text-left transition-all ${
+                active
+                  ? 'border-green-500 bg-green-50 text-green-800 shadow-sm'
+                  : completed
+                    ? 'border-gray-200 bg-white text-gray-700'
+                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'
+              }`}>
+              <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold ${
+                active
+                  ? 'bg-green-600 text-white'
+                  : completed
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-500'
+              }`}>
+                {completed ? (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.6} viewBox="0 0 24 24">
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                ) : i + 1}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[10px] font-semibold uppercase text-gray-400">Step {i + 1}</span>
+                <span className="block truncate text-xs font-semibold">{s}</span>
+              </span>
+            </button>
+          );
+        })}
+        </div>
       </div>
 
       {step > 0 && !token && (
@@ -685,6 +804,8 @@ export default function Shiprocket() {
           <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
           <span className="text-green-700 text-sm font-semibold">Success</span>
         </div>
+      )}
+        </>
       )}
     </div>
   );

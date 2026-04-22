@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import * as srSvc from '../services/shiprocket.service';
+import OrderStatusBoard from '../components/OrderStatusBoard';
 
 const inp = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 bg-white';
 const Field = ({ label, children }) => (
@@ -9,8 +11,58 @@ const Field = ({ label, children }) => (
   </div>
 );
 
-export default function ShiprocketReturns() {
-  const [tab, setTab] = useState('returns');
+const NDR_ATTEMPT_OPTIONS = [
+  { value: 'all', label: 'All Attempts' },
+  { value: '1', label: '1st Attempt' },
+  { value: '2', label: '2nd Attempt' },
+  { value: '3', label: '3rd Attempt' },
+  { value: '4+', label: '4+ Attempts' },
+];
+
+const NDR_DETAIL_PRIORITY = [
+  'awb_code',
+  'channel_order_id',
+  'order_id',
+  'shipment_id',
+  'customer_name',
+  'customer_phone',
+  'customer_email',
+  'reason',
+  'remarks',
+  'comment',
+  'action',
+  'attempts',
+  'ndr_raised_at',
+  'current_status',
+  'status',
+  'courier_name',
+  'payment_method',
+  'pickup_date',
+  'edd',
+  'delivered_date',
+  'address',
+  'city',
+  'state',
+  'pincode',
+];
+
+const formatDetailLabel = (key) => String(key || '')
+  .replace(/_/g, ' ')
+  .replace(/\b\w/g, ch => ch.toUpperCase());
+
+const formatDetailValue = (value) => {
+  if (value === null || value === undefined || value === '') return '-';
+  if (Array.isArray(value)) return value.length ? value.join(', ') : '-';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+};
+
+const detailCardCls = 'rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5';
+
+export default function ShiprocketReturns({ initialTab = 'returns' }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [tab, setTab] = useState(initialTab);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
@@ -37,6 +89,9 @@ export default function ShiprocketReturns() {
   const [ndrFrom, setNdrFrom] = useState('');
   const [ndrTo, setNdrTo] = useState('');
   const [ndrLoading, setNdrLoading] = useState(false);
+  const [ndrAttemptFilter, setNdrAttemptFilter] = useState('all');
+  const [selectedNdr, setSelectedNdr] = useState(null);
+  const [ndrDetailOpen, setNdrDetailOpen] = useState(false);
 
   const fetchNDR = (from = ndrFrom, to = ndrTo) => {
     setNdrLoading(true);
@@ -44,7 +99,13 @@ export default function ShiprocketReturns() {
     if (from) params.from = from;
     if (to) params.to = to;
     srSvc.getNDR(params).then(r => {
-      setNdrs(r.data?.data?.data || []);
+      const list = r.data?.data?.data || [];
+      setNdrs(list);
+      setSelectedNdr(current => {
+        if (!current) return list[0] || null;
+        const match = list.find(item => item.awb_code === current.awb_code && item.channel_order_id === current.channel_order_id);
+        return match || list[0] || null;
+      });
     }).catch(e => setError(e?.response?.data?.message || e.message))
       .finally(() => setNdrLoading(false));
   };
@@ -71,6 +132,44 @@ export default function ShiprocketReturns() {
 
   const setRF = (k, v) => setReturnForm(p => ({ ...p, [k]: v }));
   const setRI = (k, v) => setReturnForm(p => ({ ...p, order_items: [{ ...p.order_items[0], [k]: v }] }));
+  const filteredNdrs = ndrs.filter((item) => {
+    if (ndrAttemptFilter === 'all') return true;
+    const attempts = Number(item.attempts ?? 1);
+    if (ndrAttemptFilter === '4+') return attempts >= 4;
+    return attempts === Number(ndrAttemptFilter);
+  });
+  const selectedNdrDetails = selectedNdr
+    ? [
+        ...NDR_DETAIL_PRIORITY.filter(key => key in selectedNdr).map(key => [key, selectedNdr[key]]),
+        ...Object.entries(selectedNdr).filter(([key]) => !NDR_DETAIL_PRIORITY.includes(key)),
+      ]
+    : [];
+
+  useEffect(() => {
+    setTab(initialTab);
+    setResult(null);
+    setError('');
+    setNdrDetailOpen(false);
+  }, [initialTab]);
+
+  useEffect(() => {
+    if (!location.state?.prefillAwb) return;
+    setNdrAction(p => ({ ...p, awb: location.state.prefillAwb }));
+    window.history.replaceState({}, '');
+  }, [location.state]);
+
+  useEffect(() => {
+    if (!filteredNdrs.length) {
+      setSelectedNdr(null);
+      return;
+    }
+    if (!selectedNdr) {
+      setSelectedNdr(filteredNdrs[0]);
+      return;
+    }
+    const stillVisible = filteredNdrs.some(item => item.awb_code === selectedNdr.awb_code && item.channel_order_id === selectedNdr.channel_order_id);
+    if (!stillVisible) setSelectedNdr(filteredNdrs[0]);
+  }, [filteredNdrs, selectedNdr]);
 
   useEffect(() => {
     if (tab === 'returns') {
@@ -92,6 +191,9 @@ export default function ShiprocketReturns() {
     }
     if (tab === 'ndr') {
       fetchNDR();
+    }
+    if (tab !== 'ndr') {
+      setNdrDetailOpen(false);
     }
   }, [tab]);
 
@@ -298,6 +400,8 @@ export default function ShiprocketReturns() {
       {/* NDR */}
       {tab === 'ndr' && (
         <div className="space-y-4">
+          <OrderStatusBoard title="Order Status" />
+
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
             <div className="h-1 bg-red-500" />
             <div className="px-5 py-3 border-b border-gray-50"><span className="font-semibold text-gray-700 text-sm">NDR Action</span></div>
@@ -327,11 +431,64 @@ export default function ShiprocketReturns() {
             </div>
           </div>
 
+          {ndrDetailOpen && selectedNdr && (
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
+              <div className="h-1 bg-red-500" />
+              <div className="px-5 py-4 sm:px-6 sm:py-5 border-b border-gray-100 flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <button
+                    onClick={() => setNdrDetailOpen(false)}
+                    className="mb-3 inline-flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-gray-700"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
+                      <path d="M15 18l-6-6 6-6" />
+                    </svg>
+                    Back to NDR List
+                  </button>
+                  <h3 className="text-2xl font-bold text-gray-800 tracking-tight">Full Details</h3>
+                  <p className="text-sm text-gray-400 mt-1">
+                    {selectedNdr.customer_name?.trim() || 'Unknown Customer'} - {selectedNdr.awb_code || '-'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setNdrAction(p => ({ ...p, awb: selectedNdr.awb_code || p.awb }));
+                    setNdrDetailOpen(false);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="text-sm bg-white text-red-600 px-4 py-2 rounded-xl hover:bg-red-50 font-semibold border border-red-100"
+                >
+                  Use AWB in Action
+                </button>
+              </div>
+              <div className="p-4 sm:p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {selectedNdrDetails.map(([key, value]) => (
+                    <div key={key} className={detailCardCls}>
+                      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{formatDetailLabel(key)}</p>
+                      <p className="text-lg sm:text-[1.05rem] font-bold text-slate-800 mt-2 break-words">{formatDetailValue(value)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!ndrDetailOpen && (
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
             <div className="h-1 bg-red-500" />
             <div className="px-5 py-3 border-b border-gray-50 flex items-center justify-between flex-wrap gap-3">
               <span className="font-semibold text-gray-700 text-sm">NDR List</span>
               <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={ndrAttemptFilter}
+                  onChange={e => setNdrAttemptFilter(e.target.value)}
+                  className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-red-400 bg-white"
+                >
+                  {NDR_ATTEMPT_OPTIONS.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
                 <input type="date" value={ndrFrom} onChange={e => setNdrFrom(e.target.value)}
                   className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-red-400 bg-white" />
                 <span className="text-xs text-gray-400">to</span>
@@ -347,7 +504,36 @@ export default function ShiprocketReturns() {
                 )}
               </div>
             </div>
-            {ndrs.length === 0 ? (
+            {false && selectedNdr && (
+              <div className="px-5 py-4 border-b border-gray-50 bg-gray-50/70">
+                <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700">Full Details</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {selectedNdr.customer_name?.trim() || 'Unknown Customer'} · {selectedNdr.awb_code || 'No AWB'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setNdrAction(p => ({ ...p, awb: selectedNdr.awb_code || p.awb }));
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="text-xs bg-white text-red-600 px-3 py-1.5 rounded-xl hover:bg-red-50 font-semibold border border-red-100"
+                  >
+                    Use AWB in Action
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {selectedNdrDetails.map(([key, value]) => (
+                    <div key={key} className="rounded-xl border border-gray-200 bg-white px-3 py-2.5">
+                      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{formatDetailLabel(key)}</p>
+                      <p className="text-sm font-semibold text-gray-700 break-words mt-1">{formatDetailValue(value)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {filteredNdrs.length === 0 ? (
               <div className="px-5 py-8 text-center text-gray-400 text-sm">No NDR records found.</div>
             ) : (
               <div className="overflow-x-auto">
@@ -356,17 +542,30 @@ export default function ShiprocketReturns() {
                     <tr>{['AWB', 'Order ID', 'Customer', 'Reason', 'Attempts', 'Date', 'Action'].map(h => <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>)}</tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {ndrs.map((n, i) => (
-                      <tr key={i} className="hover:bg-gray-50/50">
+                    {filteredNdrs.map((n, i) => (
+                      <tr key={i} className={`hover:bg-gray-50/50 ${selectedNdr?.awb_code === n.awb_code && selectedNdr?.channel_order_id === n.channel_order_id ? 'bg-red-50/40' : ''}`}>
                         <td className="px-4 py-3 font-mono text-xs text-blue-600 cursor-pointer hover:underline"
-                          onClick={() => setNdrAction(p => ({ ...p, awb: n.awb_code }))}>{n.awb_code}</td>
+                          onClick={() => {
+                            setNdrAction(p => ({ ...p, awb: n.awb_code }));
+                            setSelectedNdr(n);
+                          }}>{n.awb_code}</td>
                         <td className="px-4 py-3 font-mono text-xs">{n.channel_order_id}</td>
                         <td className="px-4 py-3 text-gray-700">{n.customer_name?.trim() || '—'}</td>
                         <td className="px-4 py-3 text-xs text-gray-500">{n.reason || '—'}</td>
                         <td className="px-4 py-3 text-center font-semibold text-gray-700">{n.attempts ?? 1}</td>
                         <td className="px-4 py-3 text-xs text-gray-400">{n.ndr_raised_at?.split(' ')[0]}</td>
                         <td className="px-4 py-3">
+                          <button
+                            onClick={() => {
+                              setSelectedNdr(n);
+                              navigate('/shiprocket/ndr/detail', { state: { ndr: n } });
+                            }}
+                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-white text-gray-600 hover:bg-gray-50 border border-gray-200 whitespace-nowrap mr-2"
+                          >
+                            View
+                          </button>
                           <button onClick={() => {
+                            setSelectedNdr(n);
                             setNdrAction({ awb: n.awb_code, action: 'return', comment: 'Return to Origin' });
                             window.scrollTo({ top: 0, behavior: 'smooth' });
                           }} className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-100 whitespace-nowrap">
@@ -380,6 +579,7 @@ export default function ShiprocketReturns() {
               </div>
             )}
           </div>
+          )}
         </div>
       )}
 

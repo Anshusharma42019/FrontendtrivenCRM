@@ -115,6 +115,7 @@ export default function ShiprocketOrders() {
 
   const totalPages = Math.ceil(orders.length / PAGE_SIZE);
   const paged = orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const selectedOrders = orders.filter(o => selected.has(String(o.id || o.order_id)));
 
   const fetchOrders = async (from = fromDate, to = toDate) => {
     setLoading(true); setError(''); setSelected(new Set()); setPage(1);
@@ -161,6 +162,66 @@ export default function ShiprocketOrders() {
     finally { setLoading(false); }
   };
 
+  const getPrintUrl = (payload) => {
+    const data = payload?.data || payload;
+    return data?.label_url || data?.manifest_url || data?.invoice_url
+      || data?.data?.label_url || data?.data?.manifest_url || data?.data?.invoice_url
+      || data?.response?.label_url || data?.response?.manifest_url || data?.response?.invoice_url;
+  };
+
+  const openPrintUrl = (payload) => {
+    const url = getPrintUrl(payload);
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    return url;
+  };
+
+  const getRowsForPrint = () => selectedOrders.length ? selectedOrders : orders;
+
+  const printInvoices = async () => {
+    const rows = getRowsForPrint();
+    const ids = rows.map(o => Number(o.id || o.order_id)).filter(Boolean);
+    if (!ids.length) return setError('No orders available to print invoice.');
+    if (!selectedOrders.length && !window.confirm(`Print invoices for all ${ids.length} loaded order(s)?`)) return;
+    setActionId('print-invoice'); setError(''); setResult(null);
+    try {
+      const res = await srSvc.printInvoice(ids);
+      openPrintUrl(res.data);
+      setResult(res.data);
+    } catch (e) { setError(e?.response?.data?.message || e.message); }
+    finally { setActionId(null); }
+  };
+
+  const printManifests = async () => {
+    const rows = getRowsForPrint();
+    const ids = rows.map(o => Number(o.id || o.order_id)).filter(Boolean);
+    if (!ids.length) return setError('No orders available to print manifest.');
+    if (!selectedOrders.length && !window.confirm(`Print manifests for all ${ids.length} loaded order(s)?`)) return;
+    setActionId('print-manifest'); setError(''); setResult(null);
+    try {
+      const res = await srSvc.printManifest(ids);
+      openPrintUrl(res.data);
+      setResult(res.data);
+    } catch (e) { setError(e?.response?.data?.message || e.message); }
+    finally { setActionId(null); }
+  };
+
+  const printDeliveryLabels = async () => {
+    const rows = getRowsForPrint();
+    const shipmentIds = rows
+      .map(o => o.shipments?.[0]?.id || o.shipments?.[0]?.shipment_id || o.shipment_id)
+      .map(Number)
+      .filter(Boolean);
+    if (!shipmentIds.length) return setError('No shipment IDs available for delivery label.');
+    if (!selectedOrders.length && !window.confirm(`Print delivery labels for all ${shipmentIds.length} loaded shipment(s)?`)) return;
+    setActionId('print-label'); setError(''); setResult(null);
+    try {
+      const res = await srSvc.generateLabel(shipmentIds.length === 1 ? shipmentIds[0] : shipmentIds);
+      openPrintUrl(res.data);
+      setResult(res.data);
+    } catch (e) { setError(e?.response?.data?.message || e.message); }
+    finally { setActionId(null); }
+  };
+
   const toggleSelect = (id) => setSelected(prev => {
     const next = new Set(prev);
     next.has(String(id)) ? next.delete(String(id)) : next.add(String(id));
@@ -195,11 +256,24 @@ export default function ShiprocketOrders() {
           <div className="px-5 py-3 border-b border-gray-50 flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3 flex-wrap">
               <span className="font-semibold text-gray-700 text-sm">All Orders</span>
+              <span className="text-xs text-gray-400">{selectedOrders.length ? `${selectedOrders.length} selected` : `${orders.length} loaded`}</span>
               {selected.size > 0 && (
                 <button onClick={cancelSelected} className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-xl hover:bg-red-700 font-semibold">
                   ❌ Cancel Selected ({selected.size})
                 </button>
               )}
+              <button onClick={printInvoices} disabled={actionId === 'print-invoice' || !orders.length}
+                className="text-xs bg-white text-gray-700 px-3 py-1.5 rounded-xl border border-gray-200 hover:bg-gray-50 font-semibold disabled:opacity-40">
+                {actionId === 'print-invoice' ? 'Printing...' : 'Print Invoice'}
+              </button>
+              <button onClick={printDeliveryLabels} disabled={actionId === 'print-label' || !orders.length}
+                className="text-xs bg-white text-gray-700 px-3 py-1.5 rounded-xl border border-gray-200 hover:bg-gray-50 font-semibold disabled:opacity-40">
+                {actionId === 'print-label' ? 'Printing...' : 'Print Delivery Label'}
+              </button>
+              <button onClick={printManifests} disabled={actionId === 'print-manifest' || !orders.length}
+                className="text-xs bg-white text-gray-700 px-3 py-1.5 rounded-xl border border-gray-200 hover:bg-gray-50 font-semibold disabled:opacity-40">
+                {actionId === 'print-manifest' ? 'Printing...' : 'Print Manifest'}
+              </button>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-2">

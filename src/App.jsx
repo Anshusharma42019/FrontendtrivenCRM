@@ -14,9 +14,7 @@ import CNP from './pages/CNP';
 import Verification from './pages/Verification';
 import ReadyToShipment from './pages/ReadyToShipment';
 import Shiprocket from './pages/Shiprocket';
-import ShiprocketOrders from './pages/ShiprocketOrders';
-import ShiprocketShipments from './pages/ShiprocketShipments';
-import ShiprocketReturns from './pages/ShiprocketReturns';
+import NdrDetail from './pages/NdrDetail';
 import FollowUp from './pages/FollowUp';
 import CallAgain from './pages/CallAgain';
 
@@ -41,9 +39,11 @@ function AppRoutes() {
         <Route path="verification" element={<Verification />} />
         <Route path="ready-to-shipment" element={<ReadyToShipment />} />
         <Route path="shiprocket" element={<Shiprocket />} />
-        <Route path="shiprocket/orders" element={<ShiprocketOrders />} />
-        <Route path="shiprocket/shipments" element={<ShiprocketShipments />} />
-        <Route path="shiprocket/returns" element={<ShiprocketReturns />} />
+        <Route path="shiprocket/orders" element={<Shiprocket initialSection="orders" />} />
+        <Route path="shiprocket/shipments" element={<Shiprocket initialSection="shipments" />} />
+        <Route path="shiprocket/returns" element={<Shiprocket initialSection="returns" initialReturnsTab="returns" />} />
+        <Route path="shiprocket/ndr" element={<Shiprocket initialSection="returns" initialReturnsTab="ndr" />} />
+        <Route path="shiprocket/ndr/detail" element={<NdrDetail />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="users" element={
           <ProtectedRoute roles={['admin', 'manager']}>
