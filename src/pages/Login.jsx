@@ -4,9 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import trivenLogo from '../assets/Triven_logo.png';
 
 const FEATURES = [
-  { emoji: '🌿', title: 'Leads', sub: 'Track & convert' },
-  { emoji: '📦', title: 'Pipeline', sub: 'Manage deals' },
-  { emoji: '🚚', title: 'Shipments', sub: 'Ready to ship' },
+  { icon: <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1.41-3.53C8.73 18.16 10.86 18 13 18c3 0 5.5-2.5 5.5-5.5a5.5 5.5 0 0 0-1.5-3.8"/><path d="M14.5 2c-3.2 0-5.8 2.2-6.4 5.2"/></svg>, title: 'Leads', sub: 'Track & convert' },
+  { icon: <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>, title: 'Pipeline', sub: 'Manage deals' },
+  { icon: <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>, title: 'Shipments', sub: 'Ready to ship' },
 ];
 
 export default function Login() {
@@ -65,10 +65,10 @@ export default function Login() {
 
         {/* Feature cards */}
         <div className="relative grid grid-cols-3 gap-2 md:gap-3 mt-6 md:mt-0">
-          {FEATURES.map(({ emoji, title, sub }) => (
+          {FEATURES.map(({ icon, title, sub }) => (
             <div key={title} className="rounded-2xl p-3 md:p-4 backdrop-blur-sm"
               style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
-              <div className="text-xl md:text-2xl mb-1 md:mb-2">{emoji}</div>
+              <div className="text-white mb-1 md:mb-2">{icon}</div>
               <div className="text-white font-semibold text-xs md:text-sm">{title}</div>
               <div className="text-green-200/70 text-[10px] md:text-xs mt-0.5">{sub}</div>
             </div>

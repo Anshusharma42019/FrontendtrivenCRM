@@ -52,9 +52,9 @@ export default function ShiprocketShipments() {
   useEffect(() => { if (tab === 'list') fetchShipments(); }, [tab]);
 
   const TABS = [
-    { id: 'list', label: '🚚 Shipments' },
-    { id: 'track', label: '📍 Track' },
-    { id: 'cancel', label: '❌ Cancel Shipment' },
+    { id: 'list', label: <><svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg> Shipments</> },
+    { id: 'track', label: <><svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> Track</> },
+    { id: 'cancel', label: <><svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Cancel Shipment</> },
   ];
 
   const trackActivities = trackData?.tracking_data?.shipment_track_activities || [];

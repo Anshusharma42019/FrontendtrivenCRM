@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { fetchStaffStats, saveStaffTarget, fetchStaffVerifications, fetchStaffTodayLists, fetchStaffMonthlyChart } from '../services/dashboard.service';
+import { fetchStaffStats, saveStaffTarget, fetchStaffVerifications, fetchStaffTodayLists, fetchStaffMonthlyChart, fetchStaffCommission } from '../services/dashboard.service';
+import * as attendanceSvc from '../services/attendance.service';
 
 const card = 'bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow';
 const cardStyle = { border: '1px solid rgba(0,0,0,0.05)' };
@@ -28,10 +29,15 @@ export default function StaffDashboard() {
   const [targetInput, setTargetInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [attStatus, setAttStatus] = useState(null);
+  const [attLoading, setAttLoading] = useState(false);
+  const [commission, setCommission] = useState(null);
+  const [commMonth, setCommMonth] = useState(() => { const n = new Date(); return { month: n.getMonth(), year: n.getFullYear() }; });
+  const [commLoading, setCommLoading] = useState(false);
 
   const load = useCallback(async () => {
-    const [data, vData, lists, chart] = await Promise.allSettled([
-      fetchStaffStats(), fetchStaffVerifications(), fetchStaffTodayLists(), fetchStaffMonthlyChart()
+    const [data, vData, lists, chart, att] = await Promise.allSettled([
+      fetchStaffStats(), fetchStaffVerifications(), fetchStaffTodayLists(), fetchStaffMonthlyChart(), attendanceSvc.getTodayStatus()
     ]);
     if (data.status === 'fulfilled') setStats(data.value);
     else console.error('fetchStaffStats failed:', data.reason?.response?.status, data.reason?.message);
@@ -41,6 +47,7 @@ export default function StaffDashboard() {
     else console.error('fetchStaffTodayLists failed:', lists.reason?.response?.status, lists.reason?.message);
     if (chart.status === 'fulfilled') setMonthlyChart(Array.isArray(chart.value) ? chart.value : []);
     else console.error('fetchStaffMonthlyChart failed:', chart.reason?.response?.status, chart.reason?.message);
+    if (att.status === 'fulfilled') setAttStatus(att.value);
   }, []);
 
   useEffect(() => {
@@ -48,6 +55,17 @@ export default function StaffDashboard() {
     const t = setInterval(load, 60000);
     return () => clearInterval(t);
   }, [load]);
+
+  // Load commission data
+  useEffect(() => {
+    let cancelled = false;
+    setCommLoading(true);
+    fetchStaffCommission(commMonth.month, commMonth.year)
+      .then(d => { if (!cancelled) setCommission(d); })
+      .catch(e => console.error('Commission fetch failed:', e.message))
+      .finally(() => { if (!cancelled) setCommLoading(false); });
+    return () => { cancelled = true; };
+  }, [commMonth]);
 
   const handleSaveTarget = async (e) => {
     e.preventDefault();
@@ -73,6 +91,23 @@ export default function StaffDashboard() {
   const achieved = target > 0 && done >= target;
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
+  const checkedIn = !!attStatus?.checkIn;
+  const checkedOut = !!attStatus?.checkOut;
+  const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : null;
+
+  const handleCheckIn = async () => {
+    setAttLoading(true);
+    try { const res = await attendanceSvc.checkIn(); setAttStatus(res); }
+    catch (e) { alert(e.response?.data?.message || 'Check-in failed'); }
+    setAttLoading(false);
+  };
+  const handleCheckOut = async () => {
+    setAttLoading(true);
+    try { const res = await attendanceSvc.checkOut(); setAttStatus(res); }
+    catch (e) { alert(e.response?.data?.message || 'Check-out failed'); }
+    setAttLoading(false);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -81,6 +116,163 @@ export default function StaffDashboard() {
           <h2 className="text-2xl font-bold text-gray-800 tracking-tight">My Dashboard</h2>
           <p className="text-sm text-gray-400 mt-0.5">Welcome back, {user?.name}! · {today}</p>
         </div>
+      </div>
+
+      {/* Attendance Quick Card */}
+      <div className={card} style={{ ...cardStyle, background: 'linear-gradient(135deg, #0d1f0d, #1a3a1a)', border: 'none' }}>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+              <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <div>
+              <p className="text-white font-semibold text-sm">Attendance</p>
+              <p className="text-green-300/60 text-xs mt-0.5">
+                {checkedIn && checkedOut ? `In: ${fmtTime(attStatus.checkIn)} · Out: ${fmtTime(attStatus.checkOut)}`
+                  : checkedIn ? `Checked in at ${fmtTime(attStatus.checkIn)}`
+                  : 'Not checked in yet'}
+              </p>
+            </div>
+          </div>
+          <div>
+            {!checkedIn ? (
+              <button onClick={handleCheckIn} disabled={attLoading}
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60"
+                style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
+                {attLoading ? 'Processing...' : <><svg className="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> Clock In</>}
+              </button>
+            ) : !checkedOut ? (
+              <button onClick={handleCheckOut} disabled={attLoading}
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60"
+                style={{ background: 'linear-gradient(135deg, #ea580c, #c2410c)' }}>
+                {attLoading ? 'Processing...' : <><svg className="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> Clock Out</>}
+              </button>
+            ) : (
+              <span className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-500/20 text-green-300 text-sm font-semibold">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/></svg>
+                Day Complete
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Earnings Card */}
+      <div className={card} style={{ ...cardStyle, overflow: 'hidden' }}>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #10b98122, #05966922)' }}>
+              <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700">My Earnings</h3>
+              <p className="text-xs text-gray-400">Fixed Salary + 5% Commission</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setCommMonth(p => {
+              const m = p.month - 1;
+              return m < 0 ? { month: 11, year: p.year - 1 } : { month: m, year: p.year };
+            })} className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <span className="text-xs font-semibold text-gray-600 min-w-[90px] text-center">
+              {new Date(commMonth.year, commMonth.month).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+            </span>
+            <button onClick={() => setCommMonth(p => {
+              const m = p.month + 1;
+              return m > 11 ? { month: 0, year: p.year + 1 } : { month: m, year: p.year };
+            })} className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        {commLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : commission ? (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+              <div className="rounded-2xl p-4 text-center" style={{ background: '#f0fdf4', border: '1px solid rgba(22,163,74,0.1)' }}>
+                <p className="text-xl font-bold text-green-600">₹{(commission.basePay || 0).toLocaleString('en-IN')}</p>
+                <p className="text-[10px] text-green-700 font-semibold mt-1">Base Pay</p>
+              </div>
+              <div className="rounded-2xl p-4 text-center" style={{ background: '#fffbeb', border: '1px solid rgba(245,158,11,0.1)' }}>
+                <p className="text-xl font-bold text-amber-600">₹{(commission.totalCommission || 0).toLocaleString('en-IN')}</p>
+                <p className="text-[10px] text-amber-700 font-semibold mt-1">Commission</p>
+              </div>
+              <div className="rounded-2xl p-4 text-center bg-gray-900 shadow-inner">
+                <p className="text-xl font-bold text-white">₹{(commission.totalPay || 0).toLocaleString('en-IN')}</p>
+                <p className="text-[10px] text-gray-400 font-semibold mt-1 uppercase tracking-wider">Total Salary</p>
+              </div>
+              <div className="rounded-2xl p-4 text-center" style={{ background: '#eff6ff', border: '1px solid rgba(59,130,246,0.1)' }}>
+                <p className="text-xl font-bold text-blue-600">{commission.verifications?.verified || 0}</p>
+                <p className="text-[10px] text-blue-700 font-semibold mt-1">Verified Tasks</p>
+              </div>
+            </div>
+
+            {/* Attendance & Verification Progress */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs font-semibold">
+                  <span className="text-gray-500">Attendance ({commission.attendance?.present + commission.attendance?.late} Present, {commission.attendance?.half_day} Half Day)</span>
+                  <span className="text-gray-900">{Math.round(((commission.attendance?.present + commission.attendance?.late + (commission.attendance?.half_day * 0.5)) / new Date(commMonth.year, commMonth.month + 1, 0).getDate()) * 100)}%</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.min(100, ((commission.attendance?.present + commission.attendance?.late + (commission.attendance?.half_day * 0.5)) / 30) * 100)}%` }} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs font-semibold">
+                  <span className="text-gray-500">Verification Rate ({commission.verifications?.verified} / {commission.verifications?.assigned})</span>
+                  <span className="text-gray-900">{commission.verifications?.assigned ? Math.round((commission.verifications?.verified / commission.verifications?.assigned) * 100) : 0}%</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500 rounded-full" style={{ width: `${commission.verifications?.assigned ? (commission.verifications?.verified / commission.verifications?.assigned) * 100 : 0}%` }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Daily breakdown */}
+            {commission.dailyBreakdown?.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-50">
+                <button className="w-full flex items-center justify-between mb-2" onClick={() => setOpenSection(openSection === 'commBreakdown' ? null : 'commBreakdown')}>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Commission Breakdown</span>
+                  <span className="text-gray-400 text-xs">{openSection === 'commBreakdown' ? '▲' : '▼'}</span>
+                </button>
+                {openSection === 'commBreakdown' && (
+                  <div className="divide-y divide-gray-50 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                    {commission.dailyBreakdown.map(d => (
+                      <div key={d.date} className="py-2.5 flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-3">
+                          <span className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 text-[10px] font-bold">
+                            {new Date(d.date + 'T00:00:00').getDate()}
+                          </span>
+                          <div>
+                            <span className="text-gray-800 text-xs font-medium">{new Date(d.date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+                            <p className="text-[10px] text-gray-400">{d.deliveries} deliveries</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-bold text-emerald-600">+ ₹{Math.round(d.commission).toLocaleString('en-IN')}</p>
+                          <p className="text-[9px] text-gray-400">₹{Math.round(d.revenue).toLocaleString('en-IN')} rev.</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {commission.totalDeliveries === 0 && (
+              <p className="text-sm text-gray-400 text-center py-4">No commissions earned this month</p>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-gray-400 text-center py-6">Unable to load earnings data</p>
+        )}
       </div>
 
       {/* Target setter */}

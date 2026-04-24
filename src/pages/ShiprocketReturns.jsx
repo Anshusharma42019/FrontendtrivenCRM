@@ -198,10 +198,10 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
   }, [tab]);
 
   const TABS = [
-    { id: 'returns', label: '↩️ Returns' },
-    { id: 'create_return', label: '➕ Create Return' },
-    { id: 'wallet', label: '💰 Wallet' },
-    { id: 'ndr', label: '⚠️ NDR' },
+    { id: 'returns', label: <><svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg> Returns</> },
+    { id: 'create_return', label: <><svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> Create Return</> },
+    { id: 'wallet', label: <><svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Wallet</> },
+    { id: 'ndr', label: <><svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> NDR</> },
   ];
 
   return (
@@ -496,7 +496,7 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
                   className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-red-400 bg-white" />
                 <button onClick={() => fetchNDR(ndrFrom, ndrTo)}
                   className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-xl hover:bg-red-700 font-semibold">
-                  {ndrLoading ? 'Loading...' : '🔍 Search'}
+                  {ndrLoading ? 'Loading...' : <><svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search</>}
                 </button>
                 {(ndrFrom || ndrTo) && (
                   <button onClick={() => { setNdrFrom(''); setNdrTo(''); fetchNDR('', ''); }}
@@ -569,7 +569,7 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
                             setNdrAction({ awb: n.awb_code, action: 'return', comment: 'Return to Origin' });
                             window.scrollTo({ top: 0, behavior: 'smooth' });
                           }} className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-100 whitespace-nowrap">
-                            ↩ RTO
+                            <svg className="w-3 h-3 inline-block mr-0.5 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg> RTO
                           </button>
                         </td>
                       </tr>

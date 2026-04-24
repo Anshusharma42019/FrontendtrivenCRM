@@ -187,7 +187,7 @@ export default function Layout() {
                               <div className="flex flex-wrap gap-1.5 mt-1.5">
                                 {lead.source && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full capitalize">{lead.source.replace('_', ' ')}</span>}
                                 {lead.type && <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded-full capitalize">{lead.type}</span>}
-                                {lead.assignedTo && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">👤 {lead.assignedTo.name}</span>}
+                                {lead.assignedTo && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full flex items-center gap-0.5"><svg className="w-2.5 h-2.5 inline-block" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> {lead.assignedTo.name}</span>}
                               </div>
                               {lead.problem && <div className="text-xs text-gray-500 mt-1 italic truncate">&ldquo;{lead.problem}&rdquo;</div>}
                             </div>

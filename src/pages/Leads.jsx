@@ -271,7 +271,7 @@ export default function Leads() {
                         className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition"
                         style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}
                       >
-                        🛒 Order
+                        <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg> Order
                       </button>)}
                     </div>
                   </div>

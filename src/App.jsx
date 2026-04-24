@@ -17,6 +17,7 @@ import Shiprocket from './pages/Shiprocket';
 import NdrDetail from './pages/NdrDetail';
 import FollowUp from './pages/FollowUp';
 import CallAgain from './pages/CallAgain';
+import Attendance from './pages/Attendance';
 
 function AppRoutes() {
   const { user } = useAuth();
@@ -35,6 +36,7 @@ function AppRoutes() {
         <Route path="cnp" element={<CNP />} />
         <Route path="call-again" element={<CallAgain />} />
         <Route path="tasks" element={<Tasks />} />
+        <Route path="attendance" element={<Attendance />} />
         <Route path="follow-up" element={<FollowUp />} />
         <Route path="verification" element={<Verification />} />
         <Route path="ready-to-shipment" element={<ReadyToShipment />} />

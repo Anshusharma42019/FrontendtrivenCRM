@@ -63,7 +63,7 @@ const formatDateInput = (date) => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-const normalizeStatus = (status) => String(status || '').toUpperCase();
+const normalizeStatus = (status) => String(status || '').trim().toUpperCase().replace(/\s+/g, '_');
 const formatStatusLabel = (status) => String(status || '').replace(/_/g, ' ');
 const formatMoney = (value) => `Rs ${Number(value || 0).toLocaleString()}`;
 

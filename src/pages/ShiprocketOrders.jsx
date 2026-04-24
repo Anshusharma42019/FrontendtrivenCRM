@@ -57,7 +57,7 @@ function UpdateOrderForm({ setError, setResult, setLoading, loading }) {
   return (
     <div className="space-y-4">
       <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
-        ⚠️ Shiprocket update requires ALL fields. Enter the <strong>numeric Shiprocket Order ID</strong> (e.g. 1279117157) from the Orders List, not ORD-001.
+        <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Shiprocket update requires ALL fields. Enter the <strong>numeric Shiprocket Order ID</strong> (e.g. 1279117157) from the Orders List, not ORD-001.
       </div>
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
         <div className="h-1 bg-yellow-500" />
@@ -234,8 +234,8 @@ export default function ShiprocketOrders() {
   const canCancel = (status) => !['CANCELLED', 'CANCELED', 'DELIVERED', 'RTO_DELIVERED'].includes(status);
 
   const TABS = [
-    { id: 'list', label: '📦 Orders List' },
-    { id: 'update', label: '✏️ Update Order' },
+    { id: 'list', label: <><svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> Orders List</> },
+    { id: 'update', label: <><svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Update Order</> },
   ];
 
   return (
@@ -259,7 +259,7 @@ export default function ShiprocketOrders() {
               <span className="text-xs text-gray-400">{selectedOrders.length ? `${selectedOrders.length} selected` : `${orders.length} loaded`}</span>
               {selected.size > 0 && (
                 <button onClick={cancelSelected} className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-xl hover:bg-red-700 font-semibold">
-                  ❌ Cancel Selected ({selected.size})
+                  <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Cancel Selected ({selected.size})
                 </button>
               )}
               <button onClick={printInvoices} disabled={actionId === 'print-invoice' || !orders.length}
@@ -288,7 +288,7 @@ export default function ShiprocketOrders() {
               </div>
               <button onClick={() => fetchOrders(fromDate, toDate)}
                 className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-xl hover:bg-green-700 font-semibold">
-                🔍 Search
+                <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search
               </button>
               {(fromDate || toDate) && (
                 <button onClick={() => { setFromDate(''); setToDate(''); fetchOrders('', ''); }}
@@ -355,7 +355,7 @@ export default function ShiprocketOrders() {
                               {canCancel(o.status) && (
                                 <button onClick={() => cancelOne(oid)} disabled={actionId === `cancel-${oid}`}
                                   className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 transition-all disabled:opacity-50 whitespace-nowrap">
-                                  {actionId === `cancel-${oid}` ? '...' : '❌ Cancel'}
+                                  {actionId === `cancel-${oid}` ? '...' : <><svg className="w-3 h-3 inline-block mr-0.5 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Cancel</>}
                                 </button>
                               )}
                             </div>

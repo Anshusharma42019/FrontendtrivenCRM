@@ -7,7 +7,7 @@ import Badge from '../components/ui/Badge';
 import { useAuth } from '../context/AuthContext';
 
 const ROLES = ['manager', 'sales'];
-const EMPTY = { name: '', phone: '', password: '', role: 'manager' };
+const EMPTY = { name: '', phone: '', password: '', role: 'manager', baseSalary: 0 };
 
 const ROLE_GRADIENT = {
   admin:   'from-purple-500 to-violet-600',
@@ -78,7 +78,7 @@ export default function Users() {
   const openCreate = () => { setForm(EMPTY); setError(''); setModal('create'); };
   const openEdit = (u) => {
     setSelected(u);
-    setForm({ name: u.name, phone: u.phone || '', password: '', role: u.role });
+    setForm({ name: u.name, phone: u.phone || '', password: '', role: u.role, baseSalary: u.baseSalary || 0 });
     setError(''); setModal('edit');
   };
 
@@ -151,6 +151,10 @@ export default function Users() {
                     <p className="font-semibold text-gray-800 truncate text-sm">{u.name}</p>
                     <p className="text-xs text-gray-400 truncate">{u.phone || u.email}</p>
                   </div>
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-gray-500">Base Salary</span>
+                  <span className="text-xs font-bold text-gray-700">₹{(u.baseSalary || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex items-center justify-between mb-4">
                   <Badge value={u.role} />
@@ -333,6 +337,10 @@ export default function Users() {
               <select className={`${inputCls} mt-1.5`} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                 {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
               </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Base Salary (Monthly)</label>
+              <input type="number" className={`${inputCls} mt-1.5`} value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: Number(e.target.value) })} />
             </div>
             <div className="flex gap-3 pt-2">
               <button type="submit" disabled={loading}

@@ -7,3 +7,5 @@ export const fetchStaffVerifications = () => API.get('/dashboard/staff-verificat
 export const fetchStaffTodayLists = () => API.get('/dashboard/staff-today-lists').then(r => r.data.data);
 export const fetchStaffMonthlyChart = () => API.get('/dashboard/staff-monthly-chart').then(r => r.data.data);
 export const fetchAllStaffStats = () => API.get('/dashboard/all-staff-stats').then(r => r.data.data);
+export const fetchStaffCommission = (month, year) => API.get(`/dashboard/staff-commission?month=${month}&year=${year}`).then(r => r.data.data);
+export const fetchAllStaffCommissions = (month, year) => API.get(`/dashboard/all-staff-commissions?month=${month}&year=${year}`).then(r => r.data.data);
