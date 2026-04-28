@@ -59,7 +59,7 @@ export default function Tasks() {
   const [tasks, setTasks] = useState([]);
   const [daily, setDaily] = useState([]);
   const [salesUsers, setSalesUsers] = useState([]);
-  const [tab, setTab] = useState('all');
+  const [tab, setTab] = useState('daily');
   const [filters, setFilters] = useState({ status: '', type: '' });
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
