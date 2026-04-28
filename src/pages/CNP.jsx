@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import API from '../api';
 import {
   getLeads,
   getLead,
@@ -7,15 +8,43 @@ import {
   markCNP,
   unmarkCNP,
   getCallAgains,
+  createCallAgain,
+  updateCallAgain,
 } from "../services/lead.service";
 import {
   getCnpRecords,
   incrementCnpCount,
   updateTask,
   deleteCnpRecord,
+  createTask,
 } from "../services/task.service";
+import Modal from "../components/ui/Modal";
+
+const PIN_COLORS = [
+  'bg-rose-500', 'bg-orange-500', 'bg-amber-500',
+  'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-emerald-500',
+];
+
+const initials = (name = '') =>
+  name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+
+const DetailRow = ({ label, value, color = "gray" }) =>
+  value ? (
+    <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">{label}</span>
+      <span className={`text-sm font-medium capitalize flex-1 ${color === 'red' ? 'text-red-600' : 'text-gray-800'}`}>{value}</span>
+    </div>
+  ) : null;
+
+const SectionHead = ({ label, color = "red" }) => (
+  <div className="flex items-center gap-2 mt-4 mb-1">
+    <span className={`text-[10px] font-extrabold uppercase tracking-widest ${color === 'red' ? 'text-red-500' : 'text-amber-500'}`}>{label}</span>
+    <div className={`flex-1 h-px ${color === 'red' ? 'bg-red-100' : 'bg-amber-100'}`} />
+  </div>
+);
 
 export default function CNP() {
+  const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
   const [allLeads, setAllLeads] = useState([]);
   const [callAgainLeads, setCallAgainLeads] = useState([]);
@@ -23,10 +52,54 @@ export default function CNP() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(null);
   const [tab, setTab] = useState("tasks");
-  const [leadDetail, setLeadDetail] = useState(null);
-  const [viewTask, setViewTask] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState('today');
   const [callAgainDateFilter, setCallAgainDateFilter] = useState('today');
+  const [note, setNote] = useState('');
+  const [nextDate, setNextDate] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+  const [taskModal, setTaskModal] = useState(false);
+  const [taskForm, setTaskForm] = useState({});
+  const [taskLoading, setTaskLoading] = useState(false);
+  const [taskError, setTaskError] = useState('');
+
+  const todayISO = () => { const d = new Date(); d.setHours(23,59,59,999); return d.toISOString(); };
+  const inputCls = "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-400 transition";
+
+  const openTaskModal = (item) => {
+    const lead = item.lead || {};
+    setTaskForm({ title: lead.name || item.title || '', phone: lead.phone || '', problem: lead.problem || '', age: '', weight: '', height: '', otherProblems: '', problemDuration: '', price: '', reminderAt: '', dueDate: todayISO(), cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', type: 'task', priority: 'medium', lead: lead._id || '', assignedTo: item.assignedTo?._id || '', cnpRecordId: item._id });
+    setTaskError('');
+    setTaskModal(true);
+  };
+
+  const handleTaskSubmit = async (e) => {
+    e.preventDefault(); setTaskLoading(true); setTaskError('');
+    try {
+      const { cnpRecordId, ...payload } = taskForm;
+      if (!payload.assignedTo) delete payload.assignedTo;
+      await createTask(payload);
+      if (cnpRecordId) await deleteCnpRecord(cnpRecordId).catch(() => {});
+      setTaskModal(false);
+      setSelected(null);
+      load(dateFilter, callAgainDateFilter);
+    } catch (err) { setTaskError(err.response?.data?.message || 'Failed'); }
+    finally { setTaskLoading(false); }
+  };
+
+  const handleSaveNote = async () => {
+    if (!note.trim() && !nextDate) return;
+    setSavingNote(true);
+    const leadId = selected?.lead?._id || selected?._id;
+    try {
+      const res = await API.post(`/leads/${leadId}/follow-up`, { note, next_date: nextDate || undefined });
+      const updated = res.data.data;
+      setSelected(prev => ({ ...prev, lead: { ...(prev.lead || {}), ...updated } }));
+      setNote(''); setNextDate('');
+    } catch { }
+    finally { setSavingNote(false); }
+  };
 
   const load = useCallback(async (cnpFilter = '', caFilter = '') => {
     try {
@@ -49,61 +122,23 @@ export default function CNP() {
 
   useEffect(() => { load(dateFilter, callAgainDateFilter); }, [load, dateFilter, callAgainDateFilter]);
 
-  const handleMarkCNP = async (lead) => {
-    setUpdating(lead._id);
-    try { await markCNP(lead._id); load(dateFilter, callAgainDateFilter); } catch { /* ignore */ } finally { setUpdating(null); }
-  };
-
-  const handleUnmarkCNP = async (lead) => {
-    setUpdating(lead._id);
-    try { await unmarkCNP(lead._id); load(dateFilter, callAgainDateFilter); } catch { /* ignore */ } finally { setUpdating(null); }
-  };
-
-  const handleStatusChange = async (lead, status) => {
-    setUpdating(lead._id);
-    try { await updateLead(lead._id, { status, cnp: false }); load(dateFilter, callAgainDateFilter); } catch { /* ignore */ } finally { setUpdating(null); }
-  };
-
-  const handleNotInterested = async (task) => {
-    if (!task.lead?._id) return;
-    setUpdating(task._id);
+  const handleStatusChange = async (leadId, status, taskId = null) => {
+    setUpdating(leadId);
     try {
-      await updateLead(task.lead._id, { status: 'closed_lost' });
-      await deleteCnpRecord(task._id);
-      setCnpTasks(prev => prev.filter(t => t._id !== task._id));
-      navigate('/pipeline', { state: { filter: 'closed_lost' } });
-    } catch { /* ignore */ } finally { setUpdating(null); }
-  };
-
-  const handleInterested = async (task) => {
-    if (!task.lead?._id) return;
-    setUpdating(task._id);
-    try {
-      await updateLead(task.lead._id, { status: 'interested' });
-      await deleteCnpRecord(task._id);
-      setCnpTasks(prev => prev.filter(t => t._id !== task._id));
-      navigate('/pipeline', { state: { filter: 'interested' } });
-    } catch { /* ignore */ } finally { setUpdating(null); }
-  };
-
-  const handleOnHold = async (task) => {
-    if (!task.lead?._id) return;
-    setUpdating(task._id);
-    try {
-      await updateLead(task.lead._id, { status: 'on_hold' });
-      await deleteCnpRecord(task._id);
-      setCnpTasks(prev => prev.filter(t => t._id !== task._id));
-      navigate('/pipeline', { state: { filter: 'on_hold' } });
-    } catch { /* ignore */ } finally { setUpdating(null); }
-  };
-
-  const handleViewTask = async (task) => {
-    if (!task.lead?._id) return;
-    try {
-      const lead = await getLead(task.lead._id);
-      setLeadDetail(lead);
-      setViewTask(task);
-    } catch { /* ignore */ }
+      await updateLead(leadId, { status, cnp: false });
+      if (taskId) await deleteCnpRecord(taskId);
+      // For Call Again tab, mark the call-again record as done
+      if (tab === 'callAgain' && selected?._id) {
+        try { await updateCallAgain(selected._id, { status: 'done' }); } catch { }
+      }
+      if (tab === 'tasks') {
+        setCnpTasks(prev => prev.filter(t => t._id !== taskId));
+      } else {
+        setCallAgainLeads(prev => prev.filter(r => r._id !== selected?._id));
+      }
+      setSelected(null);
+      load(dateFilter, callAgainDateFilter);
+    } catch { } finally { setUpdating(null); }
   };
 
   const handleIncrementCnp = async (id) => {
@@ -111,28 +146,29 @@ export default function CNP() {
     try {
       const updated = await incrementCnpCount(id);
       setCnpTasks((prev) =>
-        prev.map((t) => t._id === id ? { ...t, cnpCount: updated.cnpCount, lastCnpAt: updated.lastCnpAt } : t)
+        prev.map((t) => t._id === id ? { ...t, cnpCount: updated.cnpCount, lastCnpAt: updated.lastCnpAt, cnpHistory: updated.cnpHistory } : t)
       );
+      if (selected?._id === id) {
+        setSelected(prev => ({ ...prev, cnpCount: updated.cnpCount, lastCnpAt: updated.lastCnpAt, cnpHistory: updated.cnpHistory }));
+      }
     } catch { /* ignore */ } finally { setUpdating(null); }
   };
 
-  const navigate = useNavigate();
+  const handleGoToTask = (item) => openTaskModal(item);
 
-  const handleGoToTask = (task) => {
-    navigate('/tasks', {
-      state: {
-        leadId: task.lead?._id || '',
-        assignedTo: task.assignedTo?._id || '',
-        cnpId: task._id,
-        leadData: {
-          name: task.lead?.name || task.title || '',
-          phone: task.lead?.phone || '',
-        },
-      },
+  const filteredItems = useMemo(() => {
+    const items = tab === 'tasks' ? cnpTasks : callAgainLeads;
+    if (!search) return items;
+    const q = search.toLowerCase();
+    return items.filter(item => {
+      const lead = item.lead || {};
+      return (
+        item.title?.toLowerCase().includes(q) ||
+        lead.name?.toLowerCase().includes(q) ||
+        lead.phone?.includes(q)
+      );
     });
-  };
-
-  const displayed = allLeads.filter((l) => !l.cnp);
+  }, [tab, cnpTasks, callAgainLeads, search]);
 
   if (loading)
     return (
@@ -144,376 +180,375 @@ export default function CNP() {
       </div>
     );
 
-  const tabs = [
-    { key: "tasks", label: "CNP Tasks", count: cnpTasks.length, color: "red" },
-    { key: "callAgain", label: "Call Again", count: callAgainLeads.length, color: "amber" },
-  ];
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-red-900 p-6 text-white shadow-xl">
-        <div className="absolute inset-0 opacity-10"
-          style={{ backgroundImage: "radial-gradient(circle at 80% 20%, #ef4444 0%, transparent 60%)" }} />
-        <div className="relative flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-8 h-8 rounded-lg bg-red-500/20 border border-red-400/30 flex items-center justify-center">
-                <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
-                  <line x1="1" y1="1" x2="23" y2="23" />
+    <div className="flex gap-4 scroll-container-h overflow-hidden animate-slide-up mobile-p-safe">
+      {/* ── LEFT PANEL ── */}
+      <div className={`flex flex-col gap-4 transition-all duration-300 ${selected ? 'w-full lg:w-[55%]' : 'w-full'} h-full overflow-hidden`}>
+        
+        {/* Header & Filters */}
+        <div className="flex flex-col gap-5 shrink-0 glass p-5 rounded-2xl border border-white/50 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${tab === 'tasks' ? 'bg-gradient-to-br from-red-500 to-red-600' : 'bg-gradient-to-br from-amber-500 to-amber-600'}`}>
+                {tab === 'tasks' ? (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" /><line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                  </svg>
+                )}
+              </div>
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">{tab === 'tasks' ? 'Call Not Picked' : 'Call Again'}</h2>
+                <p className="text-[11px] text-gray-400 font-medium mt-0.5">Manage unanswered leads & callbacks</p>
+              </div>
+            </div>
+            
+            <div className="flex gap-2 p-1 bg-gray-100 rounded-xl w-fit">
+              <button onClick={() => { setTab("tasks"); setSelected(null); }}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${tab === "tasks" ? "bg-white text-red-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                Tasks ({cnpTasks.length})
+              </button>
+              <button onClick={() => { setTab("callAgain"); setSelected(null); }}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${tab === "callAgain" ? "bg-white text-amber-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                Call Again ({callAgainLeads.length})
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
+              {[
+                { label: 'Today', value: 'today' },
+                { label: 'Yesterday', value: 'yesterday' },
+                { label: 'Week', value: 'this_week' },
+                { label: 'Month', value: 'this_month' },
+              ].map(f => {
+                const active = tab === 'tasks' ? dateFilter === f.value : callAgainDateFilter === f.value;
+                return (
+                  <button key={f.value}
+                    onClick={() => tab === 'tasks' ? setDateFilter(f.value) : setCallAgainDateFilter(f.value)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold border whitespace-nowrap transition-all ${active
+                      ? (tab === 'tasks' ? 'bg-red-600 text-white border-red-600 shadow-md' : 'bg-amber-600 text-white border-amber-600 shadow-md')
+                      : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50'
+                    }`}>{f.label}</button>
+                );
+              })}
+            </div>
+
+            <div className="relative flex-1">
+              <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+              </svg>
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search name, phone..."
+                className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-100 bg-white text-sm font-medium text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-red-400/20 focus:border-red-400 transition shadow-sm"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+          {filteredItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-dashed border-gray-200">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 ${tab === 'tasks' ? 'bg-red-50 text-red-300' : 'bg-amber-50 text-amber-300'}`}>
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" /><line x1="1" y1="1" x2="23" y2="23" />
                 </svg>
               </div>
-              <h2 className="text-xl font-bold tracking-tight">Call Not Picked</h2>
+              <p className="text-gray-500 text-sm font-medium">No {tab === 'tasks' ? 'CNP tasks' : 'call-again leads'} found</p>
             </div>
-            <p className="text-gray-400 text-sm">Manage unanswered call leads & tasks</p>
-          </div>
-          <div className="flex gap-3">
-            <div className="text-center px-4 py-2 rounded-xl bg-white/10 border border-white/10 backdrop-blur-sm">
-              <p className="text-2xl font-bold text-red-400">{cnpTasks.length}</p>
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">Tasks</p>
-            </div>
-            <div className="text-center px-4 py-2 rounded-xl bg-white/10 border border-white/10 backdrop-blur-sm">
-              <p className="text-2xl font-bold text-orange-400">{leads.length}</p>
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">Leads</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-2 p-1 bg-gray-100 rounded-2xl w-fit">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 ${
-              tab === t.key
-                ? "bg-white text-gray-800 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {t.label}
-            {t.count !== null && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                tab === t.key
-                  ? t.color === "red" ? "bg-red-100 text-red-600" : t.color === "amber" ? "bg-amber-100 text-amber-600" : "bg-orange-100 text-orange-600"
-                  : "bg-gray-200 text-gray-500"
-              }`}>
-                {t.count}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Content Card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        {/* Card Header */}
-        <div className="px-5 py-3.5 border-b border-gray-50 flex items-center justify-between bg-gray-50/50">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${tab === "tasks" ? "bg-red-500" : tab === "callAgain" ? "bg-amber-500" : "bg-gray-400"}`} />
-            <h3 className="font-semibold text-gray-700 text-sm">
-              {tab === "tasks" ? "CNP Tasks" : "Call Again Leads"}
-            </h3>
-          </div>
-          <div className="flex items-center gap-2">
-            {[
-              { label: 'Today', value: 'today' },
-              { label: 'Yesterday', value: 'yesterday' },
-              { label: 'This Week', value: 'this_week' },
-              { label: 'This Month', value: 'this_month' },
-            ].map(f => {
-              const isTask = tab === 'tasks';
-              const active = isTask ? dateFilter === f.value : callAgainDateFilter === f.value;
-              const activeColor = isTask ? 'bg-red-500 border-red-500' : 'bg-amber-500 border-amber-500';
-              const hoverColor = isTask ? 'hover:border-red-300 hover:text-red-500' : 'hover:border-amber-300 hover:text-amber-500';
-              return (
-                <button
-                  key={f.value}
-                  onClick={() => isTask
-                    ? setDateFilter(prev => prev === f.value ? '' : f.value)
-                    : setCallAgainDateFilter(prev => prev === f.value ? '' : f.value)
-                  }
-                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition ${
-                    active ? `${activeColor} text-white` : `bg-white text-gray-500 border-gray-200 ${hoverColor}`
-                  }`}
-                >
-                  {f.label}
-                </button>
-              );
-            })}
-            <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full font-medium">
-              {tab === "tasks" ? cnpTasks.length : callAgainLeads.length} {tab === "tasks" ? "task" : "lead"}{(tab === "tasks" ? cnpTasks.length : callAgainLeads.length) !== 1 ? "s" : ""}
-            </span>
-          </div>
-        </div>
-
-        {/* Tasks Tab */}
-        {tab === "tasks" ? (
-          cnpTasks.length === 0 ? (
-            <EmptyState message="No CNP tasks found" />
           ) : (
-            <div className="divide-y divide-gray-50">
-              {cnpTasks.map((task) => (
-                <div key={task._id} className="px-5 py-4 flex items-center gap-3 hover:bg-red-50/30 transition-colors group">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center shrink-0 text-white font-bold text-sm shadow-sm">
-                    C
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-800 text-sm truncate">{task.title}</p>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      {task.assignedTo && (
-                        <span className="inline-flex items-center gap-1 text-[11px] text-green-700 bg-green-50 px-2 py-0.5 rounded-full border border-green-100">
-                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-                          </svg>
-                          {task.assignedTo.name}
-                        </span>
-                      )}
-                      {task.lead && (
-                        <span className="text-[11px] text-gray-500 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">
-                          {task.lead.name} · {task.lead.phone}
-                        </span>
-                      )}
-                      {task.lastCnpAt && (
-                        <span className="text-[11px] text-gray-400">
-                          Last: {new Date(task.lastCnpAt).toLocaleDateString()}
-                        </span>
+            <div className="space-y-2 pb-4">
+              {filteredItems.map((item, i) => {
+                const color = PIN_COLORS[i % PIN_COLORS.length];
+                const isActive = selected?._id === item._id;
+                const lead = item.lead || {};
+                return (
+                  <div key={item._id} onClick={() => setSelected(isActive ? null : item)}
+                    className={`relative flex items-center gap-4 px-4 py-3.5 rounded-2xl cursor-pointer transition-all duration-200 border
+                      ${isActive
+                        ? (tab === 'tasks' ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200') + ' shadow-sm'
+                        : 'bg-white border-gray-100 hover:border-red-200 hover:bg-red-50/30'}`}>
+                    
+                    <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${tab === 'tasks' ? 'bg-red-500' : 'bg-amber-500'}`} />
+                    
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0 ${color}`}>
+                      {initials(lead.name || item.title)}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{lead.name || item.title}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-gray-400">{lead.phone || 'No Phone'}</span>
+                        {tab === 'tasks' && (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${item.cnpCount >= 3 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'}`}>
+                            {item.cnpCount || 1}/3
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="hidden sm:flex flex-col items-end gap-1 shrink-0">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        {new Date(item.lastCnpAt || item.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      </span>
+                      {item.assignedTo?.name && (
+                        <span className="text-[10px] text-gray-400">By {item.assignedTo.name}</span>
                       )}
                     </div>
+
+                    <svg className={`w-4 h-4 text-gray-300 transition-transform ${isActive ? 'rotate-90 text-red-400' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path d="m9 18 6-6-6-6" />
+                    </svg>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => handleViewTask(task)}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-purple-500 text-white hover:bg-purple-600 transition shadow-sm shadow-purple-200"
-                    >
-                      View
-                    </button>
-                    <button
-                      onClick={() => handleGoToTask(task)}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition shadow-sm shadow-blue-200"
-                    >
-                      + Task
-                    </button>
-                    <button
-                      disabled={updating === task._id}
-                      onClick={() => handleInterested(task)}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-green-500 text-white hover:bg-green-600 transition shadow-sm shadow-green-200 disabled:opacity-40"
-                    >
-                      Interested
-                    </button>
-                    <button
-                      disabled={updating === task._id}
-                      onClick={() => handleOnHold(task)}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition shadow-sm shadow-amber-200 disabled:opacity-40"
-                    >
-                      On Hold
-                    </button>
-                    <button
-                      disabled={updating === task._id}
-                      onClick={() => handleNotInterested(task)}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200 transition disabled:opacity-40"
-                    >
-                      Not Interested
-                    </button>
-                    <button
-                      disabled={updating === task._id || (task.cnpCount || 1) >= 3}
-                      onClick={() => handleIncrementCnp(task._id)}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-red-500 text-white hover:bg-red-600 transition disabled:opacity-40 shadow-sm shadow-red-200"
-                    >
-                      CNP
-                      <span className="bg-white/20 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
-                        {task.cnpCount || 1}/3
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-          )
-        ) : callAgainLeads.length === 0 ? (
-          <EmptyState message="No call again leads" />
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {callAgainLeads.map((record) => {
-              const lead = record.lead || {};
-              return (
-              <div key={record._id} className="px-5 py-4 flex items-center gap-3 hover:bg-amber-50/30 transition-colors">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white shadow-sm">
-                  {lead.name?.charAt(0)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-800 text-sm">{lead.name}</p>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="text-[11px] text-gray-500 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">{lead.phone}</span>
-                    {record.assignedTo && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-green-700 bg-green-50 px-2 py-0.5 rounded-full border border-green-100">
-                        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-                        </svg>
-                        {record.assignedTo.name}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => { setLeadDetail(lead); setViewTask(null); }}
-                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-purple-500 text-white hover:bg-purple-600 transition shadow-sm shadow-purple-200"
-                  >View</button>
-                  <button
-                    disabled={updating === record._id}
-                    onClick={async () => {
-                      setUpdating(record._id);
-                      try {
-                        await updateLead(lead._id, { status: 'contacted' });
-                        setCallAgainLeads(prev => prev.filter(r => r._id !== record._id));
-                        navigate('/tasks', { state: { leadId: lead._id, assignedTo: record.assignedTo?._id || '', leadName: lead.name, leadPhone: lead.phone, leadData: lead } });
-                      } catch { /* ignore */ } finally { setUpdating(null); }
-                    }}
-                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition shadow-sm shadow-blue-200 disabled:opacity-40"
-                  >+ Task</button>
-                  <button
-                    disabled={updating === record._id}
-                    onClick={async () => {
-                      setUpdating(record._id);
-                      try {
-                        await updateLead(lead._id, { status: 'interested' });
-                        setCallAgainLeads(prev => prev.filter(r => r._id !== record._id));
-                        navigate('/pipeline', { state: { filter: 'interested' } });
-                      } catch { /* ignore */ } finally { setUpdating(null); }
-                    }}
-                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-green-500 text-white hover:bg-green-600 transition shadow-sm shadow-green-200 disabled:opacity-40"
-                  >Interested</button>
-                  <button
-                    disabled={updating === record._id}
-                    onClick={async () => {
-                      setUpdating(record._id);
-                      try {
-                        await updateLead(lead._id, { status: 'on_hold' });
-                        setCallAgainLeads(prev => prev.filter(r => r._id !== record._id));
-                        navigate('/pipeline', { state: { filter: 'on_hold' } });
-                      } catch { /* ignore */ } finally { setUpdating(null); }
-                    }}
-                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition shadow-sm shadow-amber-200 disabled:opacity-40"
-                  >On Hold</button>
-                  <button
-                    disabled={updating === record._id}
-                    onClick={async () => {
-                      setUpdating(record._id);
-                      try {
-                        await updateLead(lead._id, { status: 'closed_lost' });
-                        setCallAgainLeads(prev => prev.filter(r => r._id !== record._id));
-                        navigate('/pipeline', { state: { filter: 'closed_lost' } });
-                      } catch { /* ignore */ } finally { setUpdating(null); }
-                    }}
-                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200 transition disabled:opacity-40"
-                  >Not Interested</button>
-                </div>
-              </div>
-              );
-            })}
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {leadDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { setLeadDetail(null); setViewTask(null); }}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="rounded-t-2xl px-6 py-5" style={{ background: 'linear-gradient(135deg, #0d1f0d, #1a3a1a)' }}>
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold text-white uppercase"
-                  style={{ background: 'linear-gradient(135deg, #16a34a, #4ade80)' }}>
-                  {leadDetail.name?.charAt(0)}
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-white font-bold text-base">{leadDetail.name}</h3>
-                  <p className="text-green-300/70 text-sm">{leadDetail.phone}</p>
-                </div>
-                <button onClick={() => { setLeadDetail(null); setViewTask(null); }} className="text-gray-400 hover:text-white text-xl leading-none">×</button>
+      {/* ── RIGHT DETAIL PANEL ── */}
+      {selected && (
+        <div className="hidden lg:flex flex-col w-[45%] bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden h-full">
+          <div className={`h-1.5 shrink-0 ${tab === 'tasks' ? 'bg-red-500' : 'bg-amber-500'}`} />
+          
+          <div className="px-5 py-4 flex items-center justify-between border-b border-gray-50 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold ${PIN_COLORS[filteredItems.findIndex(i => i._id === selected._id) % PIN_COLORS.length]}`}>
+                {initials(selected.lead?.name || selected.title)}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-800 leading-tight">{selected.lead?.name || 'Task Details'}</p>
+                <p className="text-xs text-gray-400">{selected.lead?.phone}</p>
               </div>
             </div>
-            <div className="px-6 py-4 space-y-0">
-              {[['Phone', leadDetail.phone], ['Email', leadDetail.email], ['Address', leadDetail.address],
-                ['Source', leadDetail.source], ['Status', leadDetail.status?.replace(/_/g, ' ')],
-                ['Problem', leadDetail.problem], ['Assigned To', leadDetail.assignedTo?.name],
-              ].filter(([, v]) => v).map(([label, value]) => (
-                <div key={label} className="flex gap-3 py-2.5 border-b border-gray-50 last:border-0">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-28 shrink-0">{label}</p>
-                  <p className="text-sm text-gray-800 font-medium">{value}</p>
-                </div>
-              ))}
+            <button onClick={() => setSelected(null)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition text-xl">×</button>
+          </div>
 
-              {/* CNP History Section */}
-              {viewTask && (
-                <div className="pt-3">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-2 h-2 rounded-full bg-red-500" />
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">CNP History</p>
-                    <span className="ml-auto text-[11px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">
-                      {viewTask.cnpCount || 1}/3 times
-                    </span>
-                  </div>
-                  {viewTask.cnpHistory?.length > 0 ? (
-                    <div className="space-y-1.5">
-                      {[...viewTask.cnpHistory].reverse().map((h, i) => {
-                        const d = new Date(h.clickedAt);
-                        return (
-                          <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-red-50 border border-red-100">
-                            <div className="w-6 h-6 rounded-lg bg-red-500 flex items-center justify-center shrink-0">
-                              <span className="text-white text-[10px] font-bold">{viewTask.cnpHistory.length - i}</span>
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold text-gray-700">{d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</p>
-                              <p className="text-[11px] text-gray-400">{d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="px-3 py-2 rounded-xl bg-red-50 border border-red-100">
-                      <p className="text-xs font-semibold text-gray-700">
-                        {new Date(viewTask.lastCnpAt || viewTask.createdAt).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-                      </p>
-                      <p className="text-[11px] text-gray-400">CNP marked — {viewTask.cnpCount || 1} time(s)</p>
-                    </div>
-                  )}
-                </div>
-              )}
-              {leadDetail.notes?.length > 0 && (
-                <div className="pt-3">
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Notes History</p>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {[...leadDetail.notes].reverse().map((n, i) => (
-                      <div key={i} className="rounded-xl px-3 py-2.5"
-                        style={{ background: 'linear-gradient(135deg, #f0fdf4, #f7fef7)', border: '1px solid rgba(22,163,74,0.1)' }}>
-                        <p className="text-sm text-gray-700">{n.text}</p>
-                        <p className="text-xs text-gray-400 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
+          <div className="px-5 py-4 overflow-y-auto flex-1 custom-scrollbar">
+            <SectionHead label="Contact Information" color={tab === 'tasks' ? 'red' : 'amber'} />
+            <DetailRow label="Phone" value={selected.lead?.phone} />
+            <DetailRow label="Email" value={selected.lead?.email} />
+            <DetailRow label="Address" value={selected.lead?.address} />
+
+            <SectionHead label="Status & History" color={tab === 'tasks' ? 'red' : 'amber'} />
+            <DetailRow label="Current Status" value={selected.lead?.status?.replace(/_/g, ' ')} />
+            <DetailRow label="Assigned To" value={selected.assignedTo?.name || selected.lead?.assignedTo?.name} />
+            {tab === 'tasks' && (
+              <>
+                <DetailRow label="CNP Count" value={`${selected.cnpCount || 1} of 3`} color="red" />
+                <DetailRow label="Last Attempt" value={selected.lastCnpAt ? new Date(selected.lastCnpAt).toLocaleString() : 'N/A'} />
+              </>
+            )}
+
+            {tab === 'tasks' && selected.cnpHistory?.length > 0 && (
+              <div className="mt-4">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Attempt History</p>
+                <div className="space-y-2">
+                  {[...selected.cnpHistory].reverse().map((h, i) => (
+                    <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-red-50 border border-red-100/50">
+                      <div className="w-6 h-6 rounded-lg bg-red-500 flex items-center justify-center text-white text-[10px] font-bold shadow-sm">
+                        {selected.cnpHistory.length - i}
                       </div>
-                    ))}
-                  </div>
+                      <div>
+                        <p className="text-xs font-bold text-gray-700">{new Date(h.clickedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                        <p className="text-[10px] text-gray-400 font-medium">{new Date(h.clickedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selected.lead?.notes?.length > 0 && (
+              <div className="mt-4">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Notes</p>
+                <div className="space-y-2">
+                  {[...selected.lead.notes].reverse().slice(0, 3).map((n, i) => (
+                    <div key={i} className="p-3 rounded-xl bg-gray-50 border border-gray-100">
+                      <p className="text-xs text-gray-600 leading-relaxed">{n.text}</p>
+                      <p className="text-[9px] text-gray-400 mt-1 font-bold uppercase">{new Date(n.createdAt).toLocaleString()}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 p-3 rounded-xl bg-gray-50 border border-gray-100">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Add Note</p>
+              <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-400 transition mb-2"
+                placeholder="What happened on the call?" />
+              <div className="flex gap-2">
+                <input type="date" value={nextDate} onChange={e => setNextDate(e.target.value)}
+                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-400 transition" />
+                <button onClick={handleSaveNote} disabled={savingNote || (!note.trim() && !nextDate)}
+                  className="px-4 py-2 bg-red-500 text-white text-xs font-bold rounded-xl hover:bg-red-600 disabled:opacity-50 transition">
+                  {savingNote ? '...' : 'Save'}
+                </button>
+              </div>
+              {/* Activity history */}
+              {(selected.lead?.follow_ups?.length > 0) && (
+                <div className="mt-3 space-y-2 max-h-32 overflow-y-auto">
+                  {[...selected.lead.follow_ups].reverse().slice(0, 5).map((f, i) => (
+                    <div key={i} className="p-2 rounded-lg bg-white border border-gray-100">
+                      {f.note && <p className="text-xs text-gray-700">{f.note}</p>}
+                      {f.next_date && <p className="text-[10px] text-green-600 font-bold">Next: {new Date(f.next_date).toLocaleDateString('en-IN')}</p>}
+                      <p className="text-[9px] text-gray-400 font-bold uppercase">{new Date(f.date).toLocaleString()}</p>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="px-5 py-4 border-t border-gray-50 bg-white shrink-0">
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <button disabled={updating} onClick={() => handleStatusChange(selected.lead?._id, 'interested', tab === 'tasks' ? selected._id : null)}
+                className="py-2.5 rounded-xl text-xs font-bold text-white bg-green-500 hover:bg-green-600 transition shadow-md shadow-green-100 disabled:opacity-50">
+                Interested
+              </button>
+              <button disabled={updating} onClick={() => handleStatusChange(selected.lead?._id, 'on_hold', tab === 'tasks' ? selected._id : null)}
+                className="py-2.5 rounded-xl text-xs font-bold text-white bg-amber-500 hover:bg-amber-600 transition shadow-md shadow-amber-100 disabled:opacity-50">
+                On Hold
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button disabled={updating} onClick={() => handleStatusChange(selected.lead?._id, 'closed_lost', tab === 'tasks' ? selected._id : null)}
+                className="py-2.5 rounded-xl text-xs font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 transition disabled:opacity-50">
+                Mark Lost
+              </button>
+              {tab === 'tasks' ? (
+                <button disabled={updating || (selected.cnpCount || 1) >= 3} onClick={() => handleIncrementCnp(selected._id)}
+                  className="py-2.5 rounded-xl text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition shadow-md shadow-red-100 disabled:opacity-50">
+                  CNP {selected.cnpCount || 1}/3
+                </button>
+              ) : (
+                <button onClick={() => handleGoToTask(selected)}
+                  className="py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition shadow-md shadow-blue-100">
+                  Task
+                </button>
+              )}
+            </div>
+            {tab === 'tasks' && (
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button onClick={() => handleGoToTask(selected)}
+                  className="py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition shadow-md shadow-blue-100">
+                  Task
+                </button>
+                <button disabled={updating} onClick={async () => {
+                  setUpdating(selected._id);
+                  try {
+                    await createCallAgain(selected.lead?._id);
+                    await deleteCnpRecord(selected._id);
+                    load(dateFilter, callAgainDateFilter);
+                    setSelected(null);
+                  } catch { } finally { setUpdating(null); }
+                }} className="py-2.5 rounded-xl text-xs font-bold text-amber-600 bg-amber-50 border border-amber-100 hover:bg-amber-100 transition disabled:opacity-50">
+                  Call Again
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
-    </div>
-  );
-}
 
-function EmptyState({ message }) {
-  return (
-    <div className="py-16 text-center">
-      <div className="w-14 h-14 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center mx-auto mb-3">
-        <svg className="w-6 h-6 text-red-300" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
-          <line x1="1" y1="1" x2="23" y2="23" />
-        </svg>
-      </div>
-      <p className="text-gray-400 text-sm font-medium">{message}</p>
+      {/* Mobile Modal */}
+      {selected && (
+        <div className="lg:hidden">
+          <Modal hideHeader={true} onClose={() => setSelected(null)}>
+            <div className={`-mx-4 -mt-4 mb-5 px-6 py-6 rounded-b-3xl relative ${tab === 'tasks' ? 'bg-gradient-to-br from-red-900 to-red-800' : 'bg-gradient-to-br from-amber-900 to-amber-800'}`}>
+              <button onClick={() => setSelected(null)} className="absolute right-4 top-4 w-7 h-7 flex items-center justify-center rounded-full bg-white/10 text-white transition text-xl">×</button>
+              <div className="flex items-center gap-4">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold text-white shadow-xl ${PIN_COLORS[filteredItems.findIndex(i => i._id === selected._id) % PIN_COLORS.length]}`}>
+                  {initials(selected.lead?.name || selected.title)}
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-lg tracking-tight">{selected.lead?.name || selected.title}</h3>
+                  <p className="text-white/60 text-sm">{selected.lead?.phone}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 px-2 pb-6">
+              <DetailRow label="Status" value={selected.lead?.status?.replace(/_/g, ' ')} />
+              <DetailRow label="Address" value={selected.lead?.address} />
+              
+              {tab === 'tasks' && (
+                <div className="p-4 rounded-2xl bg-red-50 border border-red-100">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-xs font-bold text-red-600 uppercase tracking-widest">CNP Progress</span>
+                    <span className="text-xs font-black text-red-600">{selected.cnpCount || 1}/3</span>
+                  </div>
+                  <div className="w-full h-2 bg-red-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-red-500 transition-all duration-500" style={{ width: `${((selected.cnpCount || 1) / 3) * 100}%` }} />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 pt-4">
+                <button disabled={updating} onClick={() => handleStatusChange(selected.lead?._id, 'interested', tab === 'tasks' ? selected._id : null)}
+                  className="py-4 rounded-xl text-xs font-bold text-white bg-green-500 active:scale-95 transition shadow-lg shadow-green-100">Interested</button>
+                <button disabled={updating} onClick={() => handleStatusChange(selected.lead?._id, 'on_hold', tab === 'tasks' ? selected._id : null)}
+                  className="py-4 rounded-xl text-xs font-bold text-white bg-amber-500 active:scale-95 transition shadow-lg shadow-amber-100">On Hold</button>
+                <button disabled={updating} onClick={() => handleStatusChange(selected.lead?._id, 'closed_lost', tab === 'tasks' ? selected._id : null)}
+                  className="py-4 rounded-xl text-xs font-bold text-gray-500 bg-gray-100 active:scale-95 transition">Mark Lost</button>
+                {tab === 'tasks' ? (
+                  <button disabled={updating || (selected.cnpCount || 1) >= 3} onClick={() => handleIncrementCnp(selected._id)}
+                    className="py-4 rounded-xl text-xs font-bold text-white bg-red-500 active:scale-95 transition shadow-lg shadow-red-100">CNP {selected.cnpCount || 1}/3</button>
+                ) : (
+                  <button onClick={() => handleGoToTask(selected)}
+                    className="py-4 rounded-xl text-xs font-bold text-white bg-blue-600 active:scale-95 transition shadow-lg shadow-blue-100">Task</button>
+                )}
+              </div>
+              {tab === 'tasks' && (
+                <button onClick={() => handleGoToTask(selected)}
+                  className="w-full mt-2 py-4 rounded-xl text-xs font-bold text-white bg-blue-600 active:scale-95 transition shadow-lg shadow-blue-100">Task</button>
+              )}
+            </div>
+          </Modal>
+        </div>
+      )}
+      {/* Task Modal */}
+      {taskModal && (
+        <Modal title="Create Task" onClose={() => setTaskModal(false)}>
+          {taskError && <div className="bg-red-50 border border-red-100 text-red-600 text-sm p-3 rounded-xl mb-4">{taskError}</div>}
+          <form onSubmit={handleTaskSubmit} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Name *</label>
+                <input required className={`${inputCls} mt-1`} value={taskForm.title||''} onChange={e => setTaskForm(f => ({...f, title: e.target.value}))} /></div>
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Phone</label>
+                <input className={`${inputCls} mt-1`} value={taskForm.phone||''} onChange={e => setTaskForm(f => ({...f, phone: e.target.value}))} /></div>
+            </div>
+            <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Confirmation Date</label>
+              <input type="date" className={`${inputCls} mt-1`} value={taskForm.reminderAt||''} onChange={e => setTaskForm(f => ({...f, reminderAt: e.target.value}))} /></div>
+            <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Problem</label>
+              <textarea rows={1} className={`${inputCls} mt-1`} value={taskForm.problem||''} onChange={e => setTaskForm(f => ({...f, problem: e.target.value}))} /></div>
+            <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Vitals (Age / Wt / Ht)</label>
+              <div className="grid grid-cols-3 gap-2 mt-1">
+                <input type="number" placeholder="Age" className={inputCls} value={taskForm.age||''} onChange={e => setTaskForm(f => ({...f, age: e.target.value}))} />
+                <input type="number" placeholder="Kg" className={inputCls} value={taskForm.weight||''} onChange={e => setTaskForm(f => ({...f, weight: e.target.value}))} />
+                <input type="number" step="0.1" placeholder="Ft" className={inputCls} value={taskForm.height||''} onChange={e => setTaskForm(f => ({...f, height: e.target.value}))} />
+              </div>
+            </div>
+            <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Price</label>
+              <input type="number" className={`${inputCls} mt-1`} placeholder="₹" value={taskForm.price||''} onChange={e => setTaskForm(f => ({...f, price: e.target.value}))} /></div>
+            <div className="flex gap-3 pt-2">
+              <button type="submit" disabled={taskLoading} className="flex-1 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-60" style={{background:'linear-gradient(135deg,#16a34a,#15803d)'}}>
+                {taskLoading ? 'Saving...' : 'Create Task'}
+              </button>
+              <button type="button" onClick={() => setTaskModal(false)} className="flex-1 border border-gray-100 hover:bg-gray-50 py-3 rounded-xl text-sm font-bold text-gray-500">Cancel</button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }

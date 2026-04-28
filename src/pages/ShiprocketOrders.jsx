@@ -61,7 +61,7 @@ function UpdateOrderForm({ setError, setResult, setLoading, loading }) {
       </div>
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
         <div className="h-1 bg-yellow-500" />
-        <div className="px-5 py-4 grid grid-cols-3 gap-3">
+        <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Field label="Shiprocket Order ID *"><input className={inp} placeholder="e.g. 1279117157" value={form.order_id} onChange={e => set('order_id', e.target.value)} /></Field>
           <Field label="Order Date *"><input className={inp} type="date" value={form.order_date} onChange={e => set('order_date', e.target.value)} /></Field>
           <Field label="Payment Method">
@@ -80,13 +80,13 @@ function UpdateOrderForm({ setError, setResult, setLoading, loading }) {
       </div>
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
         <div className="h-1 bg-purple-500" />
-        <div className="px-5 py-4 grid grid-cols-4 gap-3">
+        <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <Field label="Product Name *"><input className={inp} value={form.order_items[0].name} onChange={e => setItem('name', e.target.value)} /></Field>
           <Field label="SKU"><input className={inp} value={form.order_items[0].sku} onChange={e => setItem('sku', e.target.value)} /></Field>
           <Field label="Units"><input className={inp} type="number" value={form.order_items[0].units} onChange={e => setItem('units', Number(e.target.value))} /></Field>
           <Field label="Price (₹)"><input className={inp} type="number" value={form.order_items[0].selling_price} onChange={e => setItem('selling_price', Number(e.target.value))} /></Field>
         </div>
-        <div className="px-5 pb-4 grid grid-cols-5 gap-3">
+        <div className="px-5 pb-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {[['length','L (cm)'],['breadth','B (cm)'],['height','H (cm)'],['weight','Weight (kg)'],['sub_total','Sub Total (₹) *']].map(([k, l]) => (
             <Field key={k} label={l}><input className={inp} type="number" value={form[k]} onChange={e => set(k, Number(e.target.value))} /></Field>
           ))}
@@ -241,10 +241,10 @@ export default function ShiprocketOrders() {
   return (
     <div className="flex flex-col h-full gap-4">
 
-      <div className="flex gap-2 flex-wrap shrink-0">
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide shrink-0">
         {TABS.map(t => (
           <button key={t.id} onClick={() => { setTab(t.id); setResult(null); setError(''); }}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${tab === t.id ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+            className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all whitespace-nowrap ${tab === t.id ? 'bg-gray-800 text-white border-gray-800 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
             {t.label}
           </button>
         ))}
@@ -253,53 +253,61 @@ export default function ShiprocketOrders() {
       {tab === 'list' && (
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col flex-1 min-h-0" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
           <div className="h-1 bg-green-500" />
-          <div className="px-5 py-3 border-b border-gray-50 flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3 flex-wrap">
-              <span className="font-semibold text-gray-700 text-sm">All Orders</span>
-              <span className="text-xs text-gray-400">{selectedOrders.length ? `${selectedOrders.length} selected` : `${orders.length} loaded`}</span>
+          <div className="px-5 py-4 border-b border-gray-50 space-y-4 bg-gray-50/30">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="font-bold text-gray-700 text-sm uppercase tracking-widest">All Orders</span>
+                <span className="text-[10px] font-bold text-gray-400 bg-white px-2 py-0.5 rounded-full border border-gray-100">
+                  {selectedOrders.length ? `${selectedOrders.length} SELECTED` : `${orders.length} LOADED`}
+                </span>
+              </div>
+              <button onClick={() => fetchOrders(fromDate, toDate)}
+                className="text-[11px] font-bold bg-gray-800 text-white px-3 py-2 rounded-xl hover:bg-gray-700 transition active:scale-95 shadow-sm">
+                {loading ? '...' : 'REFRESH'}
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
               {selected.size > 0 && (
-                <button onClick={cancelSelected} className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-xl hover:bg-red-700 font-semibold">
-                  <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Cancel Selected ({selected.size})
+                <button onClick={cancelSelected} className="flex-1 sm:flex-none text-[11px] font-bold bg-red-600 text-white px-4 py-2.5 rounded-xl hover:bg-red-700 shadow-sm transition active:scale-95">
+                  CANCEL SELECTED ({selected.size})
                 </button>
               )}
               <button onClick={printInvoices} disabled={actionId === 'print-invoice' || !orders.length}
-                className="text-xs bg-white text-gray-700 px-3 py-1.5 rounded-xl border border-gray-200 hover:bg-gray-50 font-semibold disabled:opacity-40">
-                {actionId === 'print-invoice' ? 'Printing...' : 'Print Invoice'}
+                className="flex-1 sm:flex-none text-[11px] font-bold bg-white text-gray-700 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 shadow-sm transition disabled:opacity-40">
+                {actionId === 'print-invoice' ? 'PRINTING...' : 'INVOICE'}
               </button>
               <button onClick={printDeliveryLabels} disabled={actionId === 'print-label' || !orders.length}
-                className="text-xs bg-white text-gray-700 px-3 py-1.5 rounded-xl border border-gray-200 hover:bg-gray-50 font-semibold disabled:opacity-40">
-                {actionId === 'print-label' ? 'Printing...' : 'Print Delivery Label'}
-              </button>
-              <button onClick={printManifests} disabled={actionId === 'print-manifest' || !orders.length}
-                className="text-xs bg-white text-gray-700 px-3 py-1.5 rounded-xl border border-gray-200 hover:bg-gray-50 font-semibold disabled:opacity-40">
-                {actionId === 'print-manifest' ? 'Printing...' : 'Print Manifest'}
+                className="flex-1 sm:flex-none text-[11px] font-bold bg-white text-gray-700 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 shadow-sm transition disabled:opacity-40">
+                {actionId === 'print-label' ? 'PRINTING...' : 'LABEL'}
               </button>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-gray-500 font-semibold">From</label>
-                <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
-                  className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-green-500 bg-white" />
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
+              <div className="grid grid-cols-2 gap-2 flex-1">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">From</label>
+                  <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
+                    className="border border-gray-200 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-400/20 bg-white" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">To</label>
+                  <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+                    className="border border-gray-200 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-400/20 bg-white" />
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-gray-500 font-semibold">To</label>
-                <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
-                  className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-green-500 bg-white" />
-              </div>
-              <button onClick={() => fetchOrders(fromDate, toDate)}
-                className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-xl hover:bg-green-700 font-semibold">
-                <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search
-              </button>
-              {(fromDate || toDate) && (
-                <button onClick={() => { setFromDate(''); setToDate(''); fetchOrders('', ''); }}
-                  className="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded-xl hover:bg-gray-200 font-semibold">
-                  ✕ Clear
+              <div className="flex gap-2 sm:self-end">
+                <button onClick={() => fetchOrders(fromDate, toDate)}
+                  className="flex-1 sm:px-6 py-2.5 rounded-xl bg-green-600 text-white text-[11px] font-bold shadow-md hover:bg-green-700 transition active:scale-95">
+                  SEARCH
                 </button>
-              )}
-              <button onClick={() => fetchOrders(fromDate, toDate)}
-                className="text-xs bg-gray-800 text-white px-3 py-1.5 rounded-xl hover:bg-gray-700 font-semibold">
-                {loading ? 'Loading...' : '↻ Refresh'}
-              </button>
+                {(fromDate || toDate) && (
+                  <button onClick={() => { setFromDate(''); setToDate(''); fetchOrders('', ''); }}
+                    className="px-4 py-2.5 rounded-xl bg-gray-200 text-gray-600 text-[11px] font-bold hover:bg-gray-300 transition active:scale-95">
+                    RESET
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -314,17 +322,18 @@ export default function ShiprocketOrders() {
           )}
           {!loading && orders.length > 0 && (
             <>
-              <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+              <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0 custom-scrollbar">
+                {/* Desktop Table View */}
+                <table className="hidden sm:table w-full text-sm">
+                  <thead className="bg-gray-50 text-[10px] text-gray-500 uppercase tracking-[0.1em] sticky top-0 z-10">
                     <tr>
-                      <th className="px-4 py-3">
-                        <input type="checkbox" className="rounded"
+                      <th className="px-4 py-3 text-center">
+                        <input type="checkbox" className="w-4 h-4 rounded accent-green-600"
                           checked={selected.size === paged.length && paged.length > 0}
                           onChange={toggleAll} />
                       </th>
                       {['Order ID', 'Date', 'Customer', 'AWB', 'Courier', 'Status', 'Amount', 'Actions'].map(h => (
-                        <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
+                        <th key={h} className="px-4 py-3 text-left font-bold">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -333,31 +342,35 @@ export default function ShiprocketOrders() {
                       const oid = o.id || o.order_id;
                       return (
                         <tr key={oid} className={`hover:bg-gray-50/50 transition-colors ${['CANCELLED','CANCELED'].includes(o.status) ? 'opacity-60' : ''}`}>
-                          <td className="px-4 py-3">
-                            <input type="checkbox" className="rounded"
+                          <td className="px-4 py-3 text-center">
+                            <input type="checkbox" className="w-4 h-4 rounded accent-green-600"
                               checked={selected.has(String(oid))}
                               onChange={() => toggleSelect(oid)}
                               disabled={!canCancel(o.status)} />
                           </td>
-                          <td className="px-4 py-3 font-mono text-xs text-gray-600">{o.channel_order_id || o.order_id}</td>
-                          <td className="px-4 py-3 text-gray-500 text-xs">{o.created_at?.split(',')[0]}</td>
-                          <td className="px-4 py-3 font-medium text-gray-800">{o.customer_name}</td>
-                          <td className="px-4 py-3 font-mono text-xs text-blue-600">{o.shipments?.[0]?.awb || '—'}</td>
-                          <td className="px-4 py-3 text-gray-500 text-xs">{o.shipments?.[0]?.courier || '—'}</td>
+                          <td className="px-4 py-3 font-mono text-[11px] text-gray-600">{o.channel_order_id || o.order_id}</td>
+                          <td className="px-4 py-3 text-gray-500 text-[11px]">{o.created_at?.split(',')[0]}</td>
+                          <td className="px-4 py-3 font-bold text-gray-800 text-[13px]">{o.customer_name}</td>
+                          <td className="px-4 py-3 font-mono text-[11px] text-blue-600 font-bold">{o.shipments?.[0]?.awb || '—'}</td>
+                          <td className="px-4 py-3 text-gray-500 text-[11px] font-medium">{o.shipments?.[0]?.courier || '—'}</td>
                           <td className="px-4 py-3">
-                            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${STATUS_COLORS[o.status] || 'bg-gray-100 text-gray-600'}`}>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_COLORS[o.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                               {o.status || '—'}
                             </span>
                           </td>
-                          <td className="px-4 py-3 font-semibold text-gray-800">₹{o.total}</td>
+                          <td className="px-4 py-3 font-bold text-gray-900 text-[13px]">₹{o.total}</td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               {canCancel(o.status) && (
                                 <button onClick={() => cancelOne(oid)} disabled={actionId === `cancel-${oid}`}
-                                  className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 transition-all disabled:opacity-50 whitespace-nowrap">
-                                  {actionId === `cancel-${oid}` ? '...' : <><svg className="w-3 h-3 inline-block mr-0.5 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Cancel</>}
+                                  className="text-[10px] font-bold px-3 py-1.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-100 transition-all disabled:opacity-50 whitespace-nowrap">
+                                  {actionId === `cancel-${oid}` ? '...' : 'CANCEL'}
                                 </button>
                               )}
+                              <button onClick={() => deleteOne(oid)} disabled={actionId === `delete-${oid}`}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -365,6 +378,60 @@ export default function ShiprocketOrders() {
                     })}
                   </tbody>
                 </table>
+
+                {/* Mobile Card View */}
+                <div className="sm:hidden divide-y divide-gray-50">
+                  {paged.map((o) => {
+                    const oid = o.id || o.order_id;
+                    const isCancelled = ['CANCELLED','CANCELED'].includes(o.status);
+                    return (
+                      <div key={oid} className={`p-4 flex flex-col gap-3 ${isCancelled ? 'opacity-60 bg-gray-50/30' : ''}`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex gap-3">
+                            <input type="checkbox" className="w-5 h-5 mt-0.5 rounded accent-green-600"
+                              checked={selected.has(String(oid))}
+                              onChange={() => toggleSelect(oid)}
+                              disabled={!canCancel(o.status)} />
+                            <div className="min-w-0">
+                              <p className="font-bold text-gray-900 text-sm truncate">{o.customer_name}</p>
+                              <p className="text-[10px] font-mono text-gray-400 uppercase mt-0.5">ID: {o.channel_order_id || o.order_id} • {o.created_at?.split(',')[0]}</p>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="font-bold text-gray-900 text-sm">₹{o.total}</p>
+                            <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full border mt-1 ${STATUS_COLORS[o.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                              {o.status || '—'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 bg-gray-50 rounded-xl p-2.5">
+                          <div>
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">AWB Code</p>
+                            <p className="text-xs font-mono text-blue-600 font-bold mt-0.5">{o.shipments?.[0]?.awb || '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Courier</p>
+                            <p className="text-xs font-bold text-gray-700 mt-0.5 truncate">{o.shipments?.[0]?.courier || '—'}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {canCancel(o.status) && (
+                            <button onClick={() => cancelOne(oid)} disabled={actionId === `cancel-${oid}`}
+                              className="flex-1 text-[11px] font-bold py-2 rounded-xl bg-red-50 text-red-600 border border-red-100 active:scale-95 transition-all">
+                              {actionId === `cancel-${oid}` ? '...' : 'CANCEL ORDER'}
+                            </button>
+                          )}
+                          <button onClick={() => deleteOne(oid)} disabled={actionId === `delete-${oid}`}
+                            className="w-11 h-11 flex items-center justify-center rounded-xl bg-gray-50 text-gray-400 active:scale-95 transition-all">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Pagination */}

@@ -226,28 +226,58 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
           {returns.length === 0 ? (
             <div className="px-5 py-8 text-center text-gray-400 text-sm">No returns found.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
-                  <tr>
-                    {['Order ID', 'AWB', 'Customer', 'Status', 'Date'].map(h => (
-                      <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {returns.map((r, i) => (
-                    <tr key={i} className="hover:bg-gray-50/50">
-                      <td className="px-4 py-3 font-mono text-xs">{r.channel_order_id || r.order_id}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-blue-600">{r.awb_code || '—'}</td>
-                      <td className="px-4 py-3 text-gray-700">{r.customer_name || '—'}</td>
-                      <td className="px-4 py-3"><span className="text-xs bg-orange-50 text-orange-700 px-2 py-1 rounded-full font-semibold">{r.status || '—'}</span></td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">{r.created_at?.split('T')[0]}</td>
-                    </tr>
+          <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0 custom-scrollbar">
+            {/* Desktop Table View */}
+            <table className="hidden sm:table w-full text-sm">
+              <thead className="bg-gray-50 text-[10px] text-gray-500 uppercase tracking-[0.1em] sticky top-0 z-10">
+                <tr>
+                  {['Order ID', 'AWB', 'Customer', 'Status', 'Date'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left font-bold">{h}</th>
                   ))}
-                </tbody>
-              </table>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {returns.map((r, i) => (
+                  <tr key={i} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-4 py-3 font-mono text-[11px] text-gray-600">{r.channel_order_id || r.order_id}</td>
+                    <td className="px-4 py-3 font-mono text-[11px] text-blue-600 font-bold">{r.awb_code || '—'}</td>
+                    <td className="px-4 py-3 font-bold text-gray-800 text-[13px]">{r.customer_name || '—'}</td>
+                    <td className="px-4 py-3">
+                      <span className="text-[10px] font-bold bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full border border-orange-100">{r.status || '—'}</span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-400 text-[11px] font-medium">{r.created_at?.split('T')[0]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Mobile Card View */}
+            <div className="sm:hidden divide-y divide-gray-50">
+              {returns.map((r, i) => (
+                <div key={i} className="p-4 flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-gray-900 text-sm truncate">{r.customer_name || 'Unknown'}</p>
+                      <p className="text-[10px] font-mono text-gray-400 uppercase mt-0.5">ID: {r.channel_order_id || r.order_id}</p>
+                    </div>
+                    <span className="text-[10px] font-bold bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full border border-orange-100">
+                      {r.status || '—'}
+                    </span>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-2.5 flex items-center justify-between">
+                    <div>
+                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">AWB Code</p>
+                      <p className="text-xs font-mono text-blue-600 font-bold mt-0.5">{r.awb_code || '—'}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Date</p>
+                      <p className="text-xs font-bold text-gray-700 mt-0.5">{r.created_at?.split('T')[0]}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
+          </div>
           )}
         </div>
       )}
@@ -309,7 +339,7 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
             <div className="h-1 bg-orange-500" />
             <div className="px-5 py-3 border-b border-gray-50"><span className="font-semibold text-gray-700 text-sm">Return Details</span></div>
-            <div className="px-5 py-4 grid grid-cols-3 gap-3">
+            <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {[['order_id','Order ID'],['channel_id','Channel ID'],['payment_method','Payment Method']].map(([k,l]) => (
                 <Field key={k} label={l}>
                   {k === 'payment_method'
@@ -323,7 +353,7 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
             <div className="h-1 bg-blue-500" />
             <div className="px-5 py-3 border-b border-gray-50"><span className="font-semibold text-gray-700 text-sm">Pickup Address</span></div>
-            <div className="px-5 py-4 grid grid-cols-3 gap-3">
+            <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {[['pickup_customer_name','Name'],['pickup_phone','Phone'],['pickup_address','Address'],
                 ['pickup_city','City'],['pickup_state','State'],['pickup_pincode','Pincode']].map(([k,l]) => (
                 <Field key={k} label={l}><input className={inp} value={returnForm[k]} onChange={e => setRF(k, e.target.value)} /></Field>
@@ -334,13 +364,13 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
             <div className="h-1 bg-purple-500" />
             <div className="px-5 py-3 border-b border-gray-50"><span className="font-semibold text-gray-700 text-sm">Product</span></div>
-            <div className="px-5 py-4 grid grid-cols-4 gap-3">
+            <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <Field label="Name"><input className={inp} value={returnForm.order_items[0].name} onChange={e => setRI('name', e.target.value)} /></Field>
               <Field label="SKU"><input className={inp} value={returnForm.order_items[0].sku} onChange={e => setRI('sku', e.target.value)} /></Field>
               <Field label="Units"><input className={inp} type="number" value={returnForm.order_items[0].units} onChange={e => setRI('units', Number(e.target.value))} /></Field>
               <Field label="Price"><input className={inp} type="number" value={returnForm.order_items[0].selling_price} onChange={e => setRI('selling_price', e.target.value)} /></Field>
             </div>
-            <div className="px-5 pb-4 grid grid-cols-5 gap-3">
+            <div className="px-5 pb-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               {[['weight','Weight (kg)'],['length','L (cm)'],['breadth','B (cm)'],['height','H (cm)'],['sub_total','Sub Total']].map(([k,l]) => (
                 <Field key={k} label={l}><input className={inp} type="number" value={returnForm[k]} onChange={e => setRF(k, Number(e.target.value))} /></Field>
               ))}
@@ -374,23 +404,54 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
             {transactions.length === 0 ? (
               <div className="px-5 py-8 text-center text-gray-400 text-sm">No transactions found.</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
-                    <tr>{['Date', 'Type', 'Amount', 'Closing Balance', 'Note'].map(h => <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>)}</tr>
+              <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0 custom-scrollbar">
+                {/* Desktop Table View */}
+                <table className="hidden sm:table w-full text-sm">
+                  <thead className="bg-gray-50 text-[10px] text-gray-500 uppercase tracking-[0.1em] sticky top-0 z-10">
+                    <tr>{['Date', 'Type', 'Amount', 'Closing Balance', 'Note'].map(h => <th key={h} className="px-4 py-3 text-left font-bold">{h}</th>)}</tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {transactions.map((t, i) => (
-                      <tr key={i} className="hover:bg-gray-50/50">
-                        <td className="px-4 py-3 text-xs text-gray-400">{t.created_at?.split('T')[0]}</td>
-                        <td className="px-4 py-3"><span className={`text-xs font-semibold px-2 py-1 rounded-full ${t.type === 'credit' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{t.type}</span></td>
-                        <td className="px-4 py-3 font-semibold text-gray-800">₹{t.amount}</td>
-                        <td className="px-4 py-3 text-gray-600">₹{t.closing_balance}</td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{t.note || '—'}</td>
+                      <tr key={i} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-4 py-3 text-[11px] text-gray-400 font-medium">{t.created_at?.split('T')[0]}</td>
+                        <td className="px-4 py-3">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${t.type === 'credit' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+                            {t.type?.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-bold text-gray-900 text-[13px]">₹{t.amount}</td>
+                        <td className="px-4 py-3 text-gray-600 font-semibold text-[12px]">₹{t.closing_balance}</td>
+                        <td className="px-4 py-3 text-gray-400 text-[11px] max-w-[200px] truncate" title={t.note}>{t.note || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+
+                {/* Mobile Card View */}
+                <div className="sm:hidden divide-y divide-gray-50">
+                  {transactions.map((t, i) => (
+                    <div key={i} className="p-4 flex flex-col gap-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${t.type === 'credit' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+                            {t.type?.toUpperCase()}
+                          </span>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">{t.created_at?.split('T')[0]}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-gray-900 text-base">₹{t.amount}</p>
+                          <p className="text-[10px] font-bold text-gray-400 mt-1">Bal: ₹{t.closing_balance}</p>
+                        </div>
+                      </div>
+                      {t.note && (
+                        <div className="bg-gray-50 rounded-xl p-2.5">
+                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Note</p>
+                          <p className="text-[11px] text-gray-600 mt-1 font-medium leading-relaxed">{t.note}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -405,7 +466,7 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
             <div className="h-1 bg-red-500" />
             <div className="px-5 py-3 border-b border-gray-50"><span className="font-semibold text-gray-700 text-sm">NDR Action</span></div>
-            <div className="px-5 py-4 grid grid-cols-3 gap-3">
+            <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <Field label="AWB Code">
                 <input className={inp} placeholder="AWB number" value={ndrAction.awb}
                   onChange={e => setNdrAction(p => ({ ...p, awb: e.target.value }))} />
@@ -477,31 +538,37 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
           {!ndrDetailOpen && (
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
             <div className="h-1 bg-red-500" />
-            <div className="px-5 py-3 border-b border-gray-50 flex items-center justify-between flex-wrap gap-3">
-              <span className="font-semibold text-gray-700 text-sm">NDR List</span>
-              <div className="flex items-center gap-2 flex-wrap">
+            <div className="px-5 py-3 border-b border-gray-50 flex flex-col gap-4 bg-gray-50/30">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-gray-700 text-sm uppercase tracking-widest">NDR List</span>
+                <span className="text-[10px] font-bold text-gray-400 bg-white px-2 py-0.5 rounded-full border border-gray-100">{filteredNdrs.length} Records</span>
+              </div>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <select
                   value={ndrAttemptFilter}
                   onChange={e => setNdrAttemptFilter(e.target.value)}
-                  className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-red-400 bg-white"
+                  className="flex-1 min-w-[120px] border border-gray-200 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-400/20 bg-white font-semibold"
                 >
                   {NDR_ATTEMPT_OPTIONS.map(option => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
-                <input type="date" value={ndrFrom} onChange={e => setNdrFrom(e.target.value)}
-                  className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-red-400 bg-white" />
-                <span className="text-xs text-gray-400">to</span>
-                <input type="date" value={ndrTo} onChange={e => setNdrTo(e.target.value)}
-                  className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-red-400 bg-white" />
-                <button onClick={() => fetchNDR(ndrFrom, ndrTo)}
-                  className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-xl hover:bg-red-700 font-semibold">
-                  {ndrLoading ? 'Loading...' : <><svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search</>}
-                </button>
-                {(ndrFrom || ndrTo) && (
-                  <button onClick={() => { setNdrFrom(''); setNdrTo(''); fetchNDR('', ''); }}
-                    className="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded-xl hover:bg-gray-200 font-semibold">✕ Clear</button>
-                )}
+                <div className="grid grid-cols-2 gap-2 flex-1">
+                  <input type="date" value={ndrFrom} onChange={e => setNdrFrom(e.target.value)}
+                    className="border border-gray-200 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-400/20 bg-white" />
+                  <input type="date" value={ndrTo} onChange={e => setNdrTo(e.target.value)}
+                    className="border border-gray-200 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-400/20 bg-white" />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => fetchNDR(ndrFrom, ndrTo)}
+                    className="flex-1 sm:px-6 py-2.5 rounded-xl bg-red-600 text-white text-[11px] font-bold shadow-md hover:bg-red-700 transition active:scale-95">
+                    {ndrLoading ? '...' : 'SEARCH'}
+                  </button>
+                  {(ndrFrom || ndrTo) && (
+                    <button onClick={() => { setNdrFrom(''); setNdrTo(''); fetchNDR('', ''); }}
+                      className="px-4 py-2.5 rounded-xl bg-gray-200 text-gray-600 text-[11px] font-bold hover:bg-gray-300 transition active:scale-95">RESET</button>
+                  )}
+                </div>
               </div>
             </div>
             {false && selectedNdr && (
@@ -536,46 +603,100 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
             {filteredNdrs.length === 0 ? (
               <div className="px-5 py-8 text-center text-gray-400 text-sm">No NDR records found.</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
-                    <tr>{['AWB', 'Order ID', 'Customer', 'Reason', 'Attempts', 'Date', 'Action'].map(h => <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>)}</tr>
+              <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0 custom-scrollbar">
+                {/* Desktop Table View */}
+                <table className="hidden sm:table w-full text-sm">
+                  <thead className="bg-gray-50 text-[10px] text-gray-500 uppercase tracking-[0.1em] sticky top-0 z-10">
+                    <tr>{['AWB', 'Order ID', 'Customer', 'Reason', 'Attempts', 'Date', 'Action'].map(h => <th key={h} className="px-4 py-3 text-left font-bold">{h}</th>)}</tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {filteredNdrs.map((n, i) => (
-                      <tr key={i} className={`hover:bg-gray-50/50 ${selectedNdr?.awb_code === n.awb_code && selectedNdr?.channel_order_id === n.channel_order_id ? 'bg-red-50/40' : ''}`}>
-                        <td className="px-4 py-3 font-mono text-xs text-blue-600 cursor-pointer hover:underline"
+                      <tr key={i} className={`hover:bg-gray-50/50 transition-colors ${selectedNdr?.awb_code === n.awb_code ? 'bg-red-50/40' : ''}`}>
+                        <td className="px-4 py-3 font-mono text-[11px] text-blue-600 font-bold cursor-pointer hover:underline"
                           onClick={() => {
                             setNdrAction(p => ({ ...p, awb: n.awb_code }));
                             setSelectedNdr(n);
                           }}>{n.awb_code}</td>
-                        <td className="px-4 py-3 font-mono text-xs">{n.channel_order_id}</td>
-                        <td className="px-4 py-3 text-gray-700">{n.customer_name?.trim() || '—'}</td>
-                        <td className="px-4 py-3 text-xs text-gray-500">{n.reason || '—'}</td>
-                        <td className="px-4 py-3 text-center font-semibold text-gray-700">{n.attempts ?? 1}</td>
-                        <td className="px-4 py-3 text-xs text-gray-400">{n.ndr_raised_at?.split(' ')[0]}</td>
+                        <td className="px-4 py-3 font-mono text-[11px] text-gray-600">{n.channel_order_id}</td>
+                        <td className="px-4 py-3 font-bold text-gray-800 text-[13px]">{n.customer_name?.trim() || '—'}</td>
+                        <td className="px-4 py-3 text-[11px] text-gray-500 max-w-[200px] truncate" title={n.reason}>{n.reason || '—'}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="inline-block w-6 h-6 rounded-lg bg-gray-100 text-gray-700 font-bold text-[11px] flex items-center justify-center border border-gray-200">{n.attempts ?? 1}</span>
+                        </td>
+                        <td className="px-4 py-3 text-[11px] text-gray-400">{n.ndr_raised_at?.split(' ')[0]}</td>
                         <td className="px-4 py-3">
-                          <button
-                            onClick={() => {
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                setSelectedNdr(n);
+                                navigate('/shiprocket/ndr/detail', { state: { ndr: n } });
+                              }}
+                              className="text-[10px] font-bold px-3 py-1.5 rounded-xl bg-white text-gray-600 hover:bg-gray-50 border border-gray-200 shadow-sm transition active:scale-95"
+                            >
+                              VIEW
+                            </button>
+                            <button onClick={() => {
                               setSelectedNdr(n);
-                              navigate('/shiprocket/ndr/detail', { state: { ndr: n } });
-                            }}
-                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-white text-gray-600 hover:bg-gray-50 border border-gray-200 whitespace-nowrap mr-2"
-                          >
-                            View
-                          </button>
-                          <button onClick={() => {
-                            setSelectedNdr(n);
-                            setNdrAction({ awb: n.awb_code, action: 'return', comment: 'Return to Origin' });
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                          }} className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-100 whitespace-nowrap">
-                            <svg className="w-3 h-3 inline-block mr-0.5 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg> RTO
-                          </button>
+                              setNdrAction({ awb: n.awb_code, action: 'return', comment: 'Return to Origin' });
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }} className="text-[10px] font-bold px-3 py-1.5 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white border border-orange-100 shadow-sm transition active:scale-95">
+                              RTO
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+
+                {/* Mobile Card View */}
+                <div className="sm:hidden divide-y divide-gray-50">
+                  {filteredNdrs.map((n, i) => (
+                    <div key={i} className={`p-4 flex flex-col gap-3 ${selectedNdr?.awb_code === n.awb_code ? 'bg-red-50/20' : ''}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-900 text-sm truncate">{n.customer_name?.trim() || 'Unknown'}</p>
+                          <p className="text-[10px] font-mono text-blue-600 font-bold uppercase mt-0.5">AWB: {n.awb_code}</p>
+                        </div>
+                        <div className="shrink-0 flex flex-col items-end">
+                          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Attempt</span>
+                          <span className="w-6 h-6 rounded-lg bg-gray-100 text-gray-700 font-bold text-[11px] flex items-center justify-center border border-gray-200">
+                            {n.attempts ?? 1}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 rounded-xl p-3">
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">NDR Reason</p>
+                        <p className="text-xs text-gray-700 mt-1 leading-relaxed">{n.reason || 'No reason provided'}</p>
+                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-200/50 text-[10px] text-gray-400 font-bold">
+                          <span>ORDER: {n.channel_order_id}</span>
+                          <span className="w-1 h-1 rounded-full bg-gray-300" />
+                          <span>RAISED: {n.ndr_raised_at?.split(' ')[0]}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedNdr(n);
+                            navigate('/shiprocket/ndr/detail', { state: { ndr: n } });
+                          }}
+                          className="flex-1 text-[11px] font-bold py-2 rounded-xl bg-white text-gray-600 border border-gray-200 shadow-sm active:scale-95 transition-all"
+                        >
+                          VIEW DETAILS
+                        </button>
+                        <button onClick={() => {
+                          setSelectedNdr(n);
+                          setNdrAction({ awb: n.awb_code, action: 'return', comment: 'Return to Origin' });
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }} className="flex-1 text-[11px] font-bold py-2 rounded-xl bg-orange-600 text-white shadow-md active:scale-95 transition-all">
+                          RTO
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

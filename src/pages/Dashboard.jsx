@@ -1,61 +1,22 @@
 import { useEffect, useState, useCallback } from 'react';
 import StatCard from '../components/ui/StatCard';
-import { fetchStats } from '../services/dashboard.service';
+import { fetchStats, fetchStaffTodayLists, fetchAllStaffStats } from '../services/dashboard.service';
 import * as srSvc from '../services/shiprocket.service';
+import * as attendanceSvc from '../services/attendance.service';
+import { useAuth } from '../context/AuthContext';
+import OrderStatusBoard from '../components/OrderStatusBoard';
 
 const cardCls = "bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow";
 const cardStyle = { border: '1px solid rgba(0,0,0,0.05)' };
 const inp = "border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-green-500 bg-white";
 
-const STATUS_LIST = [
-  'DELIVERED',
-  'RTO_DELIVERED',
-  'IN_TRANSIT',
-  'CANCELED',
-  'NEW',
-  'RTO_IN_TRANSIT',
-  'OUT_FOR_DELIVERY',
-  'IN_TRANSIT-EN-ROUTE',
-  'REACHED_BACK_AT_SELLER_CITY',
-  'UNDELIVERED-1ST_ATTEMPT',
-  'PICKUP_EXCEPTION',
-  'UNDELIVERED-2ND_ATTEMPT',
-  'UNDELIVERED-3RD_ATTEMPT',
-  'RTO_INITIATED',
-  'REAACHED_AT_DESTINATION_HUB',
-  'SHIPPED',
-  'RTO_OFD',
-  'PICKUP_SCHEDULED',
-];
-
-const DATE_FILTERS = [
-  { id: 'today', label: 'Today' },
-  { id: 'yesterday', label: 'Yesterday' },
-  { id: 'last7', label: 'Last 7 Days' },
-  { id: 'month', label: 'This Month' },
-  { id: 'all', label: 'All Time' },
-  { id: 'custom', label: 'Custom' },
-];
-
-const STATUS_STYLES = {
-  DELIVERED: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  RTO_DELIVERED: 'border-blue-200 bg-blue-50 text-blue-700',
-  IN_TRANSIT: 'border-amber-200 bg-amber-50 text-amber-700',
-  CANCELED: 'border-red-200 bg-red-50 text-red-700',
-  NEW: 'border-sky-200 bg-sky-50 text-sky-700',
-  RTO_IN_TRANSIT: 'border-violet-200 bg-violet-50 text-violet-700',
-  OUT_FOR_DELIVERY: 'border-cyan-200 bg-cyan-50 text-cyan-700',
-  'IN_TRANSIT-EN-ROUTE': 'border-orange-200 bg-orange-50 text-orange-700',
-  REACHED_BACK_AT_SELLER_CITY: 'border-lime-200 bg-lime-50 text-lime-700',
-  'UNDELIVERED-1ST_ATTEMPT': 'border-rose-200 bg-rose-50 text-rose-700',
-  PICKUP_EXCEPTION: 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700',
-  'UNDELIVERED-2ND_ATTEMPT': 'border-pink-200 bg-pink-50 text-pink-700',
-  'UNDELIVERED-3RD_ATTEMPT': 'border-purple-200 bg-purple-50 text-purple-700',
-  RTO_INITIATED: 'border-yellow-200 bg-yellow-50 text-yellow-700',
-  REAACHED_AT_DESTINATION_HUB: 'border-indigo-200 bg-indigo-50 text-indigo-700',
-  SHIPPED: 'border-green-200 bg-green-50 text-green-700',
-  RTO_OFD: 'border-teal-200 bg-teal-50 text-teal-700',
-  PICKUP_SCHEDULED: 'border-slate-200 bg-slate-50 text-slate-700',
+const icons = {
+  cnp: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M16.5 1.5a4.5 4.5 0 0 1 4.5 4.5v12a4.5 4.5 0 0 1-4.5 4.5h-9A4.5 4.5 0 0 1 3 18V6a4.5 4.5 0 0 1 4.5-4.5h9z"/><line x1="4" y1="4" x2="20" y2="20"/></svg>,
+  callAgain: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 11.61 19a19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 3.09 4.18 2 2 0 0 1 5.07 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L9.91 9.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>,
+  interested: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>,
+  notInterested: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>,
+  user: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  phone: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 11.61 19a19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 3.09 4.18 2 2 0 0 1 5.07 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L9.91 9.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>,
 };
 
 const formatDateInput = (date) => {
@@ -65,7 +26,7 @@ const formatDateInput = (date) => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-const normalizeStatus = (status) => String(status || '').toUpperCase();
+const normalizeStatus = (status) => String(status || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
 
 const formatStatusLabel = (status) => String(status || '').replace(/_/g, ' ');
 
@@ -107,21 +68,29 @@ const getDateParams = (preset, customFrom, customTo) => {
 };
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deliveredStats, setDeliveredStats] = useState({ count: 0, revenue: 0, statusBreakdown: [] });
-  const [datePreset, setDatePreset] = useState('today');
-  const [filterFrom, setFilterFrom] = useState('');
-  const [filterTo, setFilterTo] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
-  const [statusOrders, setStatusOrders] = useState([]);
-  const [statusLoading, setStatusLoading] = useState(false);
   const [statusError, setStatusError] = useState('');
+  const [attStatus, setAttStatus] = useState(null);
+  const [attLoading, setAttLoading] = useState(false);
+  const [todayLists, setTodayLists] = useState({ cnpList: [], callAgainList: [], interestedList: [], notInterestedList: [] });
+  const [allStaffStats, setAllStaffStats] = useState([]);
+  const [openSection, setOpenSection] = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const s = await fetchStats();
+      const [s, att, lists, staff] = await Promise.all([
+        fetchStats(),
+        attendanceSvc.getTodayStatus(),
+        fetchStaffTodayLists(),
+        fetchAllStaffStats()
+      ]);
       setStats(s);
+      setAttStatus(att);
+      setTodayLists(lists || { cnpList: [], callAgainList: [], interestedList: [], notInterestedList: [] });
+      setAllStaffStats(staff || []);
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, []);
@@ -133,46 +102,23 @@ export default function Dashboard() {
     }).catch(() => {});
   }, []);
 
-  const loadStatusOrders = useCallback((status, params = {}) => {
-    setStatusLoading(true);
-    setStatusError('');
-    srSvc.getStatusOrders({ ...params, status, limit: 100 }).then(res => {
-      setStatusOrders(res.data?.data?.data || []);
-    }).catch(e => {
-      setStatusOrders([]);
-      setStatusError(e?.response?.data?.message || e.message || 'Unable to load orders');
-    }).finally(() => setStatusLoading(false));
-  }, []);
-
-  const applyDateFilter = (preset = datePreset, from = filterFrom, to = filterTo) => {
-    const params = getDateParams(preset, from, to);
-    loadDelivered(params);
-    if (selectedStatus) loadStatusOrders(selectedStatus, params);
+  const handleCheckIn = async () => {
+    setAttLoading(true);
+    try { const res = await attendanceSvc.checkIn(); setAttStatus(res); load(); }
+    catch (e) { alert(e.response?.data?.message || 'Check-in failed'); }
+    setAttLoading(false);
   };
 
-  const selectDatePreset = (preset) => {
-    setDatePreset(preset);
-    if (preset !== 'custom') applyDateFilter(preset, filterFrom, filterTo);
+  const handleCheckOut = async () => {
+    setAttLoading(true);
+    try { const res = await attendanceSvc.checkOut(); setAttStatus(res); load(); }
+    catch (e) { alert(e.response?.data?.message || 'Check-out failed'); }
+    setAttLoading(false);
   };
 
-  const openStatusDetails = (status) => {
-    setSelectedStatus(status);
-    loadStatusOrders(status, getDateParams(datePreset, filterFrom, filterTo));
-  };
-
-  const statusCounts = deliveredStats.statusBreakdown.reduce((acc, item) => {
-    const key = normalizeStatus(item._id);
-    acc[key] = (acc[key] || 0) + item.count;
-    return acc;
-  }, {});
-  const listedStatuses = new Set(STATUS_LIST.map(normalizeStatus));
-  const statusCards = [
-    ...STATUS_LIST.map(status => ({ status, count: statusCounts[status] || 0 })),
-    ...deliveredStats.statusBreakdown
-      .filter(item => item._id && !listedStatuses.has(normalizeStatus(item._id)))
-      .map(item => ({ status: normalizeStatus(item._id), count: item.count })),
-  ];
-  const orderTotal = deliveredStats.statusBreakdown.reduce((sum, item) => sum + item.count, 0);
+  const checkedIn = !!attStatus?.checkIn;
+  const checkedOut = !!attStatus?.checkOut;
+  const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : null;
 
   useEffect(() => {
     load();
@@ -181,7 +127,6 @@ export default function Dashboard() {
   }, [load]);
 
   useEffect(() => {
-    setDatePreset('today');
     loadDelivered(getDateParams('today', '', ''));
   }, [loadDelivered]);
 
@@ -207,7 +152,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
         <StatCard label="Total Leads" value={stats?.totalLeads} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} color="border-green-500" />
         <StatCard label="New Leads Today" value={stats?.newLeadsToday} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>} color="border-blue-500" />
         <StatCard label="Ready to Shipment" value={stats?.readyToShipmentCount} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>} color="border-purple-500" />
@@ -215,160 +160,177 @@ export default function Dashboard() {
         <StatCard label="Delivered Revenue" value={`₹${deliveredStats.revenue.toLocaleString()}`} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>} color="border-teal-500" />
       </div>
 
-      {/* Order Status Cards */}
-      <div className={cardCls} style={cardStyle}>
-        <div className="flex items-start justify-between flex-wrap gap-3 mb-5">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700">Order Status</h3>
-            <p className="text-xs text-gray-400 mt-1">{orderTotal} orders in selected period</p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            <div className="flex items-center gap-1 rounded-xl bg-gray-100 p-1">
-              {DATE_FILTERS.map(filter => (
-                <button key={filter.id} onClick={() => selectDatePreset(filter.id)}
-                  className={`h-8 px-3 rounded-lg text-xs font-semibold transition-all ${
-                    datePreset === filter.id ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}>
-                  {filter.label}
-                </button>
-              ))}
+      {/* Attendance Stats Row */}
+      {user?.role === 'manager' && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-white rounded-2xl shadow-sm p-4 border border-green-100 bg-green-50/30">
+          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Present Today</p>
+          <p className="text-2xl font-bold text-green-600 mt-1">{stats?.attendance?.present || 0}</p>
+        </div>
+        <div className="bg-white rounded-2xl shadow-sm p-4 border border-orange-100 bg-orange-50/30">
+          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Checked Out</p>
+          <p className="text-2xl font-bold text-orange-600 mt-1">{stats?.attendance?.checkedOut || 0}</p>
+        </div>
+        <div className="bg-white rounded-2xl shadow-sm p-4 border border-red-100 bg-red-50/30">
+          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Absent Staff</p>
+          <p className="text-2xl font-bold text-red-600 mt-1">{stats?.attendance?.absent || 0}</p>
+        </div>
+        <div className="bg-white rounded-2xl shadow-sm p-4 border border-blue-100 bg-blue-50/30">
+          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Total Staff</p>
+          <p className="text-2xl font-bold text-blue-600 mt-1">{stats?.attendance?.totalStaff || 0}</p>
+        </div>
+      </div>
+      )}
+
+      {/* My Attendance Quick Card */}
+      {user?.role === 'manager' && (
+        <div className={cardCls} style={{ ...cardStyle, background: 'linear-gradient(135deg, #0d1f0d, #1a3a1a)', border: 'none' }}>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+                <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              <div>
+                <p className="text-white font-semibold text-sm">Personal Attendance</p>
+                <p className="text-green-300/60 text-xs mt-0.5">
+                  {checkedIn && checkedOut ? `In: ${fmtTime(attStatus.checkIn)} · Out: ${fmtTime(attStatus.checkOut)}`
+                    : checkedIn ? `Checked in at ${fmtTime(attStatus.checkIn)}`
+                    : 'Not checked in yet'}
+                </p>
+              </div>
             </div>
-            {datePreset === 'custom' && (
-              <>
-                <input type="date" className={inp} value={filterFrom} onChange={e => setFilterFrom(e.target.value)} />
-                <input type="date" className={inp} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
-              </>
-            )}
-            <button onClick={() => applyDateFilter()}
-              className="h-8 text-xs bg-green-600 text-white px-3 rounded-xl hover:bg-green-700 font-semibold inline-flex items-center gap-1.5">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
-                <path d="M3 4h18M6 12h12M10 20h4"/>
-              </svg>
-              Apply
-            </button>
+            <div>
+              {!checkedIn ? (
+                <button onClick={handleCheckIn} disabled={attLoading}
+                  className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
+                  {attLoading ? 'Processing...' : <><svg className="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> Clock In</>}
+                </button>
+              ) : !checkedOut ? (
+                <button onClick={handleCheckOut} disabled={attLoading}
+                  className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg, #ea580c, #c2410c)' }}>
+                  {attLoading ? 'Processing...' : <><svg className="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> Clock Out</>}
+                </button>
+              ) : (
+                <span className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-500/20 text-green-300 text-sm font-semibold">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/></svg>
+                  Day Complete
+                </span>
+              )}
+            </div>
           </div>
         </div>
+      )}
 
-        {statusCards.length === 0 ? (
-          <p className="text-sm text-gray-300">No order data yet</p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {statusCards.map(({ status, count }) => {
-              const selected = selectedStatus === status;
-              return (
-                <button key={status} onClick={() => openStatusDetails(status)}
-                  className={`min-h-[86px] text-left rounded-xl border p-4 transition-all hover:-translate-y-0.5 hover:shadow-md ${
-                    selected ? 'ring-2 ring-green-500 border-green-300 bg-green-50' : STATUS_STYLES[normalizeStatus(status)] || 'border-gray-200 bg-gray-50 text-gray-700'
-                  }`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-[11px] font-bold uppercase leading-4 break-words">{formatStatusLabel(status)}</span>
-                    <svg className="w-4 h-4 shrink-0 opacity-60" fill="none" stroke="currentColor" strokeWidth={2.3} viewBox="0 0 24 24">
-                      <path d="M9 18l6-6-6-6"/>
-                    </svg>
-                  </div>
-                  <div className="mt-3 text-2xl font-bold tracking-tight">{count}</div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {selectedStatus && (
-          <div className="mt-6 border-t border-gray-100 pt-5">
-            <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700">{formatStatusLabel(selectedStatus)} Details</h4>
-                <p className="text-xs text-gray-400 mt-1">{statusOrders.length} orders loaded</p>
-              </div>
-              <button onClick={() => { setSelectedStatus(''); setStatusOrders([]); }}
-                className="h-8 text-xs bg-gray-100 text-gray-600 px-3 rounded-xl hover:bg-gray-200 font-semibold inline-flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
-                  <path d="M18 6L6 18M6 6l12 12"/>
-                </svg>
-                Close
-              </button>
+      {/* Staff Activity Counts */}
+      {user?.role === 'manager' && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[
+          { label: "CNP", value: stats?.activity?.todayCnp ?? 0, icon: icons.cnp, bg: "bg-red-50", text: "text-red-500" },
+          { label: "Call Again", value: stats?.activity?.todayCallAgain ?? 0, icon: icons.callAgain, bg: "bg-yellow-50", text: "text-yellow-600" },
+          { label: "Interested", value: stats?.activity?.todayInterested ?? 0, icon: icons.interested, bg: "bg-green-50", text: "text-green-600" },
+          { label: "Not Interested", value: stats?.activity?.todayNotInterested ?? 0, icon: icons.notInterested, bg: "bg-gray-50", text: "text-gray-500" },
+        ].map(({ label, value, icon, bg, text }) => (
+          <div key={label} className={`${cardCls} flex flex-col items-center justify-center text-center gap-2 py-6`} style={cardStyle}>
+            <div className={`w-12 h-12 rounded-2xl ${bg} flex items-center justify-center shrink-0`}>
+              <span className={text}>{icon}</span>
             </div>
+            <p className={`text-3xl font-bold ${text}`}>{value}</p>
+            <p className="text-xs text-gray-500 font-medium">Today's {label}</p>
+          </div>
+        ))}
+      </div>
+      )}
 
-            {statusLoading && (
-              <div className="py-8 flex items-center justify-center gap-2 text-gray-400 text-sm">
-                <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-                Loading orders...
-              </div>
-            )}
-            {!statusLoading && statusError && (
-              <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-sm text-red-600 font-medium">
-                {statusError}
-              </div>
-            )}
-            {!statusLoading && !statusError && statusOrders.length === 0 && (
-              <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-6 text-center text-sm text-gray-400">
-                No orders found for this status and date filter.
-              </div>
-            )}
-            {!statusLoading && !statusError && statusOrders.length > 0 && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                {statusOrders.map(order => (
-                  <div key={order._id} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-xs text-gray-400 font-semibold">Order</p>
-                        <p className="text-sm font-bold text-gray-800 truncate">{order.order_id || order.shiprocket_order_id || '-'}</p>
+      {/* Staff Performance Overview Table */}
+      {user?.role === 'manager' && (
+        <div className={cardCls} style={cardStyle}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-700">Staff Performance</h3>
+          <span className="text-xs text-gray-400">Real-time tracking</span>
+        </div>
+        <div className="table-responsive no-scrollbar">
+          <table className="w-full text-xs min-w-[600px]">
+            <thead>
+              <tr className="text-gray-400 border-b border-gray-50 text-left">
+                <th className="py-3 px-2 font-semibold uppercase tracking-wider w-40">Staff Name</th>
+                <th className="py-3 px-2 font-semibold uppercase tracking-wider text-center">Today Verif.</th>
+                <th className="py-3 px-2 font-semibold uppercase tracking-wider text-center">Month Verif.</th>
+                <th className="py-3 px-2 font-semibold uppercase tracking-wider text-center">Target</th>
+                <th className="py-3 px-2 font-semibold uppercase tracking-wider text-center">Pending Tasks</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {allStaffStats.map(s => (
+                <tr key={s.user._id} className="hover:bg-gray-50/50 transition-colors">
+                  <td className="py-3 px-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-green-100 text-green-700 flex items-center justify-center font-bold text-[10px] shrink-0">
+                        {s.user.name?.charAt(0).toUpperCase()}
                       </div>
-                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${STATUS_STYLES[normalizeStatus(order.status)] || 'border-gray-200 bg-gray-50 text-gray-600'}`}>
-                        {formatStatusLabel(order.status || selectedStatus)}
-                      </span>
+                      <span className="font-medium text-gray-700 truncate">{s.user.name}</span>
                     </div>
-                    <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                      <div>
-                        <p className="text-gray-400 font-semibold">Customer</p>
-                        <p className="font-semibold text-gray-700 truncate">{order.billing_customer_name || '-'}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400 font-semibold">Phone</p>
-                        <p className="font-semibold text-gray-700 truncate">{order.billing_phone || '-'}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400 font-semibold">Location</p>
-                        <p className="font-semibold text-gray-700 truncate">
-                          {[order.billing_city, order.billing_state, order.billing_pincode].filter(Boolean).join(', ') || '-'}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400 font-semibold">Date</p>
-                        <p className="font-semibold text-gray-700">{formatDateTime(order.createdAt)}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400 font-semibold">AWB</p>
-                        <p className="font-mono font-semibold text-blue-600 truncate">{order.awb_code || '-'}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400 font-semibold">Courier</p>
-                        <p className="font-semibold text-gray-700 truncate">{order.courier_name || '-'}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400 font-semibold">Payment</p>
-                        <p className="font-semibold text-gray-700 truncate">{order.payment_method || '-'}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400 font-semibold">Amount</p>
-                        <p className="font-bold text-gray-800">{formatMoney(order.sub_total)}</p>
+                  </td>
+                  <td className="py-3 px-2 text-center font-bold text-green-600">{s.todayVerifications}</td>
+                  <td className="py-3 px-2 text-center font-bold text-blue-600">{s.monthVerifications}</td>
+                  <td className="py-3 px-2 text-center text-gray-500">{s.todayTarget || '—'}</td>
+                  <td className="py-3 px-2 text-center font-semibold text-orange-500">{s.pendingTasks}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      )}
+
+      {/* Staff Activity Detail Lists */}
+      {user?.role === 'manager' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {[
+          { key: 'cnp', label: 'CNP List', icon: icons.cnp, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-100', list: todayLists.cnpList },
+          { key: 'callAgain', label: 'Call Again List', icon: icons.callAgain, color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-100', list: todayLists.callAgainList },
+          { key: 'interested', label: 'Interested List', icon: icons.interested, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100', list: todayLists.interestedList },
+          { key: 'notInterested', label: 'Not Interested List', icon: icons.notInterested, color: 'text-gray-500', bg: 'bg-gray-50', border: 'border-gray-100', list: todayLists.notInterestedList },
+        ].map(({ key, label, icon, color, bg, border, list }) => (
+          <div key={key} className={cardCls} style={cardStyle}>
+            <button className="w-full flex items-center justify-between"
+              onClick={() => setOpenSection(openSection === key ? null : key)}>
+              <div className="flex items-center gap-2">
+                <span className={`w-8 h-8 rounded-xl ${bg} ${color} flex items-center justify-center`}>{icon}</span>
+                <span className="text-sm font-semibold text-gray-700">{label}</span>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${bg} ${color} border ${border}`}>{list.length}</span>
+              </div>
+              <span className="text-gray-400 text-sm">{openSection === key ? '▲' : '▼'}</span>
+            </button>
+            {openSection === key && (
+              <div className="mt-4 divide-y divide-gray-50 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                {list.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-6">No records for today</p>
+                ) : list.map((item, i) => (
+                  <div key={item._id} className="py-3 flex items-center gap-3">
+                    <div className={`w-7 h-7 rounded-lg ${bg} flex items-center justify-center text-[10px] font-bold ${color} shrink-0`}>{i + 1}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-800 truncate">{item.title || item.lead?.name || '—'}</p>
+                      <div className="flex gap-3 mt-0.5">
+                        {item.assignedTo?.name && <span className="text-[10px] text-blue-600 font-medium flex items-center gap-1">{icons.user}{item.assignedTo.name}</span>}
+                        {item.lead?.phone && <span className="text-[10px] text-gray-500 flex items-center gap-1">{icons.phone}{item.lead.phone}</span>}
                       </div>
                     </div>
-                    {order.order_items?.length > 0 && (
-                      <div className="mt-4 rounded-lg bg-gray-50 px-3 py-2">
-                        <p className="text-[11px] text-gray-400 font-semibold mb-1">Items</p>
-                        <p className="text-xs text-gray-700 truncate">
-                          {order.order_items.map(item => `${item.name || 'Item'} x${item.units || 1}`).join(', ')}
-                        </p>
-                      </div>
-                    )}
+                    <span className="text-[9px] text-gray-400 shrink-0">
+                      {new Date(item.createdAt || item.updatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   </div>
                 ))}
               </div>
             )}
           </div>
-        )}
+        ))}
       </div>
+      )}
+
+      {/* Order Status Cards */}
+      <OrderStatusBoard />
 
       {/* Tasks Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -20,10 +20,11 @@ const STATUS_LIST = [
   'UNDELIVERED-2ND_ATTEMPT',
   'UNDELIVERED-3RD_ATTEMPT',
   'RTO_INITIATED',
-  'REAACHED_AT_DESTINATION_HUB',
+  'REACHED_AT_DESTINATION_HUB',
   'SHIPPED',
   'RTO_OFD',
   'PICKUP_SCHEDULED',
+  'MISROUTED',
 ];
 
 const DATE_FILTERS = [
@@ -50,7 +51,7 @@ const STATUS_STYLES = {
   'UNDELIVERED-2ND_ATTEMPT': 'border-pink-200 bg-pink-50 text-pink-700',
   'UNDELIVERED-3RD_ATTEMPT': 'border-purple-200 bg-purple-50 text-purple-700',
   RTO_INITIATED: 'border-yellow-200 bg-yellow-50 text-yellow-700',
-  REAACHED_AT_DESTINATION_HUB: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+  REACHED_AT_DESTINATION_HUB: 'border-indigo-200 bg-indigo-50 text-indigo-700',
   SHIPPED: 'border-green-200 bg-green-50 text-green-700',
   RTO_OFD: 'border-teal-200 bg-teal-50 text-teal-700',
   PICKUP_SCHEDULED: 'border-slate-200 bg-slate-50 text-slate-700',
@@ -63,7 +64,7 @@ const formatDateInput = (date) => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-const normalizeStatus = (status) => String(status || '').trim().toUpperCase().replace(/\s+/g, '_');
+const normalizeStatus = (status) => String(status || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
 const formatStatusLabel = (status) => String(status || '').replace(/_/g, ' ');
 const formatMoney = (value) => `Rs ${Number(value || 0).toLocaleString()}`;
 
@@ -158,7 +159,7 @@ export default function OrderStatusBoard({
 
   const listedStatuses = new Set(STATUS_LIST.map(normalizeStatus));
   const statusCards = [
-    ...STATUS_LIST.map(status => ({ status, count: statusCounts[status] || 0 })),
+    ...STATUS_LIST.map(status => ({ status, count: statusCounts[normalizeStatus(status)] || 0 })),
     ...deliveredStats.statusBreakdown
       .filter(item => item._id && !listedStatuses.has(normalizeStatus(item._id)))
       .map(item => ({ status: normalizeStatus(item._id), count: item.count })),
@@ -173,35 +174,39 @@ export default function OrderStatusBoard({
 
   return (
     <div className={cardCls} style={cardStyle}>
-      <div className="flex items-start justify-between flex-wrap gap-3 mb-5">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
-          <p className="text-xs text-gray-400 mt-1">{subtitle || `${orderTotal} orders in selected period`}</p>
+          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-widest">{title}</h3>
+          <p className="text-[11px] font-bold text-gray-400 mt-1 uppercase">{subtitle || `${orderTotal} ORDERS TOTAL`}</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-          <div className="flex items-center gap-1 rounded-xl bg-gray-100 p-1">
-            {DATE_FILTERS.map(filter => (
-              <button key={filter.id} onClick={() => selectDatePreset(filter.id)}
-                className={`h-8 px-3 rounded-lg text-xs font-semibold transition-all ${
-                  datePreset === filter.id ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}>
-                {filter.label}
-              </button>
-            ))}
+        <div className="w-full sm:w-auto flex flex-col gap-3">
+          <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
+            <div className="inline-flex items-center gap-1 rounded-xl bg-gray-100 p-1 shrink-0">
+              {DATE_FILTERS.map(filter => (
+                <button key={filter.id} onClick={() => selectDatePreset(filter.id)}
+                  className={`h-8 px-3 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap ${
+                    datePreset === filter.id ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  {filter.label.toUpperCase()}
+                </button>
+              ))}
+            </div>
           </div>
-          {datePreset === 'custom' && (
-            <>
-              <input type="date" className={inp} value={filterFrom} onChange={e => setFilterFrom(e.target.value)} />
-              <input type="date" className={inp} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
-            </>
-          )}
-          <button onClick={() => applyDateFilter()}
-            className="h-8 text-xs bg-green-600 text-white px-3 rounded-xl hover:bg-green-700 font-semibold inline-flex items-center gap-1.5">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
-              <path d="M3 4h18M6 12h12M10 20h4"/>
-            </svg>
-            Apply
-          </button>
+          <div className="flex items-center gap-2">
+            {datePreset === 'custom' && (
+              <div className="flex-1 grid grid-cols-2 gap-2">
+                <input type="date" className={`${inp} w-full py-2`} value={filterFrom} onChange={e => setFilterFrom(e.target.value)} />
+                <input type="date" className={`${inp} w-full py-2`} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
+              </div>
+            )}
+            <button onClick={() => applyDateFilter()}
+              className="flex-1 sm:flex-none h-9 text-[11px] bg-green-600 text-white px-5 rounded-xl hover:bg-green-700 font-bold shadow-md transition active:scale-95 inline-flex items-center justify-center gap-2">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
+                <path d="M3 4h18M6 12h12M10 20h4"/>
+              </svg>
+              APPLY
+            </button>
+          </div>
         </div>
       </div>
 

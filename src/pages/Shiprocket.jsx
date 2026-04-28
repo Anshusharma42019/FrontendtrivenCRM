@@ -112,7 +112,7 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
   const [recommendedCourierId, setRecommendedCourierId] = useState(null);
 
   const [order, setOrder] = useState({
-    order_id: '', order_date: new Date().toISOString().split('T')[0], pickup_location: 'home',
+    order_id: '', order_date: new Date().toLocaleDateString('en-CA'), pickup_location: 'home',
     billing_customer_name: '', billing_last_name: '',
     billing_address: '', billing_address_2: '', billing_city: '', billing_pincode: '',
     billing_state: '', billing_country: 'India',
@@ -132,6 +132,25 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
   const [rtsRecords, setRtsRecords] = useState([]);
   const [rtsLoading, setRtsLoading] = useState(false);
   const [pickupLocations, setPickupLocations] = useState([]);
+  const [pincodeAddress, setPincodeAddress] = useState({ pickup: '', delivery: '' });
+
+  const fetchAddress = async (pin, type) => {
+    if (pin.length !== 6) return;
+    try {
+      const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+      const data = await res.json();
+      if (data[0]?.Status === 'Success') {
+        const office = data[0].PostOffice?.[0];
+        if (office) {
+          const addr = `${office.District}, ${office.State}`;
+          setPincodeAddress(p => ({ ...p, [type]: addr }));
+          if (type === 'billing') {
+            setOrder(o => ({ ...o, billing_city: office.District, billing_state: office.State }));
+          }
+        }
+      }
+    } catch { }
+  };
 
   // Load pickup locations on mount
   useEffect(() => {
@@ -141,13 +160,37 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
 
     api.get('/shiprocket/pickup-locations')
       .then(res => {
-        const locs = res.data?.data?.shipping_address || [];
+        const locs = res.data?.data?.data?.shipping_address || [];
         setPickupLocations(locs);
         if (locs.length > 0) {
           // Prefer 'Home-1', fallback to first location
           const preferred = locs.find(l => l.pickup_location === 'Home-1') || locs[0];
           setOrder(p => ({ ...p, pickup_location: preferred.pickup_location }));
-          if (preferred.pin_code) setSvc(p => ({ ...p, pickup_postcode: String(preferred.pin_code) }));
+          const pin = String(preferred.pin_code);
+          if (preferred.pin_code) {
+            setSvc(p => ({ ...p, pickup_postcode: pin }));
+            const fullAddr = [preferred.address, preferred.address_2, preferred.city, preferred.state, preferred.pin_code].filter(Boolean).join(', ');
+            setPincodeAddress(p => ({ ...p, pickup: fullAddr }));
+            
+            // If we have a delivery postcode from navigation, trigger serviceability NOW with the correct pickup pin
+            const state = location.state;
+            if (state?.delivery_postcode) {
+              const deliveryPostcode = state.delivery_postcode;
+              setSvc(p => ({ ...p, delivery_postcode: deliveryPostcode }));
+              setStep(1);
+              setLoading(true); setError(''); setResult(null);
+              srSvc.checkServiceability({ pickup_postcode: pin, delivery_postcode: deliveryPostcode, weight: '0.5', cod: 1 })
+                .then(svcRes => {
+                  const list = svcRes.data?.data?.data?.available_courier_companies || [];
+                  const recommended = svcRes.data?.data?.data?.recommended_courier_company_id;
+                  setCouriers(list);
+                  if (recommended) { setCourierId(String(recommended)); setRecommendedCourierId(recommended); }
+                  setResult(svcRes.data);
+                })
+                .catch(e => setError(e?.response?.data?.message || e.message))
+                .finally(() => setLoading(false));
+            }
+          }
         }
       }).catch(() => {});
   }, []);
@@ -190,25 +233,16 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
       if (r._id) setRtsId(r._id);
     }
     if (state.delivery_postcode) {
-      const deliveryPostcode = state.delivery_postcode;
-      const svcParams = { pickup_postcode: svc.pickup_postcode, delivery_postcode: deliveryPostcode, weight: '0.5', cod: 1 };
-      setSvc(svcParams);
-      setStep(1);
-      // Auto-trigger serviceability check
-      setLoading(true); setError(''); setResult(null);
-      srSvc.checkServiceability({ pickup_postcode: svc.pickup_postcode, delivery_postcode: deliveryPostcode, weight: '0.5', cod: 1 })
-        .then(res => {
-          const list = res.data?.data?.data?.available_courier_companies || [];
-          const recommended = res.data?.data?.data?.recommended_courier_company_id;
-          setCouriers(list);
-          if (recommended) { setCourierId(String(recommended)); setRecommendedCourierId(recommended); }
-          setResult(res.data);
-        })
-        .catch(e => setError(e?.response?.data?.message || e.message))
-        .finally(() => setLoading(false));
+      // Logic moved to pickup-locations fetch to ensure pickup_postcode is ready
+      // or handled here if pickup-locations fails/is empty
+      if (pickupLocations.length === 0) {
+        const deliveryPostcode = state.delivery_postcode;
+        setSvc(p => ({ ...p, delivery_postcode: deliveryPostcode }));
+        setStep(1);
+      }
     }
     window.history.replaceState({}, '');
-  }, []);
+  }, [location.state, pickupLocations.length]);
 
   const getValidToken = async () => {
     const saved = getSavedToken();
@@ -240,7 +274,7 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
           saveToken(res.data.data.token);
           setToken(res.data.data.token);
           return res.data;
-        })} className="btn-primary">Get Token</button>
+        })} className="btn-primary w-full sm:w-auto">Get Token</button>
         {token && (
           <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
             <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
@@ -255,25 +289,57 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
 
     if (step === 1) return (
       <div className="space-y-4 max-w-lg">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Pickup Pincode">
             {pickupLocations.length > 0 ? (
               <select className={inp} value={svc.pickup_postcode}
-                onChange={e => setSvc(p => ({ ...p, pickup_postcode: e.target.value }))}>
+                onChange={e => {
+                  const val = e.target.value;
+                  setSvc(p => ({ ...p, pickup_postcode: val }));
+                  const loc = pickupLocations.find(l => String(l.pin_code) === val);
+                  if (loc) {
+                    const full = [loc.address, loc.address_2, loc.city, loc.state, loc.pin_code].filter(Boolean).join(', ');
+                    setPincodeAddress(p => ({ ...p, pickup: full }));
+                    setOrder(o => ({ ...o, pickup_location: loc.pickup_location }));
+                  } else setPincodeAddress(p => ({ ...p, pickup: '' }));
+                }}>
+                <option value="">Select Location</option>
                 {pickupLocations.map(l => (
                   <option key={l.id} value={String(l.pin_code)}>
-                    {l.pickup_location} | {l.address}{l.address_2 ? ', ' + l.address_2 : ''}, {l.city}, {l.state}-{l.pin_code}
+                    {l.pickup_location} | {l.city}
                   </option>
                 ))}
               </select>
             ) : (
               <input className={inp} placeholder="e.g. 110001" value={svc.pickup_postcode}
-                onChange={e => setSvc(p => ({ ...p, pickup_postcode: e.target.value }))} />
+                onChange={e => {
+                  const val = e.target.value;
+                  setSvc(p => ({ ...p, pickup_postcode: val }));
+                  if (val.length === 6) fetchAddress(val, 'pickup');
+                  else setPincodeAddress(p => ({ ...p, pickup: '' }));
+                }} />
+            )}
+            {pincodeAddress.pickup && (
+              <div className="mt-2 p-3 bg-green-50 border border-green-100 rounded-xl">
+                <p className="text-[10px] font-bold text-green-700 uppercase tracking-widest mb-1">Full Pickup Address</p>
+                <p className="text-xs text-green-800 font-medium leading-relaxed">{pincodeAddress.pickup}</p>
+              </div>
             )}
           </Field>
           <Field label="Delivery Pincode">
             <input className={inp} placeholder="e.g. 226021" value={svc.delivery_postcode}
-              onChange={e => setSvc(p => ({ ...p, delivery_postcode: e.target.value }))} />
+                onChange={e => {
+                  const val = e.target.value;
+                  setSvc(p => ({ ...p, delivery_postcode: val }));
+                  if (val.length === 6) fetchAddress(val, 'delivery');
+                  else setPincodeAddress(p => ({ ...p, delivery: '' }));
+                }} />
+            {pincodeAddress.delivery && (
+              <div className="mt-2 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                <p className="text-[10px] font-bold text-blue-700 uppercase tracking-widest mb-1">Estimated Delivery Region</p>
+                <p className="text-xs text-blue-800 font-medium leading-relaxed">{pincodeAddress.delivery}</p>
+              </div>
+            )}
           </Field>
           <Field label="Weight (kg)">
             <input className={inp} placeholder="e.g. 0.5" value={svc.weight}
@@ -293,7 +359,7 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
           setCouriers(list);
           if (recommended) { setCourierId(String(recommended)); setRecommendedCourierId(recommended); }
           return res.data;
-        })} className="btn-primary">Check Serviceability</button>
+        })} className="btn-primary w-full sm:w-auto">Check Serviceability</button>
 
         {couriers.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
@@ -401,11 +467,11 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
           <div className="px-5 py-3 border-b border-gray-50">
             <h3 className="font-semibold text-gray-700 text-sm">Order Info</h3>
           </div>
-          <div className="px-5 py-4 grid grid-cols-4 gap-3">
+          <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Field label="Order ID (auto-assigned)">
               <input className={`${inp} bg-gray-50 text-gray-400 cursor-not-allowed`} value={order.order_id || 'Will be assigned on create'} readOnly />
             </Field>
-            <Field label="Order Date *"><input className={inp} type="date" value={order.order_date} onChange={e => setO('order_date', e.target.value)} /></Field>
+            <Field label="Order Date *"><input className={inp} type="date" max={new Date().toISOString().split('T')[0]} value={order.order_date} onChange={e => setO('order_date', e.target.value)} /></Field>
             <Field label="Payment Method">
               <select className={inp} value={order.payment_method} onChange={e => setO('payment_method', e.target.value)}>
                 <option value="prepaid">Prepaid</option>
@@ -416,7 +482,9 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
               {pickupLocations.length > 0 ? (
                 <select className={inp} value={order.pickup_location} onChange={e => setO('pickup_location', e.target.value)}>
                   {pickupLocations.map(l => (
-                    <option key={l.id} value={l.pickup_location}>{l.pickup_location} — {l.address}, {l.city}</option>
+                    <option key={l.id} value={l.pickup_location}>
+                      {[l.pickup_location, l.address, l.address_2, l.city, l.state, l.pin_code].filter(Boolean).join(', ')}
+                    </option>
                   ))}
                 </select>
               ) : (
@@ -432,8 +500,8 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
             <h3 className="font-semibold text-gray-700 text-sm">Delivery Details</h3>
             <p className="text-xs text-gray-400 mt-0.5">Enter the delivery details of your buyer</p>
           </div>
-          <div className="px-5 py-4 space-y-3">
-            <div className="grid grid-cols-3 gap-3">
+          <div className="px-5 py-4 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Field label="Mobile Number *">
                 <div className="flex">
                   <span className="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-gray-200 bg-gray-50 text-gray-500 text-sm">+91</span>
@@ -452,12 +520,24 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
                 <input className={inp} placeholder="Enter Buyer's full address" value={order.billing_address} onChange={e => setO('billing_address', e.target.value)} />
               </Field>
             </div>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <Field label="Landmark (Optional)">
                 <input className={inp} placeholder="Enter any nearby landmark" value={order.billing_address_2 || ''} onChange={e => setO('billing_address_2', e.target.value)} />
               </Field>
               <Field label="Pincode *">
-                <input className={inp} placeholder="Enter pincode" value={order.billing_pincode} onChange={e => setO('billing_pincode', e.target.value)} />
+                <input className={inp} placeholder="Enter pincode" value={order.billing_pincode} 
+                  onChange={e => {
+                    const val = e.target.value;
+                    setO('billing_pincode', val);
+                    if (val.length === 6) fetchAddress(val, 'billing');
+                    else setPincodeAddress(p => ({ ...p, billing: '' }));
+                  }} />
+                {pincodeAddress.billing && (
+                  <div className="mt-2 p-3 bg-green-50 border border-green-100 rounded-xl">
+                    <p className="text-[10px] font-bold text-green-700 uppercase tracking-widest mb-1">Billing Location</p>
+                    <p className="text-xs text-green-800 font-medium leading-relaxed">{pincodeAddress.billing}</p>
+                  </div>
+                )}
               </Field>
               <Field label="City *">
                 <input className={inp} placeholder="City" value={order.billing_city} onChange={e => setO('billing_city', e.target.value)} />
@@ -466,10 +546,12 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
                 <input className={inp} placeholder="State" value={order.billing_state} onChange={e => setO('billing_state', e.target.value)} />
               </Field>
             </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="billing_email_row" className="w-3.5 h-3.5 accent-green-600" checked />
-              <label htmlFor="billing_email_row" className="text-xs text-gray-500">Billing Details are same as Delivery Details</label>
-              <input className={`${inp} max-w-xs ml-4`} placeholder="Email (optional)" value={order.billing_email} onChange={e => setO('billing_email', e.target.value)} />
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-2">
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="billing_email_row" className="w-4 h-4 accent-green-600" checked onChange={() => {}} />
+                <label htmlFor="billing_email_row" className="text-xs text-gray-500">Same Billing Info</label>
+              </div>
+              <input className={`${inp} sm:max-w-xs sm:ml-4`} placeholder="Email (optional)" value={order.billing_email} onChange={e => setO('billing_email', e.target.value)} />
             </div>
           </div>
         </div>
@@ -479,7 +561,7 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
           <div className="px-5 py-3 border-b border-gray-50 flex items-center justify-between">
             <h3 className="font-semibold text-gray-700 text-sm">Product Details</h3>
           </div>
-          <div className="px-5 py-4 grid grid-cols-4 gap-3">
+          <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Field label="Product Name *">
               <select className={inp} value={order.order_items[0].name}
                 onChange={e => {
@@ -500,7 +582,7 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
             <Field label="Units *"><input className={inp} type="number" min="1" value={order.order_items[0].units} onChange={e => setItem('units', Number(e.target.value))} /></Field>
             <Field label="Price (₹) *"><input className={inp} type="number" value={order.order_items[0].selling_price} onChange={e => setItem('selling_price', Number(e.target.value))} /></Field>
           </div>
-          <div className="px-5 pb-4 grid grid-cols-5 gap-3">
+          <div className="px-5 pb-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {[['length','Length (cm)'],['breadth','Breadth (cm)'],['height','Height (cm)'],['weight','Weight (kg)'],['sub_total','Sub Total (₹) *']].map(([k,label]) => (
               <Field key={k} label={label}><input className={inp} type="number" value={order[k]} onChange={e => setO(k, Number(e.target.value))} /></Field>
             ))}
@@ -561,7 +643,7 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
             setRtsRecords(prev => prev.filter(r => r._id !== rtsId));
           }
           return res.data;
-        })} className="btn-primary">Create Order → Auto-proceed to Assign AWB</button>
+        })} className="btn-primary w-full sm:w-auto">Create Order → Auto-proceed to Assign AWB</button>
       </div>
     );
 
@@ -577,7 +659,7 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
             ))}
           </div>
         </div>
-        <button onClick={onSubmit} className="btn-primary">{btnLabel}</button>
+        <button onClick={onSubmit} className="btn-primary w-full sm:w-auto">{btnLabel}</button>
       </div>
     );
 
@@ -639,14 +721,18 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
         </div>
         <button onClick={() => call(async () => {
           await getValidToken();
-          const res = await srSvc.assignAWB(Number(shipmentId), Number(courierId));
-          console.log('[AWB] full response:', JSON.stringify(res.data));
-          const d = res.data.data;
-          // Check failure: awb_assign_status=0 OR message indicates failure
-          const assignStatus = d?.awb_assign_status ?? d?.response?.data?.awb_assign_status;
-          const isFailure = assignStatus === 0 || (res.data.message && res.data.message !== 'AWB assigned successfully');
-          if (isFailure) {
-            // Auto-fetch couriers using billing pincode so user can pick a different one
+          try {
+            const res = await srSvc.assignAWB(Number(shipmentId), Number(courierId));
+            const d = res.data.data;
+            // Shiprocket sometimes returns HTTP 200 but with an error inside
+            if (d?.status_code >= 400 || d?.status_code === 500) {
+              throw new Error(d?.message || 'AWB assignment failed on Shiprocket side');
+            }
+            const awb = d?.awb_code || d?.response?.data?.awb_code;
+            if (awb) { setAwbCode(awb); setTimeout(() => goStep(4), 1500); }
+            return res.data;
+          } catch (e) {
+            // If assignment fails, try to re-fetch couriers so they can pick another
             const pincode = order.billing_pincode || svc.delivery_postcode;
             if (pincode) {
               try {
@@ -656,26 +742,29 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
                 });
                 const list = svcRes.data?.data?.data?.available_courier_companies || [];
                 const recommended = svcRes.data?.data?.data?.recommended_courier_company_id;
-                if (list.length) { setCouriers(list); if (recommended) setRecommendedCourierId(recommended); }
-              } catch { }
+                if (list.length) { 
+                  setCouriers(list); 
+                  if (recommended) setRecommendedCourierId(recommended); 
+                }
+              } catch (inner) { console.error('Failed to reload couriers', inner); }
             }
-            const errMsg = res.data.message
-              || (typeof d?.response?.data === 'string' ? d.response.data : null)
-              || d?.message
-              || 'AWB failed. Select a different courier below.';
-            throw new Error(errMsg);
+            throw e; // Rethrow to show the error in the UI
           }
-          const awb = d?.awb_code || d?.response?.data?.awb_code;
-          if (awb) { setAwbCode(awb); setTimeout(() => goStep(4), 1500); }
-          return res.data;
-        })} className="btn-primary">Assign AWB → Auto-proceed to Generate Pickup</button>
+        })} className="btn-primary w-full sm:w-auto">Assign AWB → Auto-proceed to Generate Pickup</button>
       </div>
     );
 
     if (step === 4) return simpleStep('Generate Pickup',
       [['Shipment ID (auto-filled)', shipmentId, setShipmentId]],
       'Generate Pickup',
-      () => call(() => srSvc.generatePickup(shipmentId).then(r => r.data))
+      () => call(async () => {
+        const res = await srSvc.generatePickup(shipmentId);
+        const d = res.data?.data || res.data;
+        if (d?.status_code >= 400 || d?.status_code === 500 || d?.message?.toLowerCase().includes('cancel')) {
+          throw new Error(d?.message || 'Pickup generation failed — order may be cancelled on Shiprocket');
+        }
+        return res.data;
+      })
     );
     if (step === 5) return simpleStep('Generate Manifest',
       [['Shipment ID (auto-filled)', shipmentId, setShipmentId]],
@@ -714,8 +803,8 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <div className="inline-flex flex-wrap justify-end gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
+      <div className="flex justify-start sm:justify-end overflow-x-auto pb-1 scrollbar-hide">
+        <div className="inline-flex gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm whitespace-nowrap">
           {SECTIONS.map(item => {
             const active = section === item.id;
             return (
@@ -808,9 +897,34 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
       )}
 
       {error && (
-        <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
-          <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <span className="text-red-600 text-sm font-medium">{error}</span>
+        <div className="flex items-start gap-2 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+          <svg className="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <div className="flex-1">
+            <span className="text-red-600 text-sm font-medium">{error}</span>
+            {(error.toLowerCase().includes('cancelled') || error.toLowerCase().includes('canceled') || error.toLowerCase().includes('already assigned')) && orderId && (
+              <div className="mt-2 flex flex-wrap gap-2 items-center">
+                <button
+                  onClick={() => call(async () => {
+                    await srSvc.cancelOrders([Number(orderId)]);
+                    setShipmentId('');
+                    setOrderId('');
+                    setAwbCode('');
+                    setCourierId('');
+                    setError('');
+                    setResult(null);
+                    try {
+                      const res = await api.get('/shiprocket/next-order-id');
+                      setOrder(p => ({ ...p, order_id: res.data.data.order_id, order_date: new Date().toLocaleDateString('en-CA') }));
+                    } catch { }
+                    goStep(2);
+                  })}
+                  className="text-xs font-bold px-3 py-1.5 rounded-xl bg-red-600 text-white hover:bg-red-700 transition">
+                  Cancel Order & Create New
+                </button>
+                <span className="text-xs text-red-400">Cancels order #{orderId} on Shiprocket → back to Step 3</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

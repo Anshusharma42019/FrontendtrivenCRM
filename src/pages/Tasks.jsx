@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getTasks, getDailyTasks, createTask, updateTask, deleteTask, addTaskNote, deleteCnpRecord } from '../services/task.service';
@@ -6,19 +6,45 @@ import API from '../api';
 import { getLeads, updateLead } from '../services/lead.service';
 import { getUsers } from '../services/user.service';
 import Modal from '../components/ui/Modal';
-import Badge from '../components/ui/Badge';
+
+const PIN_COLORS = [
+  'bg-emerald-500', 'bg-blue-500', 'bg-indigo-500',
+  'bg-violet-500', 'bg-rose-500', 'bg-orange-500', 'bg-amber-500',
+];
+
+const initials = (name = '') =>
+  name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+
+const DetailRow = ({ label, value, color = "gray", icon }) =>
+  value ? (
+    <div className="flex items-start gap-3 py-2.5 border-b border-gray-50 last:border-0">
+      {icon && <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5 border border-emerald-100/50">{icon}</div>}
+      <div className="flex-1 min-w-0">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-0.5">{label}</span>
+        <span className={`text-sm font-semibold capitalize break-words ${color === 'red' ? 'text-red-600' : color === 'green' ? 'text-emerald-600' : 'text-gray-800'}`}>{value}</span>
+      </div>
+    </div>
+  ) : null;
+
+const SectionHead = ({ label, color = "emerald" }) => (
+  <div className="flex items-center gap-2 mt-6 mb-2">
+    <span className={`text-[10px] font-extrabold uppercase tracking-widest ${color === 'emerald' ? 'text-emerald-500' : 'text-amber-500'}`}>{label}</span>
+    <div className={`flex-1 h-px ${color === 'emerald' ? 'bg-emerald-100' : 'bg-amber-100'}`} />
+  </div>
+);
 
 const TYPES = ['call', 'follow_up', 'meeting', 'email', 'task'];
-const PRIORITIES = ['low', 'medium', 'high'];
 const STATUSES = [
-  { value: 'interested', label: 'Interested', color: 'bg-green-600 border-green-600', hover: 'hover:border-green-400' },
-  { value: 'cancel_call', label: 'Not Interested', color: 'bg-red-500 border-red-500', hover: 'hover:border-red-400' },
-  { value: 'cnp', label: 'CNP', color: 'bg-orange-500 border-orange-500', hover: 'hover:border-orange-400' },
-  { value: 'verification', label: 'Verification', color: 'bg-blue-600 border-blue-600', hover: 'hover:border-blue-400' },
+  { value: 'interested', label: 'Interested', color: 'bg-green-600 border-green-600' },
+  { value: 'cancel_call', label: 'Not Interested', color: 'bg-red-500 border-red-500' },
+  { value: 'cnp', label: 'CNP', color: 'bg-orange-500 border-orange-500' },
+  { value: 'cancelled', label: 'On Hold', color: 'bg-gray-500 border-gray-500' },
+  { value: 'verification', label: 'Verification', color: 'bg-blue-600 border-blue-600' },
 ];
+
 const EMPTY = { title: '', description: '', problem: '', type: 'task', lead: '', assignedTo: '', dueDate: '', priority: 'medium', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending', age: '', weight: '', height: '', otherProblems: '', problemDuration: '', price: '', phone: '' };
 
-const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition";
+const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition";
 
 const TYPE_SVG = {
   call:      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>,
@@ -27,20 +53,13 @@ const TYPE_SVG = {
   email:     <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
   task:      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>,
 };
-const STATUS_STYLE = {
-  overdue:   { bar: 'bg-red-400',    bg: 'bg-red-50',    dot: 'bg-red-400' },
-  completed: { bar: 'bg-green-400',  bg: 'bg-green-50',  dot: 'bg-green-400' },
-  pending:   { bar: 'bg-amber-400',  bg: 'bg-amber-50',  dot: 'bg-amber-400' },
-  cancelled: { bar: 'bg-gray-300',   bg: 'bg-gray-50',   dot: 'bg-gray-300' },
-};
 
 export default function Tasks() {
   const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [daily, setDaily] = useState([]);
-  const [leads, setLeads] = useState([]);
   const [salesUsers, setSalesUsers] = useState([]);
-  const [tab, setTab] = useState('daily');
+  const [tab, setTab] = useState('all');
   const [filters, setFilters] = useState({ status: '', type: '' });
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -49,42 +68,14 @@ export default function Tasks() {
   const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
+  const [search, setSearch] = useState("");
+  const [noteText, setNoteText] = useState('');
+  const [pincodeData, setPincodeData] = useState([]);
+  const [pincodeLoading, setPincodeLoading] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
   const canManage = user?.role === 'admin' || user?.role === 'manager';
-
-  useEffect(() => {
-    if (location.state?.leadId) {
-      const ld = location.state.leadData || {};
-      setForm({
-        ...EMPTY,
-        lead: location.state.leadId,
-        assignedTo: location.state.assignedTo || '',
-        title: ld.name || '',
-        problem: ld.problem || '',
-        description: ld.description || '',
-        age: ld.age || '',
-        weight: ld.weight || '',
-        height: ld.height || '',
-        cityVillageType: ld.cityVillageType || 'city',
-        cityVillage: ld.cityVillage || '',
-        houseNo: ld.houseNo || '',
-        postOffice: ld.postOffice || '',
-        district: ld.district || '',
-        landmark: ld.landmark || '',
-        pincode: ld.pincode || '',
-        state: ld.state || '',
-        phone: ld.phone || '',
-        otherProblems: ld.otherProblems || '',
-        problemDuration: ld.problemDuration || '',
-        price: ld.price || '',
-      });
-      setError('');
-      setModal('create');
-      window.history.replaceState({}, document.title);
-    }
-  }, [location.state?.leadId]);
 
   const load = useCallback(async () => {
     setLoadError('');
@@ -103,16 +94,45 @@ export default function Tasks() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    // All roles need leads list (sales sees their own leads via backend filter)
-    getLeads({ limit: 200 }).then(r => setLeads(r.leads || [])).catch(() => {});
     if (canManage) {
       getUsers({ role: 'sales' }).then(r => setSalesUsers(r.results || [])).catch(() => {});
     }
   }, [canManage]);
 
+  useEffect(() => {
+    if (location.state?.leadId) {
+      const ld = location.state.leadData || {};
+      setForm({
+        ...EMPTY,
+        lead: location.state.leadId,
+        assignedTo: location.state.assignedTo || '',
+        title: ld.name || '',
+        phone: ld.phone || '',
+        problem: ld.problem || '',
+        description: ld.description || '',
+        age: ld.age || '',
+        weight: ld.weight || '',
+        height: ld.height || '',
+        cityVillageType: ld.cityVillageType || 'city',
+        cityVillage: ld.cityVillage || '',
+        houseNo: ld.houseNo || '',
+        postOffice: ld.postOffice || '',
+        district: ld.district || '',
+        landmark: ld.landmark || '',
+        pincode: ld.pincode || '',
+        state: ld.state || '',
+        otherProblems: ld.otherProblems || '',
+        problemDuration: ld.problemDuration || '',
+        price: ld.price || '',
+      });
+      setError('');
+      setModal('create');
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state?.leadId]);
+
   const openCreate = () => { setForm(EMPTY); setError(''); setPincodeData([]); setModal('create'); };
   const openEdit = (task) => {
-    setSelected(task);
     // Parse phone from description if task.phone is missing (legacy format: "Phone: xxx | rest")
     let phone = task.phone || '';
     let description = task.description || '';
@@ -132,19 +152,6 @@ export default function Tasks() {
       otherProblems: task.otherProblems || '', problemDuration: task.problemDuration || '', price: task.price || '', phone });
     setError(''); setModal('edit');
   };
-
-  const openDetail = async (task) => {
-    setSelected(task);
-    setModal('detail');
-    try {
-      const res = await API.get(`/tasks/${task._id}`);
-      setSelected(res.data.data);
-    } catch { /* use list data */ }
-  };
-
-  const [noteText, setNoteText] = useState('');
-  const [pincodeData, setPincodeData] = useState([]);
-  const [pincodeLoading, setPincodeLoading] = useState(false);
 
   const handlePincodeChange = async (val) => {
     setForm(f => ({ ...f, pincode: val, postOffice: '', district: '', state: '' }));
@@ -182,408 +189,487 @@ export default function Tasks() {
       if (!payload.lead) delete payload.lead;
       if (!payload.assignedTo) delete payload.assignedTo;
       if (!payload.reminderAt) delete payload.reminderAt;
-      if (modal === 'edit') {
-        await updateTask(selected._id, payload);
-        const leadId = selected.lead?._id || selected.lead;
-        if (payload.status === 'cancel_call') {
-          if (leadId) await updateLead(leadId, { status: 'closed_lost' }).catch(() => {});
-          setModal(null);
-          navigate('/pipeline', { state: { filter: 'closed_lost' } });
-          return;
-        } else if (payload.status === 'interested') {
-          if (leadId) await updateLead(leadId, { status: 'interested' }).catch(() => {});
-          setModal(null);
-          navigate('/pipeline', { state: { filter: 'interested' } });
-          return;
-        } else if (payload.status === 'cnp') {
-          if (leadId) await updateLead(leadId, { cnp: true }).catch(() => {});
-          setModal(null);
-          navigate('/cnp');
-          return;
-        }
-      } else {
+
+      if (modal === 'create') {
         await createTask(payload);
         if (location.state?.cnpId) {
           await deleteCnpRecord(location.state.cnpId).catch(() => {});
+          if (payload.lead) await updateLead(payload.lead, { cnp: false }).catch(() => {});
         }
-        if (location.state?.afterCreateStatus && location.state?.leadId) {
-          await updateLead(location.state.leadId, { status: location.state.afterCreateStatus }).catch(() => {});
-        }
-        window.history.replaceState({}, document.title);
+      } else {
+        await updateTask(selected._id, payload);
       }
+
+      const leadId = form.lead || (selected?.lead?._id || selected?.lead);
+      if (leadId) {
+        if (payload.status === 'interested') {
+          await updateLead(leadId, { status: 'interested' }).catch(() => {});
+        } else if (payload.status === 'cancel_call') {
+          await updateLead(leadId, { status: 'closed_lost' }).catch(() => {});
+        } else if (payload.status === 'cnp') {
+          await updateLead(leadId, { cnp: true }).catch(() => {});
+          setModal(null); navigate('/cnp'); return;
+        } else if (payload.status === 'cancelled') {
+          await updateLead(leadId, { status: 'on_hold' }).catch(() => {});
+          setModal(null); navigate('/pipeline', { state: { filter: 'on_hold' } }); return;
+        }
+      }
+
       setModal(null);
-      if (modal === 'create') setTab('all');
+      if (location.state?.leadId) { navigate('/pipeline'); return; }
       load();
     } catch (err) { setError(err.response?.data?.message || 'Something went wrong'); }
     finally { setLoading(false); }
   };
 
-  const handleComplete = async (id) => { await updateTask(id, { status: 'completed' }).catch(() => {}); load(); };
-  const handleLeadStatus = async (leadId, status) => { await updateLead(leadId, { status }).catch(() => {}); load(); };
+  const handleComplete = async (id) => { 
+    await updateTask(id, { status: 'completed' }).catch(() => {}); 
+    load();
+    if (selected?._id === id) {
+      setSelected(prev => ({ ...prev, status: 'completed' }));
+    }
+  };
+  
   const handleDelete = async (id) => {
     if (!confirm('Delete this task?')) return;
-    await deleteTask(id).catch(() => {}); load();
+    await deleteTask(id).catch(() => {}); 
+    setSelected(null);
+    load();
   };
+
+  const filteredItems = useMemo(() => {
+    const items = (tab === 'daily' ? daily : tasks).filter(t => !['cnp', 'verification', 'interested', 'cancel_call', 'cancelled'].includes(t.status));
+    if (!search) return items;
+    const q = search.toLowerCase();
+    return items.filter(task => 
+      task.title?.toLowerCase().includes(q) || 
+      task.lead?.name?.toLowerCase().includes(q) ||
+      task.phone?.includes(q)
+    );
+  }, [tab, tasks, daily, search]);
 
   if (pageLoading) return (
     <div className="flex items-center justify-center h-64">
-      <div className="flex items-center gap-3 text-gray-400">
-        <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-        Loading tasks...
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-10 h-10 border-[3px] border-emerald-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-gray-400 font-medium">Loading tasks...</p>
       </div>
     </div>
   );
 
-  const displayed = (tab === 'daily' ? daily : tasks).filter(t => !['cnp', 'verification', 'interested', 'cancel_call'].includes(t.status));
-
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Tasks & Follow-ups</h2>
-        </div>
-        <button onClick={openCreate}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
-            style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
-            <span className="text-base leading-none">+</span> Add Task
-          </button>
-      </div>
+    <div className="flex gap-4 scroll-container-h overflow-hidden animate-slide-up mobile-p-safe">
+      {/* ── LEFT PANEL ── */}
+      <div className={`flex flex-col gap-4 transition-all duration-300 ${selected ? 'w-full lg:w-[55%]' : 'w-full'} h-full overflow-hidden`}>
+        
+        {/* Header & Filters */}
+        <div className="flex flex-col gap-5 shrink-0 glass p-5 rounded-2xl border border-white/50 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg bg-gradient-to-br from-emerald-500 to-emerald-600">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              </div>
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Tasks & Follow-ups</h2>
+                <p className="text-[11px] text-gray-400 font-medium mt-0.5">Manage your daily schedule and leads</p>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+                <button onClick={() => { setTab("all"); setSelected(null); }}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${tab === "all" ? "bg-white text-emerald-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                  All
+                </button>
+                <button onClick={() => { setTab("daily"); setSelected(null); }}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${tab === "daily" ? "bg-white text-emerald-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                  Today
+                </button>
+              </div>
+              <button onClick={openCreate}
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white shadow-md hover:shadow-lg transition-all"
+                style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+                + New Task
+              </button>
+            </div>
+          </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-        {[['all', 'All Tasks'], ['daily', "Today"]].map(([key, label]) => (
-          <button key={key} onClick={() => setTab(key)}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${tab === key ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            {label}
-            {key === 'daily' && daily.length > 0 && (
-              <span className="ml-1.5 bg-orange-100 text-orange-600 text-xs px-1.5 py-0.5 rounded-full font-bold">{daily.length}</span>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+              </svg>
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search name, phone, task..."
+                className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-100 bg-white text-sm font-medium text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/20 focus:border-emerald-400 transition shadow-sm"
+              />
+            </div>
+            {tab === 'all' && (
+              <div className="flex gap-2">
+                <select value={filters.type} onChange={(e) => setFilters(f => ({ ...f, type: e.target.value }))}
+                  className="border border-gray-100 rounded-xl px-4 py-2 text-xs bg-white font-bold text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-400 shadow-sm min-w-[120px]">
+                  <option value="">All Types</option>
+                  {TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
+                </select>
+              </div>
             )}
-          </button>
-        ))}
+          </div>
+        </div>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+          {filteredItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-dashed border-gray-200">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-300 flex items-center justify-center mb-3">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              </div>
+              <p className="text-gray-500 text-sm font-medium">No active tasks found</p>
+            </div>
+          ) : (
+            <div className="space-y-2 pb-4">
+              {filteredItems.map((task, i) => {
+                const color = PIN_COLORS[i % PIN_COLORS.length];
+                const isActive = selected?._id === task._id;
+                const isCompleted = task.status === 'completed';
+                
+                return (
+                  <div key={task._id} onClick={() => setSelected(isActive ? null : task)}
+                    className={`relative flex items-center gap-4 px-4 py-3.5 rounded-2xl cursor-pointer transition-all duration-200 border
+                      ${isActive
+                        ? 'bg-emerald-50 border-emerald-200 shadow-sm'
+                        : 'bg-white border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/30'}`}>
+                    
+                    <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${isCompleted ? 'bg-gray-300' : 'bg-emerald-500'}`} />
+                    
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0 ${isCompleted ? 'bg-gray-300' : color}`}>
+                      {initials(task.lead?.name || task.title)}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className={`text-sm font-bold text-gray-800 truncate ${isCompleted ? 'line-through text-gray-400' : ''}`}>{task.title}</p>
+                        {isCompleted && (
+                          <span className="bg-emerald-100 text-emerald-600 text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase">Done</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-gray-400 font-medium">{task.lead?.name || 'No Lead'}</span>
+                        <span className="text-xs text-gray-300">•</span>
+                        <span className="text-[10px] text-gray-400 font-bold uppercase">{task.type.replace(/_/g, ' ')}</span>
+                      </div>
+                    </div>
+
+                    <div className="hidden sm:flex flex-col items-end gap-1 shrink-0">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        {new Date(task.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      </span>
+                      {task.assignedTo?.name && (
+                        <span className="text-[10px] text-gray-400 font-medium">For {task.assignedTo.name}</span>
+                      )}
+                    </div>
+
+                    <svg className={`w-4 h-4 text-gray-300 transition-transform ${isActive ? 'rotate-90 text-emerald-400' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path d="m9 18 6-6-6-6" />
+                    </svg>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Filters */}
-      {tab === 'all' && (
-        <div className="flex justify-end">
-          <select value={filters.type} onChange={(e) => setFilters(f => ({ ...f, type: e.target.value }))}
-            className="w-fit border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-400 shadow-sm">
-            <option value="">All Types</option>
-            {TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
-          </select>
+      {/* ── RIGHT DETAIL PANEL ── */}
+      {selected && (
+        <div className="hidden lg:flex flex-col w-[45%] bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden h-full">
+          <div className={`h-1.5 shrink-0 ${selected.status === 'completed' ? 'bg-gray-300' : 'bg-emerald-500'}`} />
+          
+          <div className="px-5 py-4 flex items-center justify-between border-b border-gray-50 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold ${selected.status === 'completed' ? 'bg-gray-300' : PIN_COLORS[filteredItems.findIndex(i => i._id === selected._id) % PIN_COLORS.length]}`}>
+                {initials(selected.lead?.name || selected.title)}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-800 leading-tight truncate max-w-[200px]">{selected.title}</p>
+                <p className="text-xs text-gray-400 font-medium">{selected.lead?.name || 'No lead linked'}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => openEdit(selected)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-emerald-50 hover:text-emerald-500 transition">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button onClick={() => setSelected(null)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition text-xl">×</button>
+            </div>
+          </div>
+
+          <div className="px-5 py-4 overflow-y-auto flex-1 custom-scrollbar">
+            <SectionHead label="Task Information" />
+            <div className="grid grid-cols-1 gap-1">
+              <DetailRow label="Due Date" value={new Date(selected.dueDate).toLocaleString()} />
+              <DetailRow label="Type" value={selected.type.replace(/_/g, ' ')} />
+              <DetailRow label="Priority" value={selected.priority} color={selected.priority === 'high' ? 'red' : 'gray'} />
+              <DetailRow label="Status" value={selected.status} color={selected.status === 'completed' ? 'green' : 'amber'} />
+            </div>
+
+            <SectionHead label="Contact & Lead" />
+            <div className="grid grid-cols-1 gap-1">
+              <DetailRow label="Lead Name" value={selected.lead?.name} />
+              <DetailRow label="Phone" value={selected.phone || selected.lead?.phone} />
+              <DetailRow label="Assigned To" value={selected.assignedTo?.name} />
+            </div>
+
+            <SectionHead label="Problem & Details" />
+            <div className="grid grid-cols-1 gap-1">
+              <DetailRow label="Problem" value={selected.problem} />
+              <DetailRow label="Vitals" value={selected.age || selected.weight || selected.height ? `${selected.age ? selected.age+'y ' : ''}${selected.weight ? selected.weight+'kg ' : ''}${selected.height ? selected.height+'ft' : ''}` : null} />
+              <DetailRow label="Other Problems" value={selected.otherProblems} />
+              <DetailRow label="Price" value={selected.price ? `₹${selected.price}` : null} />
+              <DetailRow label="Description" value={selected.description} />
+            </div>
+
+            <SectionHead label="Address" />
+            <div className="grid grid-cols-1 gap-1">
+              <DetailRow label={selected.cityVillageType === 'village' ? 'Village' : 'City'} value={selected.cityVillage} />
+              <DetailRow label="Full Address" value={[selected.houseNo, selected.landmark, selected.postOffice, selected.district, selected.pincode, selected.state].filter(Boolean).join(', ')} />
+            </div>
+
+            <div className="mt-8">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Task Activity</p>
+                <div className="flex-1 h-px bg-gray-50 ml-4" />
+              </div>
+              
+              <div className="space-y-3 mb-4">
+                {selected.notes?.length > 0 ? (
+                  [...selected.notes].reverse().map((n, i) => (
+                    <div key={i} className="p-3 rounded-xl bg-gray-50 border border-gray-100">
+                      <p className="text-xs text-gray-600 leading-relaxed font-medium">{n.text}</p>
+                      <p className="text-[9px] text-gray-400 mt-2 font-bold uppercase tracking-tight">{new Date(n.createdAt).toLocaleString()}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-gray-400 italic text-center py-4">No notes yet</p>
+                )}
+              </div>
+
+              <div className="p-3 rounded-2xl bg-gray-50 border border-gray-100">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Add Note</p>
+                <textarea value={noteText} onChange={e => setNoteText(e.target.value)} rows={2}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 transition mb-2"
+                  placeholder="Type updates here..." />
+                <button onClick={handleAddNote} disabled={!noteText.trim()}
+                  className="w-full py-2 bg-emerald-500 text-white text-xs font-bold rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition shadow-sm">
+                  Save Note
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-5 py-4 border-t border-gray-50 bg-white shrink-0">
+            <div className="grid grid-cols-2 gap-2">
+              {selected.status !== 'completed' && (
+                <button onClick={() => handleComplete(selected._id)}
+                  className="py-3 rounded-xl text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 transition shadow-md shadow-emerald-100">
+                  Mark Completed
+                </button>
+              )}
+              {selected.status === 'completed' && (
+                <div className="flex items-center justify-center bg-emerald-50 text-emerald-600 rounded-xl py-3 text-xs font-bold">
+                  ✓ Task Finished
+                </div>
+              )}
+              {canManage && (
+                <button onClick={() => handleDelete(selected._id)}
+                  className="py-3 rounded-xl text-xs font-bold text-gray-400 bg-gray-50 hover:bg-red-50 hover:text-red-500 transition">
+                  Delete Task
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
-      {loadError && <div className="bg-red-50 border border-red-100 text-red-600 text-sm p-3 rounded-xl">{loadError}</div>}
-
-      {/* Task List */}
-      <div className="space-y-2">
-        {displayed.length === 0 && (
-          <div className="bg-white rounded-2xl p-12 text-center shadow-sm" style={{ border: '1px solid rgba(0,0,0,0.05)' }}>
-            <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-3 text-gray-400">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-          </div>
-            <p className="text-gray-400 text-sm">No tasks found</p>
-          </div>
-        )}
-        {displayed.map(task => {
-          const s = STATUS_STYLE[task.status] || STATUS_STYLE.pending;
-          return (
-            <div key={task._id} className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden"
-              style={{ border: '1px solid rgba(0,0,0,0.05)' }}>
-              <div className={`h-1 ${s.bar}`} />
-              <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-start gap-2">
-                <div className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center shrink-0`}>
-                  {TYPE_SVG[task.type] || TYPE_SVG.task}
+      {/* Mobile Modal Detail */}
+      {selected && (
+        <div className="lg:hidden">
+          <Modal hideHeader={true} onClose={() => setSelected(null)}>
+            <div className="flex flex-col h-[80vh]">
+              <div className="-mx-4 -mt-4 mb-5 px-6 py-8 rounded-b-3xl relative bg-gradient-to-br from-emerald-900 to-emerald-800">
+                <button onClick={() => setSelected(null)} className="absolute right-4 top-4 w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-white text-xl">×</button>
+                <div className="flex items-center gap-4">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold text-white shadow-xl ${selected.status === 'completed' ? 'bg-gray-400' : PIN_COLORS[filteredItems.findIndex(i => i._id === selected._id) % PIN_COLORS.length]}`}>
+                    {initials(selected.lead?.name || selected.title)}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className={`text-white font-bold text-lg tracking-tight truncate ${selected.status === 'completed' ? 'line-through opacity-60' : ''}`}>{selected.title}</h3>
+                    <p className="text-white/60 text-sm font-medium">{selected.lead?.name}</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`font-semibold text-sm text-gray-800 ${task.status === 'completed' ? 'line-through text-gray-400' : ''}`}>
-                      {task.title.replace(/^call\s+/i, '')}
-                    </span>
-                    <Badge value={task.status} />
-                    {task.lead?.status && (task.lead.status === 'new' || task.lead.status === 'old') && (
-                      <Badge value={task.lead.status} />
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-1 space-y-0 custom-scrollbar">
+                 <SectionHead label="Task Information" />
+                 <DetailRow label="Due Date" value={new Date(selected.dueDate).toLocaleString()} />
+                 <DetailRow label="Type" value={selected.type.replace(/_/g, ' ')} />
+                 <DetailRow label="Status" value={selected.status} color={selected.status === 'completed' ? 'green' : 'amber'} />
+                 
+                 <SectionHead label="Lead & Phone" />
+                 <DetailRow label="Phone" value={selected.phone || selected.lead?.phone} />
+                 <DetailRow label="Address" value={[selected.houseNo, selected.cityVillage, selected.district, selected.pincode].filter(Boolean).join(', ')} />
+                 
+                 <SectionHead label="Activity" />
+                 <div className="space-y-3 pb-6">
+                    {selected.notes?.length > 0 ? (
+                      selected.notes.map((n, i) => (
+                        <div key={i} className="p-3 rounded-xl bg-gray-50 border border-gray-100">
+                          <p className="text-xs text-gray-600 font-medium">{n.text}</p>
+                          <p className="text-[9px] text-gray-400 mt-2 font-bold uppercase">{new Date(n.createdAt).toLocaleString()}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-gray-400 italic text-center">No notes yet</p>
                     )}
-                  </div>
-                  {task.lead?.name && (
-                    <p className="text-xs text-gray-500 mt-0.5">{task.lead.name}</p>
-                  )}
+                 </div>
+              </div>
 
-                </div>
-                <div className="flex flex-wrap gap-1 items-center">
-                  <button onClick={() => openDetail(task)}
-                    className="text-xs font-semibold px-2 py-1.5 rounded-xl text-white transition"
-                    style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>View</button>
-                  {task.status === 'pending' && (
-                    <button onClick={() => handleComplete(task._id)}
-                      className="text-xs font-medium px-2 py-1.5 rounded-xl bg-green-50 text-green-700 hover:bg-green-100 transition">✓</button>
-                  )}
-                  <button onClick={() => openEdit(task)}
-                    className="text-xs font-medium px-2 py-1.5 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition">Edit</button>
-                  {canManage && (
-                    <button onClick={() => handleDelete(task._id)}
-                      className="text-xs font-medium px-2 py-1.5 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition">Del</button>
-                  )}
+              <div className="pt-4 pb-2 flex flex-col gap-2">
+                {selected.status !== 'completed' && (
+                  <button onClick={() => handleComplete(selected._id)}
+                    className="w-full py-4 rounded-xl text-sm font-bold text-white bg-emerald-500 shadow-lg">Complete Task</button>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => openEdit(selected)} className="py-4 rounded-xl text-sm font-bold bg-gray-100 text-gray-600">Edit</button>
+                  {canManage && <button onClick={() => handleDelete(selected._id)} className="py-4 rounded-xl text-sm font-bold bg-red-50 text-red-500">Delete</button>}
                 </div>
               </div>
             </div>
-          );
-        })}
-      </div>
-
-      {/* Detail Modal */}
-      {modal === 'detail' && selected && (
-        <Modal title="" onClose={() => setModal(null)}>
-          {/* Header */}
-          <div className="-mx-6 -mt-5 mb-5 px-6 py-5 rounded-t-2xl"
-            style={{ background: 'linear-gradient(135deg, #0d1f0d, #1a3a1a)' }}>
-            <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${
-                selected.status === 'overdue' ? 'bg-red-500' :
-                selected.status === 'completed' ? 'bg-green-500' : 'bg-amber-500'
-              }`}>
-                <span className="text-white">{TYPE_SVG[selected.type] || TYPE_SVG.task}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className={`text-white font-bold text-base tracking-tight ${selected.status === 'completed' ? 'line-through opacity-60' : ''}`}>
-                  {selected.title}
-                </h3>
-                <div className="flex gap-2 mt-1">
-                  <Badge value={selected.status} />
-                  <Badge value={selected.priority} />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Fields */}
-          <div className="space-y-0">
-            {[
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>, label: 'Due Date', value: new Date(selected.dueDate).toLocaleString() },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>, label: 'Type', value: selected.type?.replace(/_/g, ' ') },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, label: 'Assigned To', value: selected.assignedTo?.name },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>, label: 'Lead', value: selected.lead?.name },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>, label: 'Description', value: selected.description },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, label: 'Problem', value: selected.problem },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, label: 'Age', value: selected.age ? `${selected.age} yrs` : null },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>, label: 'Weight', value: selected.weight ? `${selected.weight} kg` : null },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>, label: 'Height', value: selected.height ? `${selected.height} ft` : null },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>, label: 'Other Problems', value: selected.otherProblems },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>, label: 'Problem Duration', value: selected.problemDuration },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>, label: 'Price', value: selected.price ? `₹${selected.price}` : null },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: selected.cityVillageType === 'village' ? 'Village' : 'City', value: selected.cityVillage },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'House No', value: selected.houseNo },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'Post Office', value: selected.postOffice },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'District', value: selected.district },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'Landmark', value: selected.landmark },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'Pincode', value: selected.pincode },
-              { icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>, label: 'Reminder', value: selected.reminderAt ? new Date(selected.reminderAt).toLocaleString() : null },
-            ].filter(f => f.value).map(({ icon, label, value }) => (
-              <div key={label} className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
-                <div className="w-8 h-8 rounded-lg bg-green-50 text-green-600 flex items-center justify-center shrink-0 mt-0.5">
-                  {icon}
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">{label}</p>
-                  <p className="text-sm text-gray-800 font-medium capitalize">{value}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Actions */}
-          {selected.status === 'pending' && (
-            <button onClick={() => { handleComplete(selected._id); setModal(null); }}
-              className="w-full mt-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition"
-              style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
-              Mark as Complete
-            </button>
-          )}
-
-          {/* Notes */}
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Notes</p>
-            {selected.notes?.length > 0 ? (
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {[...selected.notes].reverse().map((n, i) => (
-                  <div key={i} className="rounded-xl px-3 py-2.5"
-                    style={{ background: 'linear-gradient(135deg, #f0fdf4, #f7fef7)', border: '1px solid rgba(22,163,74,0.1)' }}>
-                    <p className="text-sm text-gray-700">{n.text}</p>
-                    <p className="text-xs text-gray-400 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-gray-400 italic">No notes yet</p>
-            )}
-          </div>
-        </Modal>
+          </Modal>
+        </div>
       )}
 
       {/* Create/Edit Modal */}
       {(modal === 'create' || modal === 'edit') && (
-        <Modal title={modal === 'edit' ? 'Edit Task' : 'New Task'} onClose={() => setModal(null)}>
+        <Modal
+          title={modal === 'edit' ? 'Edit Task' : 'New Task'}
+          onClose={() => setModal(null)}
+          footer={
+            <div className="flex gap-3">
+              <button type="submit" form="task-form" disabled={loading}
+                className="flex-1 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-60 shadow-md transition"
+                style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+                {loading ? 'Saving...' : modal === 'edit' ? 'Update Task' : 'Create Task'}
+              </button>
+              <button type="button" onClick={() => setModal(null)}
+                className="flex-1 border border-gray-200 hover:bg-gray-50 py-3 rounded-xl text-sm font-bold text-gray-500 transition">Cancel</button>
+            </div>
+          }>
           {error && <div className="bg-red-50 border border-red-100 text-red-600 text-sm p-3 rounded-xl mb-4">{error}</div>}
-          <form onSubmit={handleSubmit} className="space-y-3">
-            {/* Row 1: Title + Confirmation Call Date */}
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Name *</label>
-                <input required className={`${inputCls} mt-1.5`} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
-              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Phone</label>
-                <input className={`${inputCls} mt-1.5`} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+          <form id="task-form" onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Task Name *</label>
+                <input required className={`${inputCls} mt-1`} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Phone</label>
+                <input className={`${inputCls} mt-1`} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
             </div>
 
-            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Confirmation Call Date</label>
-              <input type="date" className={`${inputCls} mt-1.5`} value={form.reminderAt ? form.reminderAt.slice(0, 10) : ''} onChange={(e) => setForm({ ...form, reminderAt: e.target.value })} /></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Due Date *</label>
+                <input required type="datetime-local" className={`${inputCls} mt-1`} value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></div>
+              {canManage && (
+                <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Assign To</label>
+                  <select className={`${inputCls} mt-1`} value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}>
+                    <option value="">Auto-assign</option>
+                    {salesUsers.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
+                  </select></div>
+              )}
+            </div>
 
-            {/* Assign To — only admin/manager can assign to a specific staff */}
-            {canManage && (
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Assign To</label>
-                <select className={`${inputCls} mt-1.5`} value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}>
-                  <option value="">Auto-assign</option>
-                  {salesUsers.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
-                </select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Type</label>
+                <select className={`${inputCls} mt-1`} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                  {TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
+                </select></div>
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Priority</label>
+                <select className={`${inputCls} mt-1`} value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+                  {['low', 'medium', 'high'].map(p => <option key={p} value={p}>{p}</option>)}
+                </select></div>
+            </div>
+
+            <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Problem</label>
+              <textarea rows={1} className={`${inputCls} mt-1`} value={form.problem} onChange={(e) => setForm({ ...form, problem: e.target.value })} /></div>
+            
+            <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Vitals (Age / Wt / Ht)</label>
+              <div className="grid grid-cols-3 gap-2 mt-1">
+                <input type="number" placeholder="Age" className={inputCls} value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} />
+                <input type="number" placeholder="Kg" className={inputCls} value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} />
+                <input type="number" step="0.1" placeholder="Ft" className={inputCls} value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} />
               </div>
-            )}
-
-            {/* Description and Problem */}
-            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Problem</label>
-              <textarea rows={2} className={`${inputCls} mt-1.5 mb-3`} value={form.problem} onChange={(e) => setForm({ ...form, problem: e.target.value })} /></div>
-            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</label>
-              <textarea rows={2} className={`${inputCls} mt-1.5`} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-
-            {/* Age, Weight, Height */}
-            <div className="grid grid-cols-3 gap-3">
-              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Age</label>
-                <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Age" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} /></div>
-              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Weight (kg)</label>
-                <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Weight" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} /></div>
-              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Height (feet)</label>
-                <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Height" value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} /></div>
             </div>
 
-            {/* Other Problems */}
-            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Other Problems</label>
-              <textarea rows={2} className={`${inputCls} mt-1.5`} placeholder="Any other health issues..." value={form.otherProblems} onChange={(e) => setForm({ ...form, otherProblems: e.target.value })} /></div>
-
-            {/* Problem Duration */}
-            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Problem Duration</label>
-              <input className={`${inputCls} mt-1.5`} placeholder="e.g. 2 years, 6 months" value={form.problemDuration} onChange={(e) => setForm({ ...form, problemDuration: e.target.value })} /></div>
-
-            {/* Price */}
-            <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Price</label>
-              <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Price" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></div>
-
-            {/* City/Village toggle + input */}
-            <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">City / Village</label>
-              <div className="flex items-center gap-3 mt-1.5 mb-1.5">
-                <span className={`text-xs font-semibold transition ${form.cityVillageType === 'city' ? 'text-green-600' : 'text-gray-400'}`}>City</span>
-                <div onClick={() => setForm({ ...form, cityVillageType: form.cityVillageType === 'city' ? 'village' : 'city' })}
-                  className="relative w-12 h-6 rounded-full cursor-pointer transition-colors duration-300"
-                  style={{ background: form.cityVillageType === 'village' ? '#16a34a' : '#d1d5db' }}>
-                  <span className="absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-300"
-                    style={{ left: form.cityVillageType === 'village' ? '28px' : '4px' }} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Price</label>
+                <input type="number" className={`${inputCls} mt-1`} placeholder="₹" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></div>
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Location Type</label>
+                <div className="flex items-center gap-4 mt-2">
+                  <span className={`text-xs font-bold ${form.cityVillageType === 'city' ? 'text-emerald-600' : 'text-gray-400'}`}>City</span>
+                  <div onClick={() => setForm({ ...form, cityVillageType: form.cityVillageType === 'city' ? 'village' : 'city' })}
+                    className="relative w-11 h-5.5 rounded-full cursor-pointer bg-gray-200 transition-all"
+                    style={{ background: form.cityVillageType === 'village' ? '#10b981' : '#d1d5db' }}>
+                    <span className="absolute top-0.5 w-4.5 h-4.5 bg-white rounded-full shadow-sm transition-all"
+                      style={{ left: form.cityVillageType === 'village' ? '24px' : '2px' }} />
+                  </div>
+                  <span className={`text-xs font-bold ${form.cityVillageType === 'village' ? 'text-emerald-600' : 'text-gray-400'}`}>Village</span>
                 </div>
-                <span className={`text-xs font-semibold transition ${form.cityVillageType === 'village' ? 'text-green-600' : 'text-gray-400'}`}>Village</span>
               </div>
-              <input className={`${inputCls}`} placeholder={`Enter ${form.cityVillageType} name`} value={form.cityVillage} onChange={(e) => setForm({ ...form, cityVillage: e.target.value })} />
             </div>
 
-            {/* Row: House No + Post Office */}
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">House No</label>
-                <input className={`${inputCls} mt-1.5`} placeholder="House No" value={form.houseNo} onChange={(e) => setForm({ ...form, houseNo: e.target.value })} /></div>
-              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Post Office</label>
-                <input className={`${inputCls} mt-1.5`} placeholder="Post Office" value={form.postOffice} onChange={(e) => setForm({ ...form, postOffice: e.target.value })} /></div>
+            <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Address Details</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                <input placeholder={`Enter ${form.cityVillageType} name`} className={inputCls} value={form.cityVillage} onChange={(e) => setForm({ ...form, cityVillage: e.target.value })} />
+                <div className="grid grid-cols-2 gap-2">
+                  <input placeholder="H.No" className={inputCls} value={form.houseNo} onChange={(e) => setForm({ ...form, houseNo: e.target.value })} />
+                  <input placeholder="P.O." className={inputCls} value={form.postOffice} onChange={(e) => setForm({ ...form, postOffice: e.target.value })} />
+                </div>
+              </div>
             </div>
 
-            {/* Row: District + Landmark */}
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">District</label>
-                <input className={`${inputCls} mt-1.5`} placeholder="District" value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} /></div>
-              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Landmark</label>
-                <input className={`${inputCls} mt-1.5`} placeholder="Landmark" value={form.landmark} onChange={(e) => setForm({ ...form, landmark: e.target.value })} /></div>
-            </div>
-
-            {/* Pincode + State */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pincode</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
+                <input placeholder="Dist" className={inputCls} value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} />
                 <div className="relative">
-                  <input className={`${inputCls} mt-1.5`} placeholder="Pincode" maxLength={6} value={form.pincode}
-                    onChange={(e) => handlePincodeChange(e.target.value)} />
-                  {pincodeLoading && <span className="absolute right-3 top-4 text-xs text-gray-400">...</span>}
+                  <input placeholder="Pin" className={inputCls} value={form.pincode} maxLength={6} onChange={(e) => handlePincodeChange(e.target.value)} />
+                  {pincodeLoading && <span className="absolute right-3 top-2.5 text-xs text-gray-400">...</span>}
+                  {pincodeData.length > 0 && (
+                    <select className={`${inputCls} mt-1`} value={form.postOffice}
+                      onChange={(e) => setForm(f => ({ ...f, postOffice: e.target.value }))}>
+                      <option value="">Select Post Office</option>
+                      {pincodeData.map(o => <option key={o.Name} value={o.Name}>{o.Name}</option>)}
+                    </select>
+                  )}
                 </div>
-                {pincodeData.length > 0 && (
-                  <select className={`${inputCls} mt-1`} value={form.postOffice}
-                    onChange={(e) => {
-                      const o = pincodeData.find(p => p.Name === e.target.value);
-                      setForm(f => ({ ...f, postOffice: e.target.value, district: o?.District || f.district, state: o?.State || f.state }));
-                    }}>
-                    <option value="">Select Post Office</option>
-                    {pincodeData.map(p => <option key={p.Name} value={p.Name}>{p.Name}</option>)}
-                  </select>
-                )}
               </div>
-              <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">State</label>
-                <input className={`${inputCls} mt-1.5`} placeholder="State" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} /></div>
+              <div className="grid grid-cols-2 gap-2">
+                <input placeholder="Landmark" className={inputCls} value={form.landmark} onChange={(e) => setForm({ ...form, landmark: e.target.value })} />
+                <input placeholder="State" className={inputCls} value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
+              </div>
             </div>
 
             {modal === 'edit' && (
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</label>
-                <div className="grid grid-cols-2 gap-2 mt-1.5">
-                  {STATUSES.map(({ value, label, color, hover }) => (
-                    <button key={value} type="button"
-                      onClick={() => setForm({ ...form, status: value })}
-                      className={`py-2 rounded-xl text-xs font-semibold border transition ${
-                        form.status === value
-                          ? `${color} text-white`
-                          : `bg-gray-50 text-gray-600 border-gray-200 ${hover}`
-                      }`}>
-                      {label}
-                    </button>
+              <div className="pt-2 border-t border-gray-100">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Update Status</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+                  {STATUSES.map(({ value, label, color }) => (
+                    <button key={value} type="button" onClick={() => setForm({ ...form, status: value })}
+                      className={`py-2 rounded-xl text-[11px] font-bold border transition ${
+                        form.status === value ? `${color} text-white shadow-md` : `bg-white text-gray-400 border-gray-100 hover:bg-gray-50`
+                      }`}>{label}</button>
                   ))}
                 </div>
               </div>
             )}
-
-            {/* Notes section — only in edit mode */}
-            {modal === 'edit' && (
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Notes</label>
-                {selected?.notes?.length > 0 && (
-                  <div className="mt-1.5 space-y-2 max-h-32 overflow-y-auto mb-2">
-                    {[...selected.notes].reverse().map((n, i) => (
-                      <div key={i} className="bg-gray-50 rounded-xl px-3 py-2" style={{ border: '1px solid rgba(0,0,0,0.05)' }}>
-                        <p className="text-sm text-gray-700">{n.text}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{new Date(n.createdAt).toLocaleString()}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="flex gap-2 mt-1.5">
-                  <input placeholder="Add a note and press Enter..."
-                    className={`${inputCls} flex-1`}
-                    value={noteText}
-                    onChange={(e) => setNoteText(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddNote(); } }}
-                  />
-                </div>
-              </div>
-            )}
-            <div className="flex gap-3 pt-2">
-              <button type="submit" disabled={loading}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-60 shadow-md hover:shadow-lg transition"
-                style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
-                {loading ? 'Saving...' : modal === 'edit' ? 'Update' : 'Create'}
-              </button>
-              <button type="button" onClick={() => setModal(null)}
-                className="flex-1 border border-gray-200 hover:bg-gray-50 py-2.5 rounded-xl text-sm font-medium text-gray-600 transition">Cancel</button>
-            </div>
           </form>
         </Modal>
       )}

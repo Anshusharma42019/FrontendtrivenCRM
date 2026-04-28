@@ -45,49 +45,49 @@ function AttendanceCalendar({ records, year, month, onChangeMonth }) {
   records.forEach(r => { if (counts[r.status] !== undefined) counts[r.status]++; });
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.05)' }}>
+    <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
       {/* Month nav */}
-      <div className="flex items-center justify-between px-5 py-3" style={{ background: 'linear-gradient(135deg, #0d1f0d, #1a3a1a)' }}>
-        <button onClick={() => onChangeMonth(-1)} className="w-8 h-8 flex items-center justify-center rounded-lg text-green-300 hover:bg-white/10 transition">
+      <div className="relative flex items-center justify-center px-4 py-3" style={{ background: 'linear-gradient(135deg, #0d1f0d, #1a3a1a)' }}>
+        <button onClick={() => onChangeMonth(-1)} className="absolute left-3 w-8 h-8 flex items-center justify-center rounded-lg text-green-300 hover:bg-white/10 transition">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
         </button>
-        <span className="text-white font-semibold text-sm">{MONTHS[month]} {year}</span>
-        <button onClick={() => onChangeMonth(1)} className="w-8 h-8 flex items-center justify-center rounded-lg text-green-300 hover:bg-white/10 transition">
+        <span className="text-white font-bold text-sm sm:text-base tracking-tight">{MONTHS[month]} {year}</span>
+        <button onClick={() => onChangeMonth(1)} className="absolute right-3 w-8 h-8 flex items-center justify-center rounded-lg text-green-300 hover:bg-white/10 transition">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
         </button>
       </div>
-
+ 
       {/* Summary */}
-      <div className="grid grid-cols-4 gap-2 px-4 py-3 border-b border-gray-100">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-3 py-3 border-b border-gray-50">
         {Object.entries(STATUS_COLORS).map(([key, c]) => (
-          <div key={key} className="text-center rounded-xl py-1.5" style={{ background: c.bg, border: `1px solid ${c.border}` }}>
-            <p className="text-lg font-bold" style={{ color: c.text }}>{counts[key]}</p>
-            <p className="text-[10px] text-gray-500">{c.label}</p>
+          <div key={key} className="flex flex-col items-center justify-center text-center rounded-xl py-3 border shadow-sm" 
+            style={{ background: c.bg, borderColor: c.border + '40' }}>
+            <p className="text-base sm:text-lg font-extrabold leading-tight" style={{ color: c.text }}>{counts[key]}</p>
+            <p className="text-[9px] sm:text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">{c.label}</p>
           </div>
         ))}
       </div>
-
+ 
       {/* Day headers */}
-      <div className="grid grid-cols-7 px-4 pt-2">
+      <div className="grid grid-cols-7 px-3 pt-2">
         {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
-          <div key={d} className="text-center text-[10px] font-semibold text-gray-400 uppercase pb-1">{d}</div>
+          <div key={d} className="text-center text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase pb-1">{d}</div>
         ))}
       </div>
-
+ 
       {/* Days */}
-      <div className="grid grid-cols-7 gap-1 px-4 pb-4">
+      <div className="grid grid-cols-7 gap-1 px-2.5 pb-4">
         {days.map((day, i) => {
-          if (!day) return <div key={`e${i}`} />;
+          if (!day) return <div key={`e${i}`} className="aspect-square" />;
           const key = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
           const rec = map[key];
           const isToday = key === todayKey;
           const sc = rec ? STATUS_COLORS[rec.status] : null;
           return (
-            <div key={i} className={`relative text-center py-1.5 rounded-xl text-xs font-medium transition ${isToday ? 'ring-2 ring-green-400 ring-offset-1' : ''}`}
-              style={sc ? { background: sc.bg, color: sc.text } : { color: '#9ca3af' }}
-              title={rec ? `${sc?.label} | In: ${formatTime(rec.checkIn)} | Out: ${formatTime(rec.checkOut)}` : ''}>
+            <div key={i} className={`relative aspect-square flex items-center justify-center rounded-xl text-[11px] sm:text-xs font-bold transition shadow-sm ${isToday ? 'ring-2 ring-green-400 ring-offset-1' : ''}`}
+              style={sc ? { background: sc.bg, color: sc.text, border: `1px solid ${sc.border}40` } : { background: '#f9fafb', color: '#9ca3af', border: '1px solid rgba(0,0,0,0.02)' }}>
               {day}
-              {rec && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full" style={{ background: sc?.text }} />}
+              {rec && <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full" style={{ background: sc?.text }} />}
             </div>
           );
         })}
@@ -167,14 +167,14 @@ function StaffAttendance() {
         </div>
         <div className="p-6">
           {/* Status pills */}
-          <div className="flex gap-4 mb-5">
-            <div className="flex-1 rounded-2xl p-4 text-center" style={{ background: checkedIn ? '#f0fdf4' : '#f9fafb', border: `1px solid ${checkedIn ? '#bbf7d0' : '#e5e7eb'}` }}>
-              <p className={`text-xl font-bold ${checkedIn ? 'text-green-600' : 'text-gray-300'}`}>{checkedIn ? formatTime(todayRec.checkIn) : '—:—'}</p>
-              <p className="text-[11px] text-gray-500 mt-0.5">Check In</p>
+          <div className="flex flex-row gap-3 sm:gap-4 mb-5">
+            <div className="flex-1 rounded-2xl p-4 text-center bg-white shadow-sm border border-gray-100" style={checkedIn ? { background: '#f0fdf4', borderColor: '#bbf7d0' } : {}}>
+              <p className={`text-xl sm:text-2xl font-black ${checkedIn ? 'text-green-600' : 'text-gray-300'}`}>{checkedIn ? formatTime(todayRec.checkIn) : '--:--'}</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Check In</p>
             </div>
-            <div className="flex-1 rounded-2xl p-4 text-center" style={{ background: checkedOut ? '#f0fdf4' : '#f9fafb', border: `1px solid ${checkedOut ? '#bbf7d0' : '#e5e7eb'}` }}>
-              <p className={`text-xl font-bold ${checkedOut ? 'text-green-600' : 'text-gray-300'}`}>{checkedOut ? formatTime(todayRec.checkOut) : '—:—'}</p>
-              <p className="text-[11px] text-gray-500 mt-0.5">Check Out</p>
+            <div className="flex-1 rounded-2xl p-4 text-center bg-white shadow-sm border border-gray-100" style={checkedOut ? { background: '#f0fdf4', borderColor: '#bbf7d0' } : {}}>
+              <p className={`text-xl sm:text-2xl font-black ${checkedOut ? 'text-green-600' : 'text-gray-300'}`}>{checkedOut ? formatTime(todayRec.checkOut) : '--:--'}</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Check Out</p>
             </div>
           </div>
 
@@ -240,7 +240,8 @@ function AdminAttendance() {
         getUsers(),
         svc.getAllAttendance({ startDate: todayStart.toISOString(), endDate: todayEnd.toISOString(), limit: 200 }),
       ]);
-      setUsers(uRes?.results || []);
+      const filteredUsers = (uRes?.results || []).filter(u => u.role !== 'admin');
+      setUsers(filteredUsers);
       setRecords(aRes?.results || []);
     } catch { /* ignore */ }
     setLoading(false);
@@ -303,16 +304,22 @@ function AdminAttendance() {
       </div>
 
       {/* Quick stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: 'Total Staff', val: users.length, color: '#3b82f6', bg: '#eff6ff' },
-          { label: 'Present', val: records.filter(r => r.checkIn).length, color: '#16a34a', bg: '#f0fdf4' },
-          { label: 'Checked Out', val: records.filter(r => r.checkOut).length, color: '#ea580c', bg: '#fff7ed' },
-          { label: 'Absent', val: users.length - records.filter(r => r.checkIn).length, color: '#dc2626', bg: '#fef2f2' },
+          { label: 'Staff Total', val: users.length, color: '#3b82f6', bg: '#eff6ff', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2' },
+          { label: 'Present', val: records.filter(r => r.checkIn).length, color: '#16a34a', bg: '#f0fdf4', icon: 'M22 11.08V12a10 10 0 1 1-5.93-9.14' },
+          { label: 'Done Today', val: records.filter(r => r.checkOut).length, color: '#ea580c', bg: '#fff7ed', icon: 'M9 11l3 3L22 4' },
+          { label: 'Absent', val: users.length - records.filter(r => r.checkIn).length, color: '#dc2626', bg: '#fef2f2', icon: 'M18 6L6 18M6 6l12 12' },
         ].map(s => (
-          <div key={s.label} className="rounded-2xl p-4 text-center" style={{ background: s.bg, border: `1px solid ${s.color}20` }}>
-            <p className="text-2xl font-bold" style={{ color: s.color }}>{s.val}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+          <div key={s.label} className="relative overflow-hidden rounded-2xl p-4 bg-white border border-gray-100 shadow-sm">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: s.bg, color: s.color }}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d={s.icon}/></svg>
+              </div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-tight">{s.label}</p>
+            </div>
+            <p className="text-2xl font-black text-gray-800 tracking-tight">{s.val}</p>
+            <div className="absolute top-0 right-0 w-16 h-16 -mr-6 -mt-6 rounded-full opacity-[0.03]" style={{ background: s.color }} />
           </div>
         ))}
       </div>
@@ -359,81 +366,124 @@ function AdminAttendance() {
               </div>
             ) : commData ? (
               <>
-                {/* Grand totals */}
-                <div className="grid grid-cols-4 gap-3 mb-4">
-                  <div className="rounded-2xl p-4 text-center" style={{ background: '#eff6ff', border: '1px solid rgba(59,130,246,0.1)' }}>
-                    <p className="text-xl font-bold text-blue-600">{commData.grandTotalDeliveries}</p>
-                    <p className="text-[10px] text-blue-700 font-semibold mt-1">Deliveries</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                  <div className="rounded-2xl p-4 bg-white border border-gray-100 shadow-sm">
+                    <p className="text-2xl font-black text-blue-600">{commData.grandTotalDeliveries}</p>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Deliveries</p>
                   </div>
-                  <div className="rounded-2xl p-4 text-center" style={{ background: '#f0fdf4', border: '1px solid rgba(22,163,74,0.1)' }}>
-                    <p className="text-xl font-bold text-green-600">₹{(commData.grandTotalRevenue || 0).toLocaleString('en-IN')}</p>
-                    <p className="text-[10px] text-green-700 font-semibold mt-1">Total Revenue</p>
+                  <div className="rounded-2xl p-4 bg-white border border-gray-100 shadow-sm">
+                    <p className="text-2xl font-black text-green-600">₹{(commData.grandTotalRevenue || 0).toLocaleString('en-IN')}</p>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Revenue</p>
                   </div>
-                  <div className="rounded-2xl p-4 text-center" style={{ background: '#fffbeb', border: '1px solid rgba(245,158,11,0.1)' }}>
-                    <p className="text-xl font-bold text-amber-600">₹{(commData.grandTotalCommission || 0).toLocaleString('en-IN')}</p>
-                    <p className="text-[10px] text-amber-700 font-semibold mt-1">Total Comm.</p>
+                  <div className="rounded-2xl p-4 bg-white border border-gray-100 shadow-sm">
+                    <p className="text-2xl font-black text-amber-600">₹{(commData.grandTotalCommission || 0).toLocaleString('en-IN')}</p>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Comm.</p>
                   </div>
-                  <div className="rounded-2xl p-4 text-center" style={{ background: 'linear-gradient(135deg, #0d1f0d, #1a3a1a)', border: 'none' }}>
-                    <p className="text-xl font-bold text-green-400">₹{(commData.grandTotalPay || 0).toLocaleString('en-IN')}</p>
-                    <p className="text-[10px] text-green-300/60 font-semibold mt-1">Total Payout</p>
+                  <div className="rounded-2xl p-4 bg-gray-900 text-white shadow-xl shadow-green-900/10">
+                    <p className="text-2xl font-black text-green-400">₹{(commData.grandTotalPay || 0).toLocaleString('en-IN')}</p>
+                    <p className="text-[10px] text-green-300/50 font-bold uppercase tracking-widest mt-1">Payout</p>
                   </div>
                 </div>
 
-                {/* Per-staff table */}
-                {commData.staff?.length > 0 && (
-                  <div className="overflow-x-auto rounded-xl border border-gray-100">
-                    <table className="w-full text-[11px] sm:text-xs">
-                      <thead>
-                        <tr className="bg-gray-50 text-gray-500">
-                          <th className="text-left py-3 px-4 font-semibold uppercase tracking-wider">Staff</th>
-                          <th className="text-center py-3 px-2 font-semibold uppercase tracking-wider">Attendance</th>
-                          <th className="text-center py-3 px-2 font-semibold uppercase tracking-wider">Verified</th>
-                          <th className="text-right py-3 px-2 font-semibold uppercase tracking-wider">Base Pay</th>
-                          <th className="text-right py-3 px-2 font-semibold uppercase tracking-wider">Comm.</th>
-                          <th className="text-right py-3 px-4 font-semibold uppercase tracking-wider">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {commData.staff.map(s => (
-                          <tr key={s.user._id} className="hover:bg-gray-50/50 transition-colors">
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-2">
-                                <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${ROLE_GRADIENT[s.user.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-[10px] font-bold uppercase`}>
-                                  {s.user.name?.charAt(0)}
-                                </div>
-                                <div>
-                                  <p className="font-semibold text-gray-800">{s.user.name}</p>
+                {/* Desktop Table View */}
+                <div className="hidden sm:block overflow-x-auto rounded-xl border border-gray-100">
+                  <table className="w-full text-[11px] sm:text-xs">
+                    <thead>
+                      <tr className="bg-gray-50 text-gray-500 text-left">
+                        <th className="py-3 px-4 font-semibold uppercase tracking-wider">Staff</th>
+                        <th className="text-center py-3 px-2 font-semibold uppercase tracking-wider">Attendance</th>
+                        <th className="text-center py-3 px-2 font-semibold uppercase tracking-wider">Verified</th>
+                        <th className="text-right py-3 px-2 font-semibold uppercase tracking-wider">Base Pay</th>
+                        <th className="text-right py-3 px-2 font-semibold uppercase tracking-wider">Comm.</th>
+                        <th className="text-right py-3 px-4 font-semibold uppercase tracking-wider">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {commData.staff.map(s => (
+                        <tr key={s.user._id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${ROLE_GRADIENT[s.user.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-[10px] font-bold uppercase`}>
+                                {s.user.name?.charAt(0)}
+                              </div>
+                              <div>
+                                <p className="font-semibold text-gray-800">{s.user.name}</p>
+                                {s.user.role !== 'admin' && (
                                   <p className="text-[9px] text-gray-400">₹{s.user.baseSalary?.toLocaleString()}</p>
-                                </div>
+                                )}
                               </div>
-                            </td>
-                            <td className="text-center py-3 px-2">
-                              <div className="flex items-center justify-center gap-1">
-                                <span title="Present" className="text-green-600 font-bold">{s.attendance.present + s.attendance.late}</span>
-                                <span className="text-gray-300">/</span>
-                                <span title="Half Day" className="text-amber-500 font-bold">{s.attendance.half_day}</span>
-                              </div>
-                            </td>
-                            <td className="text-center py-3 px-2">
-                              <p className="font-bold text-blue-600">{s.verifications.verified}</p>
-                              <p className="text-[9px] text-gray-400">{s.verifications.assigned} assigned</p>
-                            </td>
-                            <td className="text-right py-3 px-2 text-gray-600">
-                              ₹{(s.basePay || 0).toLocaleString()}
-                            </td>
-                            <td className="text-right py-3 px-2">
-                              <p className="font-bold text-amber-600">₹{s.totalCommission?.toLocaleString()}</p>
-                              <p className="text-[9px] text-green-500">{s.totalDeliveries} del.</p>
-                            </td>
-                            <td className="text-right py-3 px-4">
-                              <span className="text-sm font-bold text-gray-900">₹{(s.totalPay || 0).toLocaleString()}</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                            </div>
+                          </td>
+                          <td className="text-center py-3 px-2">
+                            <div className="flex items-center justify-center gap-1 font-bold">
+                              <span title="Present" className="text-green-600">{s.attendance.present + s.attendance.late}</span>
+                              <span className="text-gray-300">/</span>
+                              <span title="Half Day" className="text-amber-500">{s.attendance.half_day}</span>
+                            </div>
+                          </td>
+                          <td className="text-center py-3 px-2">
+                            <p className="font-bold text-blue-600">{s.verifications.verified}</p>
+                            <p className="text-[9px] text-gray-400">{s.verifications.assigned} assigned</p>
+                          </td>
+                          <td className="text-right py-3 px-2 text-gray-600">₹{(s.basePay || 0).toLocaleString()}</td>
+                          <td className="text-right py-3 px-2">
+                            <p className="font-bold text-amber-600">₹{s.totalCommission?.toLocaleString()}</p>
+                            <p className="text-[9px] text-green-500">{s.totalDeliveries} del.</p>
+                          </td>
+                          <td className="text-right py-3 px-4">
+                            <span className="text-sm font-bold text-gray-900">₹{(s.totalPay || 0).toLocaleString()}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="sm:hidden space-y-3">
+                  {commData.staff.map(s => (
+                    <div key={s.user._id} className="rounded-xl border border-gray-100 p-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${ROLE_GRADIENT[s.user.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-xs font-bold uppercase`}>
+                            {s.user.name?.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-bold text-gray-800 text-sm">{s.user.name}</p>
+                            <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">{s.user.role}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-bold text-gray-900">₹{(s.totalPay || 0).toLocaleString()}</p>
+                          <p className="text-[9px] text-gray-400 font-bold uppercase">Total Payout</p>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-gray-50 rounded-lg p-2">
+                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Attendance</p>
+                          <p className="text-xs font-bold mt-0.5">
+                            <span className="text-green-600">{s.attendance.present + s.attendance.late}P</span>
+                            <span className="mx-1 text-gray-300">|</span>
+                            <span className="text-amber-500">{s.attendance.half_day}H</span>
+                          </p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-2">
+                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Verified</p>
+                          <p className="text-xs font-bold text-blue-600 mt-0.5">{s.verifications.verified} <span className="text-[9px] text-gray-400 font-normal">/ {s.verifications.assigned}</span></p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-2">
+                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Base Pay</p>
+                          <p className="text-xs font-bold text-gray-700 mt-0.5">₹{(s.basePay || 0).toLocaleString()}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-2">
+                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Commission</p>
+                          <p className="text-xs font-bold text-amber-600 mt-0.5">₹{s.totalCommission?.toLocaleString()}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
                 {commData.staff?.length === 0 && (
                   <p className="text-sm text-gray-400 text-center py-4">No staff data available</p>

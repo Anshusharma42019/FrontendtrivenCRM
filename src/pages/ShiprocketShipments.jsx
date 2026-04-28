@@ -63,10 +63,10 @@ export default function ShiprocketShipments() {
   return (
     <div className="space-y-4">
 
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide shrink-0">
         {TABS.map(t => (
           <button key={t.id} onClick={() => { setTab(t.id); setResult(null); setError(''); setTrackData(null); }}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${tab === t.id ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+            className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all whitespace-nowrap ${tab === t.id ? 'bg-gray-800 text-white border-gray-800 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
             {t.label}
           </button>
         ))}
@@ -93,55 +93,104 @@ export default function ShiprocketShipments() {
             <div className="px-5 py-8 text-center text-gray-400 text-sm">No shipments found.</div>
           )}
           {!loading && shipments.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
-                  <tr>
-                    {['Shipment ID', 'Order ID', 'AWB', 'Courier', 'Status', 'City', 'Pincode', 'Date'].map(h => (
-                      <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {shipments.map((s) => {
-                    // /orders response structure:
-                    // s.id = order id, s.shipments[0].id = shipment id
-                    // s.shipments[0].awb = AWB code
-                    // s.shipments[0].courier = courier name
-                    // s.customer_city, s.customer_pincode = delivery address
-                    const ship = Array.isArray(s.shipments) ? s.shipments[0] : null;
-                    const awb = ship?.awb || '';
-                    const courier = ship?.courier || ship?.sr_courier_name || '';
-                    const shipmentId = ship?.id || '—';
-                    const city = s.customer_city || '';
-                    const pincode = s.customer_pincode || '';
-                    return (
-                      <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
-                        <td className="px-4 py-3 font-mono text-xs text-gray-600">{shipmentId}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-gray-600 cursor-pointer hover:text-red-500"
-                          onClick={() => { setCancelAwbs(String(s.id)); setTab('cancel'); }}>
-                          {s.id}
-                        </td>
-                        <td
-                          className={`px-4 py-3 font-mono text-xs ${awb ? 'text-blue-600 cursor-pointer hover:underline' : 'text-gray-400'}`}
-                          onClick={() => { if (awb) { setAwbInput(awb); setTab('track'); } }}>
-                          {awb || '—'}
-                        </td>
-                        <td className="px-4 py-3 text-gray-600 text-xs">{courier || '—'}</td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs font-semibold px-2 py-1 rounded-full border ${STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                            {s.status || '—'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-gray-600 text-xs">{city || '—'}</td>
-                        <td className="px-4 py-3 text-gray-600 text-xs">{pincode || '—'}</td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{s.created_at?.split(',')[0] || '—'}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0 custom-scrollbar">
+            {/* Desktop Table View */}
+            <table className="hidden sm:table w-full text-sm">
+              <thead className="bg-gray-50 text-[10px] text-gray-500 uppercase tracking-[0.1em] sticky top-0 z-10">
+                <tr>
+                  {['Shipment ID', 'Order ID', 'AWB', 'Courier', 'Status', 'City', 'Date'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left font-bold">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {shipments.map((s) => {
+                  const ship = Array.isArray(s.shipments) ? s.shipments[0] : null;
+                  const awb = ship?.awb || '';
+                  const courier = ship?.courier || ship?.sr_courier_name || '';
+                  const shipmentId = ship?.id || '—';
+                  const city = s.customer_city || '';
+                  return (
+                    <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-4 py-3 font-mono text-[11px] text-gray-600">{shipmentId}</td>
+                      <td className="px-4 py-3 font-mono text-[11px] text-gray-600 cursor-pointer hover:text-red-500"
+                        onClick={() => { setCancelAwbs(String(s.id)); setTab('cancel'); }}>
+                        {s.id}
+                      </td>
+                      <td
+                        className={`px-4 py-3 font-mono text-[11px] ${awb ? 'text-blue-600 cursor-pointer hover:underline font-bold' : 'text-gray-400'}`}
+                        onClick={() => { if (awb) { setAwbInput(awb); setTab('track'); } }}>
+                        {awb || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 text-[11px] font-medium">{courier || '—'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                          {s.status || '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 text-[11px] font-medium">{city || '—'}</td>
+                      <td className="px-4 py-3 text-gray-400 text-[11px] font-medium">{s.created_at?.split(',')[0] || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {/* Mobile Card View */}
+            <div className="sm:hidden divide-y divide-gray-50">
+              {shipments.map((s) => {
+                const ship = Array.isArray(s.shipments) ? s.shipments[0] : null;
+                const awb = ship?.awb || '';
+                const courier = ship?.courier || ship?.sr_courier_name || '';
+                const shipmentId = ship?.id || '—';
+                const city = s.customer_city || '';
+                return (
+                  <div key={s.id} className="p-4 flex flex-col gap-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Shipment ID: {shipmentId}</p>
+                        <p className="font-bold text-gray-900 text-sm mt-0.5">Order: {s.id}</p>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                        {s.status || '—'}
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2 bg-gray-50 rounded-xl p-2.5">
+                      <div onClick={() => { if (awb) { setAwbInput(awb); setTab('track'); } }} className={awb ? 'cursor-pointer' : ''}>
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">AWB Code</p>
+                        <p className={`text-xs font-mono font-bold mt-0.5 ${awb ? 'text-blue-600 underline' : 'text-gray-400'}`}>{awb || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Courier</p>
+                        <p className="text-xs font-bold text-gray-700 mt-0.5 truncate">{courier || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Location</p>
+                        <p className="text-xs font-bold text-gray-700 mt-0.5 truncate">{city || '—'}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Date</p>
+                        <p className="text-[11px] font-bold text-gray-500 mt-0.5">{s.created_at?.split(',')[0] || '—'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => { setCancelAwbs(String(s.id)); setTab('cancel'); }}
+                        className="flex-1 text-[11px] font-bold py-2 rounded-xl bg-red-50 text-red-600 border border-red-100 active:scale-95 transition-all">
+                        CANCEL
+                      </button>
+                      <button onClick={() => { if (awb) { setAwbInput(awb); setTab('track'); } }}
+                        className="flex-1 text-[11px] font-bold py-2 rounded-xl bg-blue-600 text-white shadow-md active:scale-95 transition-all disabled:opacity-50"
+                        disabled={!awb}>
+                        TRACK
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+          </div>
           )}
         </div>
       )}
@@ -151,7 +200,7 @@ export default function ShiprocketShipments() {
         <div className="space-y-4">
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
             <div className="h-1 bg-blue-500" />
-            <div className="px-5 py-4 grid grid-cols-2 gap-4">
+            <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="space-y-3">
                 <Field label="Track by AWB Code">
                   <input className={inp} placeholder="e.g. 1234567890" value={awbInput}
@@ -162,7 +211,7 @@ export default function ShiprocketShipments() {
                   const res = await srSvc.trackByAWB(awbInput);
                   setTrackData(res.data?.data);
                   return res.data;
-                })} className="btn-primary w-full">Track by AWB</button>
+                })} className="btn-primary w-full shadow-md active:scale-95 transition-all">Track by AWB</button>
               </div>
               <div className="space-y-3">
                 <Field label="Track by Shipment ID">
@@ -174,7 +223,7 @@ export default function ShiprocketShipments() {
                   const res = await srSvc.trackByShipment(shipmentIdInput);
                   setTrackData(res.data?.data);
                   return res.data;
-                })} className="btn-primary w-full">Track by Shipment ID</button>
+                })} className="btn-primary w-full shadow-md active:scale-95 transition-all">Track by Shipment ID</button>
               </div>
             </div>
           </div>

@@ -115,15 +115,15 @@ export default function Users() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Staff</h2>
-          <p className="text-sm text-gray-400 mt-0.5">{data.totalResults} team members</p>
+          <h2 className="text-2xl font-bold text-gray-800 tracking-tight uppercase">Staff Directory</h2>
+          <p className="text-[11px] font-bold text-gray-400 mt-1 uppercase tracking-widest">{data.totalResults} TEAM MEMBERS TOTAL</p>
         </div>
         <button onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-[11px] font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all uppercase tracking-widest"
           style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
-          <span className="text-base leading-none">+</span> Add User
+          <span className="text-base leading-none">+</span> Add New User
         </button>
       </div>
 
@@ -136,51 +136,60 @@ export default function Users() {
           <p className="text-gray-400 text-sm">No staff members yet</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="space-y-3">
           {data.results?.map(u => (
-            <div key={u._id} className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 overflow-hidden"
-              style={{ border: '1px solid rgba(0,0,0,0.05)' }}>
-              {/* Top gradient strip */}
-              <div className={`h-1.5 bg-gradient-to-r ${ROLE_GRADIENT[u.role] || 'from-gray-300 to-gray-400'}`} />
-              <div className="p-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${ROLE_GRADIENT[u.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-lg font-bold shadow-sm uppercase`}>
+            <div key={u._id} className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden border border-gray-100">
+              <div className="flex flex-col md:flex-row md:items-center p-4 gap-4">
+                {/* Left side: Avatar & Name */}
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${ROLE_GRADIENT[u.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-lg font-black shadow-lg uppercase shrink-0`}>
                     {u.name?.charAt(0)}
                   </div>
                   <div className="min-w-0">
-                    <p className="font-semibold text-gray-800 truncate text-sm">{u.name}</p>
-                    <p className="text-xs text-gray-400 truncate">{u.phone || u.email}</p>
+                    <p className="font-black text-gray-900 text-base leading-tight truncate uppercase tracking-tight">{u.name}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge value={u.role} />
+                      <span className="w-1 h-1 rounded-full bg-gray-300" />
+                      <p className="text-[10px] font-bold text-gray-400 truncate uppercase tracking-widest">{u.phone || u.email}</p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-gray-500">Base Salary</span>
-                  <span className="text-xs font-bold text-gray-700">₹{(u.baseSalary || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex items-center justify-between mb-4">
-                  <Badge value={u.role} />
-                  <span className="text-xs text-gray-300">{new Date(u.createdAt).toLocaleDateString()}</span>
-                </div>
-                {shipmentCounts[u._id] > 0 && (
-                  <div className="flex items-center gap-1.5 mb-3 px-3 py-1.5 rounded-xl bg-green-50 border border-green-100">
-                    <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                    <span className="text-xs font-semibold text-green-700">{shipmentCounts[u._id]} Ready to Shipment</span>
+
+                {/* Center: Info/Stats */}
+                <div className="flex flex-wrap items-center gap-4 md:px-6 md:border-x border-gray-50">
+                  {u.role !== 'admin' && (
+                    <div className="bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
+                      <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Base Salary</p>
+                      <p className="text-xs font-black text-gray-700 mt-0.5">₹{(u.baseSalary || 0).toLocaleString()}</p>
+                    </div>
+                  )}
+                  {shipmentCounts[u._id] > 0 && (
+                    <div className="bg-green-50 px-3 py-1.5 rounded-xl border border-green-100">
+                      <p className="text-[8px] font-black text-green-600 uppercase tracking-widest">Shipments</p>
+                      <p className="text-xs font-black text-green-700 mt-0.5">{shipmentCounts[u._id]} READY</p>
+                    </div>
+                  )}
+                  <div className="bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-100">
+                    <p className="text-[8px] font-black text-blue-600 uppercase tracking-widest">Joined</p>
+                    <p className="text-xs font-black text-blue-700 mt-0.5">{new Date(u.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</p>
                   </div>
-                )}
-                <div className="flex gap-2 pt-3 border-t border-gray-50">
+                </div>
+
+                {/* Right: Actions */}
+                <div className="flex gap-2">
                   <button onClick={() => openView(u)}
-                    className="flex-1 text-xs font-semibold text-white py-2 rounded-xl transition"
-                    style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
-                    View
+                    className="flex-1 md:flex-none text-[10px] font-black px-5 py-2.5 rounded-xl bg-gray-900 text-white hover:bg-black transition shadow-md active:scale-95 uppercase tracking-widest">
+                    VIEW
                   </button>
                   {canManage && (
                     <>
                       <button onClick={() => openEdit(u)}
-                        className="flex-1 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 py-2 rounded-xl transition">
-                        Edit
+                        className="flex-1 md:flex-none text-[10px] font-black px-5 py-2.5 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 transition active:scale-95 uppercase tracking-widest">
+                        EDIT
                       </button>
                       <button onClick={() => handleDelete(u._id)}
-                        className="flex-1 text-xs font-semibold text-red-500 bg-red-50 hover:bg-red-100 py-2 rounded-xl transition">
-                        Delete
+                        className="flex-1 md:flex-none text-[10px] font-black px-5 py-2.5 rounded-xl bg-red-50 text-red-500 border border-red-100 hover:bg-red-100 transition active:scale-95 uppercase tracking-widest">
+                        DEL
                       </button>
                     </>
                   )}
@@ -225,26 +234,26 @@ export default function Users() {
                 return (
                   <div className="mb-5 space-y-3">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Today's Performance</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[['Done', done, 'text-green-600', '#f0fdf4', 'rgba(22,163,74,0.15)'],
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {[['Done Today', done, 'text-green-600', '#f0fdf4', 'rgba(22,163,74,0.15)'],
                         ['Remaining', target > 0 ? remaining : '—', 'text-orange-500', '#fff7ed', 'rgba(251,146,60,0.2)'],
                         ['Target', target || '—', 'text-blue-600', '#eff6ff', 'rgba(59,130,246,0.15)']
                       ].map(([label, val, tc, bg, border]) => (
-                        <div key={label} className="rounded-2xl p-3 text-center" style={{ background: bg, border: `1px solid ${border}` }}>
-                          <p className={`text-2xl font-bold ${tc}`}>{val}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+                        <div key={label} className="rounded-2xl p-4 text-center bg-white shadow-sm" style={{ background: bg, border: `1px solid ${border}` }}>
+                          <p className={`text-2xl font-black ${tc}`}>{val}</p>
+                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{label}</p>
                         </div>
                       ))}
                     </div>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
                       {[['CNP', s.todayCnp, 'text-red-500', 'bg-red-50'],
-                        ['Call Again', s.todayCallAgain, 'text-yellow-600', 'bg-yellow-50'],
-                        ['Interested', s.todayInterested, 'text-green-600', 'bg-green-50'],
-                        ['Not Int.', s.todayNotInterested, 'text-gray-500', 'bg-gray-50']
+                        ['CALL AGAIN', s.todayCallAgain, 'text-yellow-600', 'bg-yellow-50'],
+                        ['INTERESTED', s.todayInterested, 'text-green-600', 'bg-green-50'],
+                        ['NOT INT.', s.todayNotInterested, 'text-gray-500', 'bg-gray-50']
                       ].map(([label, val, tc, bg]) => (
-                        <div key={label} className={`${bg} rounded-xl p-2 text-center`}>
-                          <p className={`text-lg font-bold ${tc}`}>{val}</p>
-                          <p className="text-[10px] text-gray-500">{label}</p>
+                        <div key={label} className={`${bg} rounded-xl p-3 text-center border border-black/0.03 shadow-sm`}>
+                          <p className={`text-xl font-black ${tc}`}>{val}</p>
+                          <p className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter mt-0.5">{label}</p>
                         </div>
                       ))}
                     </div>
@@ -338,19 +347,21 @@ export default function Users() {
                 {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
               </select>
             </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Base Salary (Monthly)</label>
-              <input type="number" className={`${inputCls} mt-1.5`} value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: Number(e.target.value) })} />
-            </div>
-            <div className="flex gap-3 pt-2">
+            {form.role !== 'admin' && (
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Base Salary (Monthly)</label>
+                <input type="number" className={`${inputCls} mt-1.5`} value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: Number(e.target.value) })} />
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row gap-3 pt-4">
               <button type="submit" disabled={loading}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-60 transition shadow-md hover:shadow-lg"
+                className="flex-1 py-3.5 rounded-xl text-[11px] font-bold text-white disabled:opacity-60 transition shadow-lg hover:shadow-xl active:scale-95 uppercase tracking-widest"
                 style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
-                {loading ? 'Saving...' : modal === 'edit' ? 'Update' : 'Create'}
+                {loading ? 'SAVING...' : modal === 'edit' ? 'UPDATE USER' : 'CREATE USER'}
               </button>
               <button type="button" onClick={() => setModal(null)}
-                className="flex-1 border border-gray-200 hover:bg-gray-50 py-2.5 rounded-xl text-sm font-medium text-gray-600 transition">
-                Cancel
+                className="flex-1 border border-gray-200 bg-white py-3.5 rounded-xl text-[11px] font-bold text-gray-500 hover:bg-gray-50 transition active:scale-95 uppercase tracking-widest">
+                CANCEL
               </button>
             </div>
           </form>

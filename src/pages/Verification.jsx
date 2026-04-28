@@ -1,18 +1,40 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getVerificationRecords, updateVerificationStatus, updateVerificationRecord, updateTask } from '../services/task.service';
+import { getVerificationRecords, updateVerificationStatus, updateVerificationRecord, updateTask, deleteVerificationRecord } from '../services/task.service';
 import { updateLead } from '../services/lead.service';
+import API from '../api';
 import Modal from '../components/ui/Modal';
 
-const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition";
+const VerifyIcon = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" />
+  </svg>
+);
 
-const SectionDivider = ({ label }) => (
-  <div className="flex items-center gap-2 my-3">
-    <span className="h-px flex-1 bg-gray-200" />
-    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{label}</span>
-    <span className="h-px flex-1 bg-gray-200" />
+const PIN_COLORS = [
+  'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
+  'bg-rose-500', 'bg-amber-500', 'bg-cyan-500', 'bg-pink-500',
+];
+
+const initials = (name = '') =>
+  name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+
+const DetailRow = ({ label, value }) =>
+  value ? (
+    <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">{label}</span>
+      <span className="text-sm text-gray-800 font-medium capitalize flex-1">{value}</span>
+    </div>
+  ) : null;
+
+const SectionHead = ({ label }) => (
+  <div className="flex items-center gap-2 mt-4 mb-1">
+    <span className="text-[10px] font-extrabold uppercase tracking-widest text-green-500">{label}</span>
+    <div className="flex-1 h-px bg-green-100" />
   </div>
 );
+
+const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition";
 
 export default function Verification() {
   const navigate = useNavigate();
@@ -28,7 +50,7 @@ export default function Verification() {
   const [showOnHoldPicker, setShowOnHoldPicker] = useState(false);
   const [dayFilter, setDayFilter] = useState('today');
   const [customDate, setCustomDate] = useState('');
-
+  const [search, setSearch] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -41,22 +63,6 @@ export default function Verification() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleStatusChange = async (id, status) => {
-    setUpdating(id);
-    try {
-      const updated = await updateVerificationStatus(id, status);
-      if (status === 'verified') {
-        const record = records.find(r => r._id === id);
-        const taskId = record?.task?._id || (typeof record?.task === 'string' ? record.task : null);
-        if (taskId) await updateTask(taskId, { status: 'ready_to_shipment' });
-        setRecords(prev => prev.filter(r => r._id !== id));
-      } else {
-        setRecords(prev => prev.map(r => r._id === id ? { ...r, status: updated.status } : r));
-      }
-    } catch { }
-    finally { setUpdating(null); }
-  };
-
   const flattenRecord = (r) => ({
     ...r,
     ...(r.task && typeof r.task === 'object' ? r.task : {}),
@@ -68,7 +74,37 @@ export default function Verification() {
     task: r.task,
   });
 
-  const openDetail = (r) => { setSelected(flattenRecord(r)); setEditMode(false); };
+  const filterRecords = (recs) => {
+    const startOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const today = startOf(new Date());
+    let filtered = recs;
+
+    if (dayFilter === 'today') filtered = recs.filter(r => new Date(r.createdAt) >= today);
+    else if (dayFilter === 'yesterday') {
+      const y = new Date(today); y.setDate(y.getDate() - 1);
+      filtered = recs.filter(r => { const d = new Date(r.createdAt); return d >= y && d < today; });
+    }
+    else if (dayFilter === 'custom' && customDate) {
+      const from = new Date(customDate);
+      const to = new Date(from); to.setDate(to.getDate() + 1);
+      filtered = recs.filter(r => { const d = new Date(r.createdAt); return d >= from && d < to; });
+    }
+
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(r =>
+        r.title?.toLowerCase().includes(q) ||
+        r.lead?.name?.toLowerCase().includes(q) ||
+        r.lead?.phone?.includes(q) ||
+        r.assignedTo?.name?.toLowerCase().includes(q) ||
+        r.district?.toLowerCase().includes(q)
+      );
+    }
+
+    return filtered;
+  };
+
+  const filteredRecords = filterRecords(records);
 
   const startEdit = () => {
     setEditForm({
@@ -93,30 +129,55 @@ export default function Verification() {
       price: selected.price || '',
     });
     setEditMode(true);
-    setTimeout(() => {
-      document.querySelector('.modal-scroll-container')?.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 50);
   };
 
   const handleSave = async (e) => {
-    e.preventDefault(); setSaving(true);
+    if (e) e.preventDefault();
+    setSaving(true);
     try {
       const { name, phone, ...verificationFields } = editForm;
       await updateVerificationRecord(selected._id, verificationFields);
       if (selected.lead?._id) await updateLead(selected.lead._id, { name, phone });
+      
       const freshData = await getVerificationRecords();
       const freshRecords = Array.isArray(freshData) ? freshData : [];
       setRecords(freshRecords);
+      
       const freshSelected = freshRecords.find(r => r._id === selected._id);
       const flattened = freshSelected ? flattenRecord(freshSelected) : { ...selected, ...verificationFields };
-      // Ensure updated lead name/phone are reflected immediately
       setSelected({ ...flattened, lead: { ...(flattened.lead || selected.lead || {}), name, phone } });
       setEditMode(false);
     } catch { }
     finally { setSaving(false); }
   };
 
-  const sf = (k, v) => setEditForm(f => ({ ...f, [k]: v }));
+  const handleStatusUpdate = async (status, holdDate = null) => {
+    setUpdating(selected._id);
+    try {
+      const updated = await updateVerificationStatus(selected._id, status, holdDate);
+      if (status === 'verified') {
+        const taskId = selected.task?._id || (typeof selected.task === 'string' ? selected.task : null);
+        if (taskId) await updateTask(taskId, { status: 'ready_to_shipment' });
+        setRecords(prev => prev.filter(r => r._id !== selected._id));
+        setSelected(null);
+      } else {
+        setRecords(prev => prev.map(r => r._id === selected._id ? { ...r, status: updated.status } : r));
+        const freshSelected = { ...selected, status: updated.status };
+        setSelected(freshSelected);
+      }
+    } catch { }
+    finally { setUpdating(null); }
+  };
+
+  const handleDelete = async (id, e) => {
+    e.stopPropagation();
+    if (!confirm('Delete this verification record?')) return;
+    try {
+      await deleteVerificationRecord(id);
+      setRecords(prev => prev.filter(r => r._id !== id));
+      if (selected?._id === id) setSelected(null);
+    } catch { }
+  };
 
   const handleReadyToShipment = async () => {
     try {
@@ -127,388 +188,397 @@ export default function Verification() {
     } catch { }
   };
 
-  const filterRecords = (recs) => {
-    const startOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const today = startOf(new Date());
-    if (dayFilter === 'today') return recs.filter(r => new Date(r.createdAt) >= today);
-    if (dayFilter === 'yesterday') {
-      const y = new Date(today); y.setDate(y.getDate() - 1);
-      return recs.filter(r => { const d = new Date(r.createdAt); return d >= y && d < today; });
-    }
-    if (dayFilter === 'custom' && customDate) {
-      const from = new Date(customDate);
-      const to = new Date(from); to.setDate(to.getDate() + 1);
-      return recs.filter(r => { const d = new Date(r.createdAt); return d >= from && d < to; });
-    }
-    return recs;
-  };
+  const sf = (k, v) => setEditForm(f => ({ ...f, [k]: v }));
 
-  const filteredRecords = filterRecords(records);
+  const handlePincodeChange = async (val) => {
+    sf('pincode', val);
+    if (val.length !== 6) return;
+    try {
+      const res = await fetch(`https://api.postalpincode.in/pincode/${val}`);
+      const data = await res.json();
+      if (data[0]?.Status === 'Success') {
+        const office = data[0].PostOffice?.[0];
+        if (office) {
+          setEditForm(f => ({ ...f, district: office.District, state: office.State }));
+        }
+      }
+    } catch { }
+  };
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
-      <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+      <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
     </div>
   );
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Verification</h2>
-          <p className="text-sm text-gray-400 mt-0.5">Tasks pending verification</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {[['all','All'],['today','Today'],['yesterday','Yesterday']].map(([val, label]) => (
-            <button key={val} onClick={() => { setDayFilter(val); setCustomDate(''); }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
-                dayFilter === val
-                  ? 'bg-green-600 text-white border-green-600'
-                  : 'bg-white text-gray-500 border-gray-200 hover:border-green-400 hover:text-green-600'
-              }`}>{label}</button>
-          ))}
-          <input
-            type="date"
-            value={customDate}
-            max={new Date().toISOString().slice(0, 10)}
-            onChange={e => { setCustomDate(e.target.value); setDayFilter(e.target.value ? 'custom' : 'all'); }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-              dayFilter === 'custom'
-                ? 'bg-green-600 text-white border-green-600'
-                : 'bg-white text-gray-500 border-gray-200 hover:border-green-400'
-            }`}
-          />
-          <span className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-100">
-            {filteredRecords.length} task{filteredRecords.length !== 1 ? 's' : ''}
-          </span>
-        </div>
-      </div>
-
-      {error && <div className="bg-red-50 border border-red-100 text-red-600 text-sm p-3 rounded-xl">{error}</div>}
-
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
-        <div className="h-1 bg-blue-400" />
-        <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
-          <h3 className="font-semibold text-gray-700 text-sm">Verification List</h3>
-          <span className="text-xs text-gray-400">{filteredRecords.length} record{filteredRecords.length !== 1 ? 's' : ''}</span>
-        </div>
-        {filteredRecords.length === 0 ? (
-          <div className="py-16 text-center">
-            <p className="text-gray-400 text-sm">No verification tasks</p>
+    <div className="flex gap-4 scroll-container-h overflow-hidden animate-slide-up mobile-p-safe">
+      {/* ── LEFT PANEL ── */}
+      <div className={`flex flex-col gap-4 transition-all duration-300 ${selected ? 'w-full lg:w-[55%]' : 'w-full'} h-full overflow-hidden`}>
+        
+        {/* Header & Filters (Fixed) */}
+        <div className="flex flex-col gap-5 shrink-0 glass p-5 rounded-2xl border border-white/50 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Verification</h2>
+              <p className="text-[11px] text-gray-400 font-medium mt-0.5">Confirm tasks for shipment readiness</p>
+            </div>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-xs font-bold shadow-md"
+                style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)' }}>
+                <VerifyIcon className="w-3.5 h-3.5" />
+                <span>{filteredRecords.length} Pending</span>
+              </div>
+            </div>
           </div>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {filteredRecords.map(r => (
-              <div key={r._id} className="px-4 py-3.5 flex flex-col sm:flex-row sm:items-center gap-2 hover:bg-gray-50/50 transition-colors">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center shrink-0 text-blue-500 font-bold text-sm">V</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-800 text-sm">{r.title}</p>
-                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                      {r.assignedTo && <p className="text-xs text-green-600">{r.assignedTo.name}</p>}
-                      {r.lead && <p className="text-xs text-gray-400">{r.lead.name} — {r.lead.phone}</p>}
+
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
+              {[['all', 'All'], ['today', 'Today'], ['yesterday', 'Yesterday']].map(([val, label]) => (
+                <button key={val} onClick={() => { setDayFilter(val); setCustomDate(''); }}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold border whitespace-nowrap transition-all ${dayFilter === val
+                      ? 'bg-green-600 text-white border-green-600 shadow-md'
+                      : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50'
+                    }`}>{label}</button>
+              ))}
+              <div className="relative shrink-0">
+                <input
+                  type="date"
+                  value={customDate}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={e => { setCustomDate(e.target.value); setDayFilter(e.target.value ? 'custom' : 'all'); }}
+                  className={`pl-3 pr-2 py-2 rounded-xl text-xs font-bold border transition cursor-pointer outline-none ${dayFilter === 'custom'
+                      ? 'bg-green-600 text-white border-green-600 shadow-md'
+                      : 'bg-white text-gray-400 border-gray-100'
+                    }`}
+                />
+              </div>
+            </div>
+
+            <div className="relative">
+              <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+              </svg>
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search name, phone, task..."
+                className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-100 bg-white text-sm font-medium text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-400/20 focus:border-green-400 transition shadow-sm"
+              />
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-300 uppercase tracking-tighter">
+                {filteredRecords.length} found
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* List (Scrollable) */}
+        <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+          {filteredRecords.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-dashed border-gray-200">
+              <div className="w-12 h-12 rounded-2xl bg-green-50 flex items-center justify-center mb-3 text-green-300">
+                <VerifyIcon className="w-6 h-6" />
+              </div>
+              <p className="text-gray-500 text-sm font-medium">No tasks found</p>
+              <p className="text-gray-400 text-xs mt-1">{search ? 'Try a different search' : 'Nothing here yet'}</p>
+            </div>
+          ) : (
+            <div className="space-y-2 pb-4">
+              {filteredRecords.map((r, i) => {
+                const color = PIN_COLORS[i % PIN_COLORS.length];
+                const isActive = selected?._id === r._id;
+                const flattened = flattenRecord(r);
+                return (
+                  <div
+                    key={r._id}
+                    onClick={() => setSelected(isActive ? null : flattened)}
+                    className={`relative flex items-center gap-4 px-4 py-3.5 rounded-2xl cursor-pointer transition-all duration-200 border
+                      ${isActive
+                        ? 'bg-green-50 border-green-200 shadow-sm'
+                        : 'bg-white border-gray-100 hover:border-green-200 hover:bg-green-50/30 hover:shadow-sm'}`}>
+
+                    <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${color}`} />
+                    <span className="text-[11px] font-bold text-gray-300 w-5 text-center shrink-0 ml-2">{i + 1}</span>
+
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0 ${color}`}>
+                      {initials(flattened.lead?.name || flattened.title)}
                     </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{flattened.title}</p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        {flattened.lead?.name && <span className="text-xs text-gray-500">{flattened.lead.name}</span>}
+                        {flattened.lead?.phone && (
+                          <span className="text-xs text-gray-400 flex items-center gap-0.5">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
+                            {flattened.lead.phone}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${
+                        flattened.status === 'on_hold' ? 'bg-gray-50 text-gray-600 border-gray-100' :
+                        flattened.status === 'verified' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                        flattened.status === 'rejected' ? 'bg-rose-50 text-rose-700 border-rose-100' :
+                        'bg-amber-50 text-amber-700 border-amber-100'
+                      }`}>
+                        {flattened.status?.replace(/_/g, ' ').toUpperCase()}
+                      </span>
+                      {flattened.assignedTo?.name && (
+                        <span className="text-[10px] text-gray-400 hidden sm:block">Assigned: {flattened.assignedTo.name}</span>
+                      )}
+                    </div>
+
+                    <button onClick={(e) => handleDelete(r._id, e)}
+                      className="w-8 h-8 flex items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-100 border border-red-100 transition shrink-0 font-bold text-base">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                    </button>
                   </div>
-                </div>
-                <button onClick={() => openDetail(r)}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-xl text-white transition"
-                  style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>View Detail</button>
-              </div>
-            ))}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
+      {/* ── RIGHT DETAIL PANEL ── */}
       {selected && (
-        <Modal title="" hideHeader onClose={() => { setSelected(null); setEditMode(false); }}>
-          {!editMode ? (
-            <>
-              {/* Header */}
-              <div className="-mx-6 -mt-5 mb-4 px-6 py-4 rounded-t-2xl flex items-center justify-between"
-                style={{ background: 'linear-gradient(135deg, #1e3a2f, #15803d)' }}>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-base">
-                    {selected.lead?.name?.charAt(0)?.toUpperCase() || 'V'}
-                  </div>
-                  <div>
-                    <p className="text-white font-bold text-base leading-tight">{selected.lead?.name || selected.title}</p>
-                    <p className="text-green-200 text-xs">{selected.lead?.phone}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${
-                    selected.status === 'on_hold' ? 'bg-gray-500 text-white' :
-                    selected.status === 'verified' ? 'bg-green-400 text-white' :
-                    selected.status === 'rejected' ? 'bg-red-400 text-white' : 'bg-amber-400 text-white'
-                  }`}>{selected.status?.replace(/_/g, ' ')}</span>
-                  <button onClick={() => { setSelected(null); setEditMode(false); }}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/20 text-white hover:bg-white/30 text-lg">×</button>
-                </div>
+        <div className="hidden lg:flex flex-col w-[45%] bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden h-full">
+          <div className="h-1.5 shrink-0" style={{ background: 'linear-gradient(90deg,#16a34a,#15803d,#16a34a)' }} />
+          
+          <div className="px-5 py-4 flex items-center justify-between border-b border-gray-50 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold ${PIN_COLORS[filteredRecords.findIndex(r => r._id === selected._id) % PIN_COLORS.length]}`}>
+                {initials(selected.lead?.name || selected.title)}
               </div>
-
-              {/* Invoice-style two-column info */}
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pb-3 mb-1 border-b border-gray-100">
-                {[
-                  ['Name', selected.lead?.name],
-                  ['Task Title', selected.title],
-                  ['Mobile No.', selected.lead?.phone],
-                  ['Assigned To', selected.assignedTo?.name],
-                  ['City', selected.cityVillage],
-                  ['Call Date', selected.reminderAt ? new Date(selected.reminderAt).toLocaleDateString() : null],
-                  ['Price', selected.price ? `₹${selected.price}` : null],
-                ].filter(([, v]) => v).map(([label, value]) => (
-                  <div key={label} className="flex gap-1 text-sm">
-                    <span className="text-gray-400 shrink-0 w-20">{label}</span>
-                    <span className="font-semibold text-gray-800">: {value}</span>
-                  </div>
-                ))}
+              <div>
+                <p className="text-sm font-bold text-gray-800 leading-tight">{selected.lead?.name || 'Task Detail'}</p>
+                {selected.lead?.phone && <p className="text-xs text-gray-400">{selected.lead.phone}</p>}
               </div>
-
-              {/* Patient Info */}
-              {(selected.age || selected.weight || selected.height) && (
-                <>
-                  <SectionDivider label="Patient Info" />
-                  <div className="grid grid-cols-3 gap-2 mb-1">
-                    {[
-                      { label: 'Age', value: selected.age ? `${selected.age} yrs` : null },
-                      { label: 'Weight', value: selected.weight ? `${selected.weight} kg` : null },
-                      { label: 'Height', value: selected.height ? `${selected.height} ft` : null },
-                    ].filter(f => f.value).map(({ label, value }) => (
-                      <div key={label} className="rounded-xl px-3 py-2.5 text-center" style={{ background: '#f0fdf4', border: '1px solid rgba(22,163,74,0.15)' }}>
-                        <p className="text-xs text-green-600 font-bold uppercase tracking-wide">{label}</p>
-                        <p className="text-base font-bold text-gray-800 mt-0.5">{value}</p>
-                      </div>
-                    ))}
-                  </div>
-                </>
+            </div>
+            <div className="flex items-center gap-2">
+              {!editMode && (
+                <button onClick={startEdit} className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-lg transition">Edit</button>
               )}
+              <button onClick={() => { setSelected(null); setEditMode(false); }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition text-lg">×</button>
+            </div>
+          </div>
 
-              {/* Health Details */}
-              {(selected.problem || selected.otherProblems || selected.problemDuration) && (
-                <>
-                  <SectionDivider label="Health Details" />
-                  <div className="space-y-2 mb-1">
-                    {selected.problem && (
-                      <div className="flex gap-3 rounded-xl px-3 py-2.5" style={{ background: '#fff7ed', border: '1px solid rgba(251,146,60,0.2)' }}>
-                        <div className="w-1 rounded-full bg-orange-400 shrink-0" />
-                        <div><p className="text-xs text-orange-500 font-bold uppercase tracking-wide">Problem</p>
-                          <p className="text-sm text-gray-700 mt-0.5">{selected.problem}</p></div>
-                      </div>
-                    )}
-                    {selected.otherProblems && (
-                      <div className="flex gap-3 rounded-xl px-3 py-2.5" style={{ background: '#fff7ed', border: '1px solid rgba(251,146,60,0.2)' }}>
-                        <div className="w-1 rounded-full bg-orange-300 shrink-0" />
-                        <div><p className="text-xs text-orange-500 font-bold uppercase tracking-wide">Other Problems</p>
-                          <p className="text-sm text-gray-700 mt-0.5">{selected.otherProblems}</p></div>
-                      </div>
-                    )}
-                    {selected.problemDuration && (
-                      <div className="flex gap-3 rounded-xl px-3 py-2.5" style={{ background: '#fefce8', border: '1px solid rgba(234,179,8,0.2)' }}>
-                        <div className="w-1 rounded-full bg-yellow-400 shrink-0" />
-                        <div><p className="text-xs text-yellow-600 font-bold uppercase tracking-wide">Problem Duration</p>
-                          <p className="text-sm text-gray-700 mt-0.5">{selected.problemDuration}</p></div>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {/* Address */}
-              {(selected.cityVillage || selected.district || selected.state || selected.pincode || selected.houseNo || selected.landmark || selected.postOffice) && (
-                <>
-                  <SectionDivider label="Address" />
-                  <div className="grid grid-cols-2 gap-2 mb-1">
-                    {[
-                      { label: selected.cityVillageType === 'village' ? 'Village' : 'City', value: selected.cityVillage },
-                      { label: 'District', value: selected.district },
-                      { label: 'State', value: selected.state },
-                      { label: 'Pincode', value: selected.pincode },
-                      { label: 'House No', value: selected.houseNo },
-                      { label: 'Landmark', value: selected.landmark },
-                      { label: 'Post Office', value: selected.postOffice },
-                    ].filter(f => f.value).map(({ label, value }) => (
-                      <div key={label} className="bg-gray-50 rounded-xl px-3 py-2.5" style={{ border: '1px solid rgba(0,0,0,0.05)' }}>
-                        <p className="text-xs text-gray-400 font-bold uppercase tracking-wide mb-0.5">{label}</p>
-                        <p className="text-sm text-gray-800 font-semibold capitalize">{value}</p>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-
-              {/* Task Info */}
-              <SectionDivider label="Task Info" />
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                {[
-                  { label: 'Task Title', value: selected.title },
-                  { label: 'Assigned To', value: selected.assignedTo?.name },
-                  { label: 'Lead Status', value: selected.lead?.status?.replace(/_/g, ' ') },
-                  { label: 'Call Date', value: selected.reminderAt ? new Date(selected.reminderAt).toLocaleDateString() : null },
-                ].filter(f => f.value).map(({ label, value }) => (
-                  <div key={label} className="bg-gray-50 rounded-xl px-3 py-2.5" style={{ border: '1px solid rgba(0,0,0,0.05)' }}>
-                    <p className="text-xs text-gray-400 font-bold uppercase tracking-wide mb-0.5">{label}</p>
-                    <p className="text-sm text-gray-800 font-semibold capitalize">{value}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Description */}
-              {selected.description && (
-                <div className="flex gap-3 rounded-xl px-3 py-2.5 mb-4" style={{ background: '#eff6ff', border: '1px solid rgba(59,130,246,0.15)' }}>
-                  <div className="w-1 rounded-full bg-blue-400 shrink-0" />
-                  <div><p className="text-xs text-blue-500 font-bold uppercase tracking-wide">Description</p>
-                    <p className="text-sm text-gray-700 mt-0.5">{selected.description}</p></div>
+          <div className="px-5 py-3 overflow-y-auto flex-1 custom-scrollbar">
+            {editMode ? (
+              <form onSubmit={handleSave} className="space-y-4 py-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Name</label>
+                    <input className={`${inputCls} mt-1`} value={editForm.name} onChange={e => sf('name', e.target.value)} /></div>
+                  <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Phone</label>
+                    <input className={`${inputCls} mt-1`} value={editForm.phone} onChange={e => sf('phone', e.target.value)} /></div>
                 </div>
-              )}
+                <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Problem</label>
+                  <textarea rows={2} className={`${inputCls} mt-1`} value={editForm.problem} onChange={e => sf('problem', e.target.value)} /></div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Age</label>
+                    <input type="number" className={`${inputCls} mt-1`} value={editForm.age} onChange={e => sf('age', e.target.value)} /></div>
+                  <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Weight</label>
+                    <input type="number" className={`${inputCls} mt-1`} value={editForm.weight} onChange={e => sf('weight', e.target.value)} /></div>
+                  <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Height</label>
+                    <input type="number" step="0.1" className={`${inputCls} mt-1`} value={editForm.height} onChange={e => sf('height', e.target.value)} /></div>
+                </div>
+                <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Other Problems</label>
+                  <textarea rows={2} className={`${inputCls} mt-1`} value={editForm.otherProblems} onChange={e => sf('otherProblems', e.target.value)} /></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Price</label>
+                    <input type="number" className={`${inputCls} mt-1`} value={editForm.price} onChange={e => sf('price', e.target.value)} /></div>
+                  <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Call Date</label>
+                    <input type="date" className={`${inputCls} mt-1`} value={editForm.reminderAt} onChange={e => sf('reminderAt', e.target.value)} /></div>
+                </div>
+                
+                <SectionHead label="Address" />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">City / Village Type</label>
+                    <select className={`${inputCls} mt-1`} value={editForm.cityVillageType} onChange={e => sf('cityVillageType', e.target.value)}>
+                      <option value="city">City</option>
+                      <option value="village">Village</option>
+                    </select>
+                  </div>
+                  <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">City Name</label>
+                    <input className={`${inputCls} mt-1`} value={editForm.cityVillage} onChange={e => sf('cityVillage', e.target.value)} /></div>
+                  <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Pincode</label>
+                    <input className={`${inputCls} mt-1`} value={editForm.pincode} onChange={e => handlePincodeChange(e.target.value)} /></div>
+                  <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">House No</label>
+                    <input className={`${inputCls} mt-1`} value={editForm.houseNo} onChange={e => sf('houseNo', e.target.value)} /></div>
+                  <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Post Office</label>
+                    <input className={`${inputCls} mt-1`} value={editForm.postOffice} onChange={e => sf('postOffice', e.target.value)} /></div>
+                  <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Landmark</label>
+                    <input className={`${inputCls} mt-1`} value={editForm.landmark} onChange={e => sf('landmark', e.target.value)} /></div>
+                  <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">District</label>
+                    <input className={`${inputCls} mt-1`} value={editForm.district} onChange={e => sf('district', e.target.value)} /></div>
+                  <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">State</label>
+                    <input className={`${inputCls} mt-1`} value={editForm.state} onChange={e => sf('state', e.target.value)} /></div>
+                </div>
+                
+                <div className="flex gap-2 pt-2">
+                  <button type="submit" disabled={saving} className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-green-600 hover:bg-green-700 transition disabled:opacity-50">
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                  <button type="button" onClick={() => setEditMode(false)} className="flex-1 py-2 rounded-xl text-xs font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 transition">
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <SectionHead label="Customer" />
+                <DetailRow label="Task" value={selected.title} />
+                <DetailRow label="Assigned To" value={selected.assignedTo?.name} />
+                <DetailRow label="Description" value={selected.description} />
 
-              {/* Actions */}
-              <div className="pt-2 border-t border-gray-100 flex flex-wrap gap-2">
-                <button onClick={startEdit}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition"
-                  style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)' }}>Edit</button>
-                <button onClick={async () => {
-                  setSaving(true);
-                  try {
-                    await updateVerificationRecord(selected._id, {
-                      description: selected.description || '',
-                      problem: selected.problem || '',
-                      age: selected.age || '',
-                      weight: selected.weight || '',
-                      height: selected.height || '',
-                      otherProblems: selected.otherProblems || '',
-                      problemDuration: selected.problemDuration || '',
-                      cityVillageType: selected.cityVillageType || 'city',
-                      cityVillage: selected.cityVillage || '',
-                      houseNo: selected.houseNo || '',
-                      postOffice: selected.postOffice || '',
-                      district: selected.district || '',
-                      landmark: selected.landmark || '',
-                      pincode: selected.pincode || '',
-                      state: selected.state || '',
-                      reminderAt: selected.reminderAt ? selected.reminderAt.slice(0, 10) : '',
-                      price: selected.price || '',
-                    });
-                    setSelected(null);
-                    load();
-                  } catch { }
-                  finally { setSaving(false); }
-                }} disabled={saving}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition disabled:opacity-60"
-                  style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
-                  {saving ? 'Saving...' : 'Save'}
-                </button>
-                <button onClick={handleReadyToShipment}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition"
-                  style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>Ready to Shipment</button>
+                <SectionHead label="Health Info" />
+                <DetailRow label="Problem" value={selected.problem} />
+                <DetailRow label="Duration" value={selected.problemDuration} />
+                <DetailRow label="Age" value={selected.age ? `${selected.age} yrs` : null} />
+                <DetailRow label="Weight" value={selected.weight ? `${selected.weight} kg` : null} />
+                <DetailRow label="Height" value={selected.height ? `${selected.height} ft` : null} />
+                <DetailRow label="Other Problems" value={selected.otherProblems} />
+
+                <SectionHead label="Address" />
+                <DetailRow label={selected.cityVillageType === 'village' ? 'Village' : 'City'} value={selected.cityVillage} />
+                <DetailRow label="House No" value={selected.houseNo} />
+                <DetailRow label="Post Office" value={selected.postOffice} />
+                <DetailRow label="District" value={selected.district} />
+                <DetailRow label="State" value={selected.state} />
+                <DetailRow label="Pincode" value={selected.pincode} />
+                <DetailRow label="Landmark" value={selected.landmark} />
+
+                <SectionHead label="Order" />
+                <DetailRow label="Price" value={selected.price ? `₹${selected.price}` : null} />
+                <DetailRow label="Call Date" value={selected.reminderAt ? new Date(selected.reminderAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null} />
+              </>
+            )}
+          </div>
+
+          {!editMode && (
+            <div className="px-5 py-4 border-t border-gray-50 flex flex-col gap-2 shrink-0 bg-white">
+              <div className="flex gap-2">
+                  <button
+                    onClick={() => handleStatusUpdate('verified')}
+                    disabled={updating}
+                    className="flex-1 py-3 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-emerald-900/10 bg-gradient-to-r from-emerald-500 to-emerald-600 disabled:opacity-50">
+                    <VerifyIcon /> Verified
+                  </button>
+                
                 {showOnHoldPicker ? (
-                  <div className="flex-1 flex gap-2 items-center">
+                  <div className="flex-[1.5] flex gap-1.5 items-center bg-gray-50 p-1.5 rounded-xl border border-gray-100">
                     <input type="date" value={onHoldDate} onChange={e => setOnHoldDate(e.target.value)}
-                      min={new Date().toISOString().slice(0,10)}
-                      className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400" />
-                    <button onClick={async () => {
-                      if (!onHoldDate) return;
-                      setUpdating(selected._id);
-                      try {
-                        await updateVerificationStatus(selected._id, 'on_hold', onHoldDate);
-                        if (selected.lead?._id) await updateLead(selected.lead._id, { status: 'on_hold' });
-                        setSelected(null); setShowOnHoldPicker(false); setOnHoldDate('');
-                        navigate('/pipeline', { state: { filter: 'on_hold' } });
-                      } catch { }
-                      finally { setUpdating(null); }
-                    }}
-                      disabled={!onHoldDate || updating === selected._id}
-                      className="px-3 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-60"
-                      style={{ background: 'linear-gradient(135deg, #6b7280, #4b5563)' }}>Confirm</button>
-                    <button onClick={() => { setShowOnHoldPicker(false); setOnHoldDate(''); }}
-                      className="px-3 py-2 rounded-xl text-sm text-gray-500 border border-gray-200 hover:bg-gray-50">✕</button>
+                      min={new Date().toISOString().slice(0, 10)}
+                      className="flex-1 bg-transparent text-[11px] focus:outline-none" />
+                    <button onClick={() => handleStatusUpdate('on_hold', onHoldDate)} disabled={!onHoldDate}
+                      className="px-2 py-1 bg-gray-800 text-white text-[10px] font-bold rounded-lg disabled:opacity-50">Confirm</button>
+                    <button onClick={() => setShowOnHoldPicker(false)} className="text-gray-400 p-1">×</button>
                   </div>
                 ) : (
                   <button onClick={() => setShowOnHoldPicker(true)}
-                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition"
-                    style={{ background: 'linear-gradient(135deg, #6b7280, #4b5563)' }}>On Hold</button>
-                )}
-                <button onClick={() => setSelected(null)}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 transition">Cancel</button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-gray-800 text-base">Edit Task</h3>
-                <button onClick={() => setEditMode(false)} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition text-lg">×</button>
-              </div>
-              <form onSubmit={handleSave} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</label>
-                    <input className={`${inputCls} mt-1.5`} placeholder="Name" value={editForm.name} onChange={e => sf('name', e.target.value)} /></div>
-                  <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Phone</label>
-                    <input className={`${inputCls} mt-1.5`} placeholder="Phone" value={editForm.phone} onChange={e => sf('phone', e.target.value)} /></div>
-                </div>
-                <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Problem</label>
-                  <textarea rows={2} className={`${inputCls} mt-1.5`} value={editForm.problem} onChange={e => sf('problem', e.target.value)} /></div>
-                <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</label>
-                  <textarea rows={2} className={`${inputCls} mt-1.5`} value={editForm.description} onChange={e => sf('description', e.target.value)} /></div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Age</label>
-                    <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Age" value={editForm.age} onChange={e => sf('age', e.target.value)} /></div>
-                  <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Weight (kg)</label>
-                    <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Weight" value={editForm.weight} onChange={e => sf('weight', e.target.value)} /></div>
-                  <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Height (ft)</label>
-                    <input type="number" min="0" step="0.1" className={`${inputCls} mt-1.5`} placeholder="e.g. 5.6" value={editForm.height} onChange={e => sf('height', e.target.value)} /></div>
-                </div>
-                <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Other Problems</label>
-                  <textarea rows={2} className={`${inputCls} mt-1.5`} value={editForm.otherProblems} onChange={e => sf('otherProblems', e.target.value)} /></div>
-                <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Problem Duration</label>
-                  <input className={`${inputCls} mt-1.5`} placeholder="e.g. 2 years, 6 months" value={editForm.problemDuration} onChange={e => sf('problemDuration', e.target.value)} /></div>
-                <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Price</label>
-                  <input type="number" min="0" className={`${inputCls} mt-1.5`} placeholder="Price" value={editForm.price || ''} onChange={e => sf('price', e.target.value)} /></div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">City / Village</label>
-                  <div className="flex items-center gap-3 mt-1.5 mb-1.5">
-                    <span className={`text-xs font-semibold ${editForm.cityVillageType === 'city' ? 'text-green-600' : 'text-gray-400'}`}>City</span>
-                    <div onClick={() => sf('cityVillageType', editForm.cityVillageType === 'city' ? 'village' : 'city')}
-                      className="relative w-12 h-6 rounded-full cursor-pointer transition-colors duration-300"
-                      style={{ background: editForm.cityVillageType === 'village' ? '#16a34a' : '#d1d5db' }}>
-                      <span className="absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-300"
-                        style={{ left: editForm.cityVillageType === 'village' ? '28px' : '4px' }} />
-                    </div>
-                    <span className={`text-xs font-semibold ${editForm.cityVillageType === 'village' ? 'text-green-600' : 'text-gray-400'}`}>Village</span>
-                  </div>
-                  <input className={inputCls} placeholder={`Enter ${editForm.cityVillageType} name`} value={editForm.cityVillage} onChange={e => sf('cityVillage', e.target.value)} />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">House No</label>
-                    <input className={`${inputCls} mt-1.5`} placeholder="House No" value={editForm.houseNo} onChange={e => sf('houseNo', e.target.value)} /></div>
-                  <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Post Office</label>
-                    <input className={`${inputCls} mt-1.5`} placeholder="Post Office" value={editForm.postOffice} onChange={e => sf('postOffice', e.target.value)} /></div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">District</label>
-                    <input className={`${inputCls} mt-1.5`} placeholder="District" value={editForm.district} onChange={e => sf('district', e.target.value)} /></div>
-                  <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Landmark</label>
-                    <input className={`${inputCls} mt-1.5`} placeholder="Landmark" value={editForm.landmark} onChange={e => sf('landmark', e.target.value)} /></div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pincode</label>
-                    <input className={`${inputCls} mt-1.5`} placeholder="Pincode" value={editForm.pincode} onChange={e => sf('pincode', e.target.value)} /></div>
-                  <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">State</label>
-                    <input className={`${inputCls} mt-1.5`} placeholder="State" value={editForm.state} onChange={e => sf('state', e.target.value)} /></div>
-                </div>
-                <div><label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Confirmation Call Date</label>
-                  <input type="date" className={`${inputCls} mt-1.5`} value={editForm.reminderAt} onChange={e => sf('reminderAt', e.target.value)} /></div>
-                <div className="flex gap-3 pt-2">
-                  <button type="submit" disabled={saving}
-                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-60 shadow-md transition"
-                    style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
-                    {saving ? 'Saving...' : 'Save'}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 transition-opacity hover:opacity-90 bg-gradient-to-r from-gray-500 to-gray-600">
+                    On Hold
                   </button>
-                  <button type="button" onClick={() => setEditMode(false)}
-                    className="flex-1 border border-gray-200 hover:bg-gray-50 py-2.5 rounded-xl text-sm font-medium text-gray-600 transition">Back</button>
-                </div>
-              </form>
-            </>
+                )}
+              </div>
+              
+              <button onClick={handleReadyToShipment}
+                className="w-full py-3 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-amber-900/10 bg-gradient-to-r from-amber-500 to-amber-600">
+                Ready to Shipment
+              </button>
+            </div>
           )}
-        </Modal>
+        </div>
+      )}
+
+      {/* Detail Modal (Mobile) */}
+      {selected && (
+        <div className="lg:hidden">
+          <Modal hideHeader={true} onClose={() => { setSelected(null); setEditMode(false); }}>
+            <div className="-mx-4 -mt-4 mb-5 px-6 py-6 rounded-b-3xl relative" style={{ background: 'linear-gradient(135deg, #064e3b, #065f46)' }}>
+              <button onClick={() => { setSelected(null); setEditMode(false); }}
+                className="absolute right-4 top-4 w-7 h-7 flex items-center justify-center rounded-full bg-white/10 text-white/80 hover:bg-white/20 transition-all text-xl">
+                ×
+              </button>
+              <div className="flex items-center gap-4 pr-8">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold text-white shadow-xl ${PIN_COLORS[filteredRecords.findIndex(r => r._id === selected._id) % PIN_COLORS.length]}`}>
+                  {initials(selected.lead?.name || selected.title)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-white font-bold text-lg tracking-tight truncate">{selected.lead?.name || selected.title}</h3>
+                  <p className="text-emerald-300/70 text-sm font-medium">{selected.lead?.phone}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-0 px-2">
+              {editMode ? (
+                <form onSubmit={handleSave} className="space-y-4">
+                  <div className="grid grid-cols-1 gap-3">
+                    <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Name</label>
+                      <input className={`${inputCls} mt-1`} value={editForm.name} onChange={e => sf('name', e.target.value)} /></div>
+                    <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Phone</label>
+                      <input className={`${inputCls} mt-1`} value={editForm.phone} onChange={e => sf('phone', e.target.value)} /></div>
+                    <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Problem</label>
+                      <textarea rows={1} className={`${inputCls} mt-1`} value={editForm.problem} onChange={e => sf('problem', e.target.value)} /></div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <input type="number" placeholder="Age" className={inputCls} value={editForm.age} onChange={e => sf('age', e.target.value)} />
+                      <input type="number" placeholder="Wt" className={inputCls} value={editForm.weight} onChange={e => sf('weight', e.target.value)} />
+                      <input type="number" step="0.1" placeholder="Ht" className={inputCls} value={editForm.height} onChange={e => sf('height', e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-2 pb-2">
+                    <button type="submit" disabled={saving} className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-green-600 shadow-md">Save</button>
+                    <button type="button" onClick={() => setEditMode(false)} className="flex-1 py-3 rounded-xl text-sm font-bold text-gray-500 bg-gray-100">Cancel</button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <SectionHead label="Customer Info" />
+                  <DetailRow label="Task" value={selected.title} />
+                  <DetailRow label="Assigned" value={selected.assignedTo?.name} />
+                  <DetailRow label="Problem" value={selected.problem} />
+                  <DetailRow label="Duration" value={selected.problemDuration} />
+                  
+                  <SectionHead label="Address Details" />
+                  <DetailRow label="City/Village" value={selected.cityVillage} />
+                  <DetailRow label="Pincode" value={selected.pincode} />
+                  <DetailRow label="Landmark" value={selected.landmark} />
+                  
+                  <SectionHead label="Order Details" />
+                  <DetailRow label="Price" value={selected.price ? `₹${selected.price}` : null} />
+                  
+                  <div className="flex flex-col gap-3 pt-6 pb-4">
+                    <div className="flex gap-2.5">
+                      <button onClick={() => handleStatusUpdate('verified')} 
+                        className="flex-1 py-4 rounded-xl text-[11px] font-bold text-white shadow-lg shadow-emerald-900/10 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                        style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+                        <VerifyIcon className="w-4 h-4" /> VERIFY RECORD
+                      </button>
+                      <button onClick={() => setEditMode(true)} 
+                        className="px-6 py-4 rounded-xl text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 transition-all active:scale-[0.98]">
+                        EDIT
+                      </button>
+                    </div>
+                    <button onClick={handleReadyToShipment} 
+                      className="w-full py-4 rounded-xl text-[11px] font-bold text-white shadow-lg shadow-amber-900/10 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                      style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path d="M5 8h14M5 8a2 2 0 1 0 0-4h14a2 2 0 1 0 0 4M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8" />
+                      </svg>
+                      READY TO SHIPMENT
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </Modal>
+        </div>
       )}
     </div>
   );

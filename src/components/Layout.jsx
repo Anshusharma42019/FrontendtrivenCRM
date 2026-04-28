@@ -125,22 +125,27 @@ export default function Layout() {
 
       <div className="flex-1 md:ml-64 flex flex-col min-h-screen min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="sticky top-0 z-10 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between"
-          style={{ background: 'rgba(240,244,240,0.92)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-          <button onClick={() => setSidebarOpen(true)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-white shadow-sm text-gray-500 hover:text-green-700 transition md:hidden">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        <header className="sticky top-0 z-10 px-4 py-3 flex items-center justify-between glass shadow-sm shadow-black/5"
+          style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+          <button onClick={() => setSidebarOpen(true)} 
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-white shadow-sm text-gray-500 hover:text-green-700 hover:scale-105 active:scale-95 transition-all md:hidden">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
             </svg>
           </button>
+          
           {/* Mobile brand */}
-          <span className="text-sm font-bold text-green-800 md:hidden">Triven CRM</span>
+          <div className="flex items-center gap-2 md:hidden">
+            <span className="text-lg font-extrabold tracking-tight text-green-800">Triven</span>
+          </div>
+
           <div className="hidden md:flex flex-1 items-center gap-4">
             {pageTitle && (
-              <h1 className="text-lg font-bold text-gray-800 tracking-tight">{pageTitle}</h1>
+              <h1 className="text-xl font-bold text-gray-800 tracking-tight">{pageTitle}</h1>
             )}
             {/* Global Phone Search */}
-            <div ref={searchRef} className="relative ml-2">
-              <div className="flex items-center gap-2 bg-white rounded-xl shadow-sm px-3 py-1.5 border border-gray-200 focus-within:border-green-400 transition-colors w-64">
+            <div ref={searchRef} className="relative ml-4">
+              <div className="flex items-center gap-2.5 bg-white/50 rounded-2xl shadow-sm px-4 py-2 border border-gray-200 focus-within:border-green-400 focus-within:ring-4 focus-within:ring-green-500/10 transition-all w-72">
                 <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
                 </svg>
@@ -149,7 +154,7 @@ export default function Layout() {
                   value={phoneQuery}
                   onChange={e => setPhoneQuery(e.target.value)}
                   onFocus={() => phoneQuery.trim().length >= 3 && setSearchOpen(true)}
-                  placeholder="Search by phone..."
+                  placeholder="Search lead or order..."
                   className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder-gray-400"
                 />
                 {searchLoading && (
@@ -165,7 +170,7 @@ export default function Layout() {
                 )}
               </div>
               {searchOpen && (
-                <div className="absolute top-full left-0 mt-1.5 w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+                <div className="absolute top-full left-0 mt-1.5 w-[92vw] sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
                   {searchResults.length === 0 ? (
                     <div className="px-4 py-6 text-center text-sm text-gray-400">No person found with this phone number</div>
                   ) : (
@@ -318,8 +323,10 @@ export default function Layout() {
         </header>
 
         {/* Main content */}
-        <main className="flex-1 p-3 sm:p-4 md:p-6 min-w-0 overflow-auto h-0">
-          <Outlet />
+        <main className="flex-1 p-main md:p-6 min-w-0 overflow-hidden h-main animate-slide-up pb-safe">
+          <div className="h-full overflow-y-auto no-scrollbar pt-2">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
