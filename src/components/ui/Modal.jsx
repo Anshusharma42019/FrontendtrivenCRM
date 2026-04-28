@@ -21,3 +21,5 @@ export default function Modal({ title, onClose, children, hideHeader, footer }) 
     </div>
   );
 }
+
+//next
