@@ -188,24 +188,6 @@ export default function CNP() {
         {/* Header & Filters */}
         <div className="flex flex-col gap-5 shrink-0 glass p-5 rounded-2xl border border-white/50 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${tab === 'tasks' ? 'bg-gradient-to-br from-red-500 to-red-600' : 'bg-gradient-to-br from-amber-500 to-amber-600'}`}>
-                {tab === 'tasks' ? (
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" /><line x1="1" y1="1" x2="23" y2="23" />
-                  </svg>
-                ) : (
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                  </svg>
-                )}
-              </div>
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">{tab === 'tasks' ? 'Call Not Picked' : 'Call Again'}</h2>
-                <p className="text-[11px] text-gray-400 font-medium mt-0.5">Manage unanswered leads & callbacks</p>
-              </div>
-            </div>
-            
             <div className="flex gap-2 p-1 bg-gray-100 rounded-xl w-fit">
               <button onClick={() => { setTab("tasks"); setSelected(null); }}
                 className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${tab === "tasks" ? "bg-white text-red-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
@@ -218,8 +200,8 @@ export default function CNP() {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
               {[
                 { label: 'Today', value: 'today' },
                 { label: 'Yesterday', value: 'yesterday' },
@@ -237,8 +219,7 @@ export default function CNP() {
                 );
               })}
             </div>
-
-            <div className="relative flex-1">
+            <div className="relative w-1/2">
               <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                 <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
               </svg>

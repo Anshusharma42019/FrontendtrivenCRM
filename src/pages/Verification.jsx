@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getVerificationRecords, updateVerificationStatus, updateVerificationRecord, updateTask, deleteVerificationRecord } from '../services/task.service';
+import { getVerificationRecords, syncVerificationRecords, updateVerificationStatus, updateVerificationRecord, updateTask, deleteVerificationRecord } from '../services/task.service';
 import { updateLead } from '../services/lead.service';
 import API from '../api';
 import Modal from '../components/ui/Modal';
@@ -61,7 +61,14 @@ export default function Verification() {
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    // Sync new tasks in background, then refresh list silently
+    syncVerificationRecords()
+      .then(() => getVerificationRecords())
+      .then(data => setRecords(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, [load]);
 
   const flattenRecord = (r) => ({
     ...r,
@@ -214,58 +221,33 @@ export default function Verification() {
       <div className={`flex flex-col gap-4 transition-all duration-300 ${selected ? 'w-full lg:w-[55%]' : 'w-full'} h-full overflow-hidden`}>
         
         {/* Header & Filters (Fixed) */}
-        <div className="flex flex-col gap-5 shrink-0 glass p-5 rounded-2xl border border-white/50 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Verification</h2>
-              <p className="text-[11px] text-gray-400 font-medium mt-0.5">Confirm tasks for shipment readiness</p>
-            </div>
-            <div className="flex items-center gap-2 self-start sm:self-auto">
-              <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-xs font-bold shadow-md"
-                style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)' }}>
-                <VerifyIcon className="w-3.5 h-3.5" />
-                <span>{filteredRecords.length} Pending</span>
-              </div>
-            </div>
+        <div className="flex items-center gap-3 shrink-0 glass px-4 py-3 rounded-2xl border border-white/50 shadow-sm">
+          {/* Day filters */}
+          {[['all', 'All'], ['today', 'Today'], ['yesterday', 'Yesterday']].map(([val, label]) => (
+            <button key={val} onClick={() => { setDayFilter(val); setCustomDate(''); }}
+              className={`px-3 py-2 rounded-xl text-xs font-bold border whitespace-nowrap transition-all shrink-0 ${
+                dayFilter === val ? 'bg-green-600 text-white border-green-600 shadow-md' : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50'
+              }`}>{label}</button>
+          ))}
+          <input type="date" value={customDate} max={new Date().toISOString().slice(0, 10)}
+            onChange={e => { setCustomDate(e.target.value); setDayFilter(e.target.value ? 'custom' : 'all'); }}
+            className={`px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer outline-none shrink-0 ${
+              dayFilter === 'custom' ? 'bg-green-600 text-white border-green-600 shadow-md' : 'bg-white text-gray-400 border-gray-100'
+            }`} />
+          {/* Search */}
+          <div className="relative flex-1">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+            </svg>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, phone, task..."
+              className="w-full pl-9 pr-16 py-2.5 rounded-xl border border-gray-100 bg-white text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-400/20 focus:border-green-400 transition shadow-sm" />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-300">{filteredRecords.length}</span>
           </div>
-
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
-              {[['all', 'All'], ['today', 'Today'], ['yesterday', 'Yesterday']].map(([val, label]) => (
-                <button key={val} onClick={() => { setDayFilter(val); setCustomDate(''); }}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold border whitespace-nowrap transition-all ${dayFilter === val
-                      ? 'bg-green-600 text-white border-green-600 shadow-md'
-                      : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50'
-                    }`}>{label}</button>
-              ))}
-              <div className="relative shrink-0">
-                <input
-                  type="date"
-                  value={customDate}
-                  max={new Date().toISOString().slice(0, 10)}
-                  onChange={e => { setCustomDate(e.target.value); setDayFilter(e.target.value ? 'custom' : 'all'); }}
-                  className={`pl-3 pr-2 py-2 rounded-xl text-xs font-bold border transition cursor-pointer outline-none ${dayFilter === 'custom'
-                      ? 'bg-green-600 text-white border-green-600 shadow-md'
-                      : 'bg-white text-gray-400 border-gray-100'
-                    }`}
-                />
-              </div>
-            </div>
-
-            <div className="relative">
-              <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-              </svg>
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search name, phone, task..."
-                className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-100 bg-white text-sm font-medium text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-400/20 focus:border-green-400 transition shadow-sm"
-              />
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-300 uppercase tracking-tighter">
-                {filteredRecords.length} found
-              </div>
-            </div>
+          {/* Pending badge */}
+          <div className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-white text-xs font-bold shadow-md shrink-0"
+            style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)' }}>
+            <VerifyIcon className="w-3.5 h-3.5" />
+            {filteredRecords.length} Pending
           </div>
         </div>
 

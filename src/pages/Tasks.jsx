@@ -265,16 +265,6 @@ export default function Tasks() {
         {/* Header & Filters */}
         <div className="flex flex-col gap-5 shrink-0 glass p-5 rounded-2xl border border-white/50 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg bg-gradient-to-br from-emerald-500 to-emerald-600">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-              </div>
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Tasks & Follow-ups</h2>
-                <p className="text-[11px] text-gray-400 font-medium mt-0.5">Manage your daily schedule and leads</p>
-              </div>
-            </div>
-            
             <div className="flex gap-2">
               <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
                 <button onClick={() => { setTab("all"); setSelected(null); }}

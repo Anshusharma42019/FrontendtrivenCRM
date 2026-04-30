@@ -169,20 +169,8 @@ export default function Leads() {
         
         {/* Header & Filters */}
         <div className="flex flex-col gap-5 shrink-0 glass p-5 rounded-3xl border border-white/50 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Leads</h2>
-              <p className="text-[11px] text-gray-400 font-medium mt-0.5">{data.total} total leads found</p>
-            </div>
-            <button onClick={() => { setIsCreating(true); setSelected(null); setForm(EMPTY); }}
-              className="px-4 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
-              style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
-              <span className="text-lg leading-none">+</span> Add New Lead
-            </button>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
               {[['today', 'Today'], ['yesterday', 'Yesterday'], ['week', 'Week'], ['month', 'Month']].map(([key, label]) => (
                 <button key={key}
                   onClick={() => filters.datePreset === key ? applyPreset('today') : applyPreset(key)}
@@ -192,17 +180,22 @@ export default function Leads() {
                   }`}>{label}</button>
               ))}
             </div>
-            <div className="relative flex-1">
+            <div className="relative flex-1 min-w-[180px]">
               <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                 <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
               </svg>
               <input
                 value={filters.search}
-                onChange={e => setFilter('search', e.target.value)}
+                onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
                 placeholder="Search by name, phone..."
                 className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-100 bg-white text-sm font-medium text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/20 transition shadow-sm"
               />
             </div>
+            <button onClick={() => { setIsCreating(true); setSelected(null); setForm(EMPTY); }}
+              className="px-4 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg hover:shadow-xl transition-all flex items-center gap-2 shrink-0"
+              style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+              <span className="text-lg leading-none">+</span> Add New Lead
+            </button>
           </div>
         </div>
 

@@ -145,64 +145,49 @@ export default function FollowUp() {
       <div className={`flex flex-col gap-4 transition-all duration-300 ${selected ? 'w-full lg:w-[55%]' : 'w-full'} h-full overflow-hidden`}>
         
         {/* Header & Filters (Fixed) */}
-        <div className="flex flex-col gap-5 shrink-0 glass p-5 rounded-2xl border border-white/50 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Follow Up</h2>
-              <p className="text-[11px] text-gray-400 font-medium mt-0.5">Manage delivered orders • {all.length} total</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={syncAndLoad} disabled={syncing || loading}
-                className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
-                style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.1} viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                {syncing ? 'Syncing...' : 'Sync'}
-              </button>
-              <button onClick={load} disabled={loading}
-                className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
-                style={{ background: 'linear-gradient(135deg, #374151, #1f2937)' }}>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.1} viewBox="0 0 24 24"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
-                {loading ? 'Refilling...' : 'Refresh'}
-              </button>
-            </div>
+        <div className="flex items-center gap-3 shrink-0 glass px-4 py-3 rounded-2xl border border-white/50 shadow-sm">
+          {/* Date filter */}
+          <div className="flex items-center bg-white rounded-xl border border-gray-100 px-3 py-2 shadow-sm gap-2 shrink-0">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date</span>
+            <input type="date" value={filterDelivered} onChange={e => { setFilterDelivered(e.target.value); setPage(1); }}
+              className="text-xs font-bold text-gray-700 bg-transparent outline-none w-28" />
           </div>
-
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex-1 min-w-[140px] flex items-center bg-white rounded-xl border border-gray-100 px-3 py-2 shadow-sm">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mr-3">Date</span>
-                <input type="date" value={filterDelivered} onChange={e => { setFilterDelivered(e.target.value); setPage(1); }} 
-                  className="text-xs font-bold text-gray-700 bg-transparent outline-none flex-1" />
-              </div>
-              <div className="flex-1 min-w-[120px] flex items-center bg-white rounded-xl border border-gray-100 px-3 py-2 shadow-sm">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mr-3">Call</span>
-                <select value={filterFollowupNum} onChange={e => { setFilterFollowupNum(e.target.value); setPage(1); }} 
-                  className="text-xs font-bold text-gray-700 bg-transparent outline-none flex-1">
-                  <option value="">All Calls</option>
-                  {[1,2,3,4,5].map(n => <option key={n} value={n}>{ordinal(n-1)}</option>)}
-                </select>
-              </div>
-              {(filterDelivered || filterFollowupNum) && (
-                <button onClick={() => { setFilterDelivered(''); setFilterFollowupNum(''); setPage(1); }}
-                  className="px-4 py-2 rounded-xl text-[10px] font-extrabold text-rose-500 bg-rose-50 hover:bg-rose-100 transition shadow-sm">RESET</button>
-              )}
-            </div>
-
-            <div className="relative">
-              <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-              </svg>
-              <input
-                value={search}
-                onChange={e => { setSearch(e.target.value); setPage(1); }}
-                placeholder="Search customer, phone, AWB..."
-                className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-100 bg-white text-sm font-medium text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/20 focus:border-emerald-400 transition shadow-sm"
-              />
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-300 uppercase tracking-tighter">
-                {filtered.length} found
-              </div>
-            </div>
+          {/* Call filter */}
+          <div className="flex items-center bg-white rounded-xl border border-gray-100 px-3 py-2 shadow-sm gap-2 shrink-0">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Call</span>
+            <select value={filterFollowupNum} onChange={e => { setFilterFollowupNum(e.target.value); setPage(1); }}
+              className="text-xs font-bold text-gray-700 bg-transparent outline-none">
+              <option value="">All</option>
+              {[1,2,3,4,5].map(n => <option key={n} value={n}>{ordinal(n-1)}</option>)}
+            </select>
           </div>
+          {(filterDelivered || filterFollowupNum) && (
+            <button onClick={() => { setFilterDelivered(''); setFilterFollowupNum(''); setPage(1); }}
+              className="px-3 py-2 rounded-xl text-[10px] font-extrabold text-rose-500 bg-rose-50 hover:bg-rose-100 transition shrink-0">RESET</button>
+          )}
+          {/* Search */}
+          <div className="relative flex-1">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+            </svg>
+            <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search customer, phone, AWB..."
+              className="w-full pl-9 pr-16 py-2.5 rounded-xl border border-gray-100 bg-white text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/20 focus:border-emerald-400 transition shadow-sm" />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-300">{filtered.length}</span>
+          </div>
+          {/* Buttons */}
+          <button onClick={syncAndLoad} disabled={syncing || loading}
+            className="px-4 py-2.5 rounded-xl text-white text-xs font-bold shadow-md flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 shrink-0"
+            style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.1} viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            {syncing ? 'Syncing...' : 'Sync'}
+          </button>
+          <button onClick={load} disabled={loading}
+            className="px-4 py-2.5 rounded-xl text-white text-xs font-bold shadow-md flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 shrink-0"
+            style={{ background: 'linear-gradient(135deg, #374151, #1f2937)' }}>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.1} viewBox="0 0 24 24"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+            {loading ? 'Loading...' : 'Refresh'}
+          </button>
         </div>
 
         {error && <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-red-600 text-xs font-medium shrink-0">{error}</div>}
@@ -403,7 +388,11 @@ export default function FollowUp() {
                 );
               })}
             </div>
-                {/* Detail Modal (Mobile) */}
+          </div>
+        </div>
+      )}
+
+      {/* Detail Modal (Mobile) */}
       {selected && (
         <div className="lg:hidden">
           <Modal hideHeader={true} onClose={() => setSelected(null)}>
@@ -469,9 +458,6 @@ export default function FollowUp() {
               </div>
             </div>
           </Modal>
-        </div>
-      )}
-      </div>
         </div>
       )}
     </div>

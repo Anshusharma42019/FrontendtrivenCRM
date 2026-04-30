@@ -141,16 +141,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Dashboard</h2>
-          <p className="text-sm text-gray-400 mt-0.5">Welcome back! Here's what's happening.</p>
-        </div>
-        <span className="text-xs text-gray-300 bg-white px-3 py-1.5 rounded-xl shadow-sm" style={{ border: '1px solid rgba(0,0,0,0.05)' }}>
-          Live · {(Number(import.meta.env.VITE_DASHBOARD_REFRESH_INTERVAL) || 120000) / 1000}s refresh
-        </span>
-      </div>
-
       {/* Stat Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
         <StatCard label="Total Leads" value={stats?.totalLeads} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} color="border-green-500" />

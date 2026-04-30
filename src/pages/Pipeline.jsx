@@ -230,18 +230,12 @@ export default function Pipeline() {
       <div className={`flex flex-col gap-4 transition-all duration-300 ${selected ? 'w-full lg:w-[55%]' : 'w-full'} h-full overflow-hidden`}>
         
         {/* Header & Filters */}
-        <div className="flex flex-col gap-5 shrink-0 glass p-5 rounded-3xl border border-white/50 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-800 tracking-tight">Sales Pipeline</h2>
-              <p className="text-[11px] text-gray-400 font-medium mt-0.5">Manage and track your lead progression</p>
-            </div>
-            
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        <div className="flex items-center justify-between gap-3 shrink-0 glass px-5 py-3 rounded-3xl border border-white/50 shadow-sm">
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
               {[
                 ...STAGES,
-                { key: 'cnp', label: 'CNP', bar: 'bg-red-600', icon: 'M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636' },
-                { key: 'call_again', label: 'Call Again', bar: 'bg-amber-600', icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' }
+                { key: 'cnp', label: 'CNP', bar: 'bg-red-600' },
+                { key: 'call_again', label: 'Call Again', bar: 'bg-amber-600' }
               ].map(s => (
                 <button key={s.key} onClick={() => { setFilter(s.key); setSelected(null); }}
                   className={`px-4 py-2 rounded-xl text-xs font-bold border whitespace-nowrap transition-all flex items-center gap-2 ${filter === s.key
@@ -252,10 +246,8 @@ export default function Pipeline() {
                   {s.label}
                 </button>
               ))}
-            </div>
           </div>
-
-          <div className="relative">
+          <div className="relative w-1/2">
             <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
             </svg>
@@ -263,7 +255,7 @@ export default function Pipeline() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search by name, phone..."
-              className="w-full pl-11 pr-4 py-3 rounded-2xl border border-gray-100 bg-white text-sm font-medium text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-400/20 transition shadow-sm"
+              className="w-full pl-11 pr-4 py-2.5 rounded-2xl border border-gray-100 bg-white text-sm font-medium text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-400/20 transition shadow-sm"
             />
           </div>
         </div>

@@ -120,10 +120,10 @@ export default function Layout() {
   };
 
   return (
-    <div className="flex min-h-screen" style={{ background: '#f0f4f0' }}>
+    <div className="flex h-screen overflow-hidden" style={{ background: '#f0f4f0' }}>
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} unreadCount={unreadCount} />
 
-      <div className="flex-1 md:ml-64 flex flex-col min-h-screen min-w-0 overflow-hidden">
+      <div className="flex-1 md:ml-64 flex flex-col h-screen min-w-0 overflow-hidden">
         {/* Header */}
         <header className="sticky top-0 z-10 px-4 py-3 flex items-center justify-between glass shadow-sm shadow-black/5"
           style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
@@ -323,10 +323,8 @@ export default function Layout() {
         </header>
 
         {/* Main content */}
-        <main className="flex-1 p-main md:p-6 min-w-0 overflow-hidden h-main animate-slide-up pb-safe">
-          <div className="h-full overflow-y-auto no-scrollbar pt-2">
-            <Outlet />
-          </div>
+        <main className="flex-1 overflow-y-auto p-main md:p-6 min-w-0 pb-safe">
+          <Outlet />
         </main>
       </div>
     </div>
