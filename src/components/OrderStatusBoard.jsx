@@ -13,7 +13,6 @@ const STATUS_LIST = [
   'NEW',
   'RTO_IN_TRANSIT',
   'OUT_FOR_DELIVERY',
-  'IN_TRANSIT-EN-ROUTE',
   'REACHED_BACK_AT_SELLER_CITY',
   'UNDELIVERED-1ST_ATTEMPT',
   'PICKUP_EXCEPTION',
@@ -44,7 +43,6 @@ const STATUS_STYLES = {
   NEW: 'border-sky-200 bg-sky-50 text-sky-700',
   RTO_IN_TRANSIT: 'border-violet-200 bg-violet-50 text-violet-700',
   OUT_FOR_DELIVERY: 'border-cyan-200 bg-cyan-50 text-cyan-700',
-  'IN_TRANSIT-EN-ROUTE': 'border-orange-200 bg-orange-50 text-orange-700',
   REACHED_BACK_AT_SELLER_CITY: 'border-lime-200 bg-lime-50 text-lime-700',
   'UNDELIVERED-1ST_ATTEMPT': 'border-rose-200 bg-rose-50 text-rose-700',
   PICKUP_EXCEPTION: 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700',
@@ -106,7 +104,8 @@ const getDateParams = (preset, customFrom, customTo) => {
 export default function OrderStatusBoard({
   title = 'Order Status',
   subtitle,
-  defaultPreset = 'today',
+  defaultPreset = 'month',
+  onStatsChange,
 }) {
   const [deliveredStats, setDeliveredStats] = useState({ count: 0, revenue: 0, statusBreakdown: [] });
   const [datePreset, setDatePreset] = useState(defaultPreset);
@@ -116,13 +115,17 @@ export default function OrderStatusBoard({
   const [statusOrders, setStatusOrders] = useState([]);
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusError, setStatusError] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
 
   const loadDelivered = useCallback((params = {}) => {
     srSvc.getDeliveredStats(params).then(res => {
       const { count, revenue, statusBreakdown } = res.data?.data || {};
-      setDeliveredStats({ count: count || 0, revenue: revenue || 0, statusBreakdown: statusBreakdown || [] });
+      const stats = { count: count || 0, revenue: revenue || 0, statusBreakdown: statusBreakdown || [] };
+      setDeliveredStats(stats);
+      onStatsChange?.(stats);
     }).catch(() => {});
-  }, []);
+  }, [onStatsChange]);
 
   const loadStatusOrders = useCallback((status, params = {}) => {
     setStatusLoading(true);
@@ -136,14 +139,40 @@ export default function OrderStatusBoard({
   }, []);
 
   const applyDateFilter = useCallback((preset = datePreset, from = filterFrom, to = filterTo) => {
+    if (preset === 'custom' && (!from || !to)) return;
     const params = getDateParams(preset, from, to);
     loadDelivered(params);
     if (selectedStatus) loadStatusOrders(selectedStatus, params);
   }, [datePreset, filterFrom, filterTo, loadDelivered, loadStatusOrders, selectedStatus]);
 
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncMsg('');
+    try {
+      await srSvc.syncShiprocket();
+      const backfill = await srSvc.backfillDeliveredAt();
+      const fixed = backfill.data?.data;
+      setSyncMsg(`Sync complete! Fixed: ${fixed?.subTotalFixed || 0} amounts, ${fixed?.deliveredAtFixed || 0} dates`);
+      applyDateFilter();
+    } catch (e) {
+      setSyncMsg(e?.response?.data?.message || 'Sync failed');
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncMsg(''), 6000);
+    }
+  };
+
   const selectDatePreset = (preset) => {
     setDatePreset(preset);
-    if (preset !== 'custom') applyDateFilter(preset, filterFrom, filterTo);
+    if (preset === 'custom') {
+      const today = new Date();
+      const from = formatDateInput(new Date(today.getFullYear(), today.getMonth(), 1));
+      const to = formatDateInput(today);
+      setFilterFrom(from);
+      setFilterTo(to);
+    } else {
+      applyDateFilter(preset, filterFrom, filterTo);
+    }
   };
 
   const openStatusDetails = (status) => {
@@ -200,13 +229,29 @@ export default function OrderStatusBoard({
               </div>
             )}
             <button onClick={() => applyDateFilter()}
-              className="flex-1 sm:flex-none h-9 text-[11px] bg-green-600 text-white px-5 rounded-xl hover:bg-green-700 font-bold shadow-md transition active:scale-95 inline-flex items-center justify-center gap-2">
+              className="h-9 text-[11px] bg-green-600 text-white px-5 rounded-xl hover:bg-green-700 font-bold shadow-md transition active:scale-95 inline-flex items-center justify-center gap-2">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
                 <path d="M3 4h18M6 12h12M10 20h4"/>
               </svg>
               APPLY
             </button>
+            <button onClick={handleSync} disabled={syncing}
+              title="Sync from Shiprocket"
+              className={`h-9 px-4 rounded-xl text-[11px] font-bold inline-flex items-center gap-1.5 transition active:scale-95 disabled:opacity-60 ${
+                syncing ? 'bg-blue-100 text-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
+              }`}>
+              <svg className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
+                <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+              {syncing ? 'SYNCING...' : 'SYNC'}
+            </button>
           </div>
+          {syncMsg && (
+            <p className={`text-[11px] font-semibold text-right ${
+              syncMsg.includes('complete') ? 'text-green-600' : 'text-red-500'
+            }`}>{syncMsg}</p>
+          )}
         </div>
       </div>
 
