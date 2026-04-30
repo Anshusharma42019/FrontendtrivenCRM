@@ -154,16 +154,13 @@ export default function Verification() {
   const handleStatusUpdate = async (status, holdDate = null) => {
     setUpdating(selected._id);
     try {
-      const updated = await updateVerificationStatus(selected._id, status, holdDate);
+      await updateVerificationStatus(selected._id, status, holdDate);
       if (status === 'verified') {
-        const taskId = selected.task?._id || (typeof selected.task === 'string' ? selected.task : null);
-        if (taskId) await updateTask(taskId, { status: 'ready_to_shipment' });
         setRecords(prev => prev.filter(r => r._id !== selected._id));
         setSelected(null);
       } else {
-        setRecords(prev => prev.map(r => r._id === selected._id ? { ...r, status: updated.status } : r));
-        const freshSelected = { ...selected, status: updated.status };
-        setSelected(freshSelected);
+        setRecords(prev => prev.map(r => r._id === selected._id ? { ...r, status } : r));
+        setSelected(prev => ({ ...prev, status }));
       }
     } catch { }
     finally { setUpdating(null); }

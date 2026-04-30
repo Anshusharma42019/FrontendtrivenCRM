@@ -40,6 +40,9 @@ export default function ReadyToShipment() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState('');
+  const [dayFilter, setDayFilter] = useState('today');
+  const [customDate, setCustomDate] = useState('');
+  const [repairing, setRepairing] = useState(false);
   const navigate = useNavigate();
 
   const load = useCallback(async () => {
@@ -53,7 +56,30 @@ export default function ReadyToShipment() {
 
   useEffect(() => { load(); }, [load]);
 
+  const handleRepair = async () => {
+    setRepairing(true);
+    try {
+      await load();
+    } finally {
+      setRepairing(false);
+    }
+  };
+
   const filtered = records.filter(r => {
+    const startOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const today = startOf(new Date());
+    if (dayFilter === 'today' && new Date(r.createdAt) < today) return false;
+    if (dayFilter === 'yesterday') {
+      const y = new Date(today); y.setDate(y.getDate() - 1);
+      const d = new Date(r.createdAt);
+      if (d < y || d >= today) return false;
+    }
+    if (dayFilter === 'custom' && customDate) {
+      const from = new Date(customDate);
+      const to = new Date(from); to.setDate(to.getDate() + 1);
+      const d = new Date(r.createdAt);
+      if (d < from || d >= to) return false;
+    }
     const q = search.toLowerCase();
     return !q ||
       r.title?.toLowerCase().includes(q) ||
@@ -82,11 +108,42 @@ export default function ReadyToShipment() {
               <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Ready to Ship</h2>
               <p className="text-xs text-gray-400 mt-0.5">Orders confirmed · awaiting dispatch</p>
             </div>
-            <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-white text-xs font-bold shadow-sm"
-              style={{ background: 'linear-gradient(135deg,#f59e0b,#d97706)' }}>
-              <TruckIcon />
-              {records.length} pending
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleRepair}
+                disabled={repairing}
+                className="px-3 py-2 rounded-xl text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 transition disabled:opacity-50 whitespace-nowrap">
+                {repairing ? 'Syncing...' : '🔄 Sync Verified'}
+              </button>
+              <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-white text-xs font-bold shadow-sm"
+                style={{ background: 'linear-gradient(135deg,#f59e0b,#d97706)' }}>
+                <TruckIcon />
+                {records.length} pending
+              </div>
             </div>
+          </div>
+
+          {/* Date Filters */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {[['all', 'All'], ['today', 'Today'], ['yesterday', 'Yesterday']].map(([val, label]) => (
+              <button key={val} onClick={() => { setDayFilter(val); setCustomDate(''); }}
+                className={`px-4 py-2 rounded-xl text-xs font-bold border whitespace-nowrap transition-all ${
+                  dayFilter === val
+                    ? 'bg-amber-500 text-white border-amber-500 shadow-md'
+                    : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50'
+                }`}>{label}</button>
+            ))}
+            <input
+              type="date"
+              value={customDate}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={e => { setCustomDate(e.target.value); setDayFilter(e.target.value ? 'custom' : 'all'); }}
+              className={`px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer outline-none shrink-0 ${
+                dayFilter === 'custom'
+                  ? 'bg-amber-500 text-white border-amber-500 shadow-md'
+                  : 'bg-white text-gray-400 border-gray-100'
+              }`}
+            />
           </div>
 
           {/* Search (Fixed) */}
