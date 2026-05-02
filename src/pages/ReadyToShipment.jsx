@@ -65,6 +65,17 @@ export default function ReadyToShipment() {
     }
   };
 
+  const handleDelete = async (record) => {
+    if (!window.confirm('Delete this record? The task will be marked as cancelled.')) return;
+    try {
+      await API.delete(`/ready-to-shipment/${record._id}`);
+      setSelected(null);
+      load();
+    } catch (e) {
+      alert(e?.response?.data?.message || 'Delete failed');
+    }
+  };
+
   const filtered = records.filter(r => {
     const startOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const today = startOf(new Date());
@@ -268,7 +279,12 @@ export default function ReadyToShipment() {
           </div>
 
           {/* Panel footer */}
-          <div className="px-5 py-4 border-t border-gray-50 shrink-0">
+          <div className="px-5 py-4 border-t border-gray-50 shrink-0 flex gap-2">
+            <button
+              onClick={() => handleDelete(selected)}
+              className="px-4 py-3 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition shrink-0">
+              Delete
+            </button>
             <button
               onClick={() => {
                 setSelected(null);
@@ -276,7 +292,7 @@ export default function ReadyToShipment() {
                   state: { delivery_postcode: selected.pincode || '', rts: selected }
                 });
               }}
-              className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-emerald-900/10"
+              className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-emerald-900/10"
               style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)' }}>
               <TruckIcon />
               Check Serviceability & Ship
@@ -333,13 +349,18 @@ export default function ReadyToShipment() {
               <DetailRow label="Price" value={selected.price ? `₹${selected.price}` : null} />
               <DetailRow label="Confirm Date" value={selected.reminderAt ? new Date(selected.reminderAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null} />
               
-              <div className="pt-6">
+              <div className="pt-6 flex gap-2">
+                <button
+                  onClick={() => handleDelete(selected)}
+                  className="px-5 py-4 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition shrink-0">
+                  Delete
+                </button>
                 <button
                   onClick={() => {
                     setSelected(null);
                     navigate('/shiprocket', { state: { delivery_postcode: selected.pincode || '', rts: selected } });
                   }}
-                  className="w-full py-4 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/10 transition-all active:scale-[0.98]"
+                  className="flex-1 py-4 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/10 transition-all active:scale-[0.98]"
                   style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
                   <TruckIcon className="w-5 h-5" /> CHECK SERVICEABILITY
                 </button>

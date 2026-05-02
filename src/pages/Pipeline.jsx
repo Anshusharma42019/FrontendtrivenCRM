@@ -64,16 +64,11 @@ export default function Pipeline() {
   const [nextDate, setNextDate] = useState('');
   const [savingNote, setSavingNote] = useState(false);
 
-  useEffect(() => {
-    if (location.state?.filter) {
-      setFilter(location.state.filter);
-      window.history.replaceState({}, '');
-    }
-  }, [location.state]);
-
   const load = useCallback(async () => {
     setError('');
     try {
+      API.post('/verification/repair').catch(() => {});
+
       const [interestedRes, onHoldRes, closedLostRes, ordersRes, cnpRes, callAgainRes] = await Promise.all([
         getLeads({ limit: 200, status: 'interested' }),
         getLeads({ limit: 200, status: 'on_hold' }),
@@ -84,7 +79,7 @@ export default function Pipeline() {
       ]);
       setLeads([
         ...(Array.isArray(interestedRes?.leads) ? interestedRes.leads : []),
-        ...(Array.isArray(onHoldRes?.leads) ? onHoldRes.leads : []),
+        ...(Array.isArray(onHoldRes?.leads) ? onHoldRes.leads.filter(l => !l.cnp) : []),
       ]);
       setClosedLostLeads(Array.isArray(closedLostRes?.leads) ? closedLostRes.leads : []);
       setDeliveredOrders(Array.isArray(ordersRes.data?.data) ? ordersRes.data.data : []);
@@ -96,6 +91,13 @@ export default function Pipeline() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (location.state?.filter) {
+      setFilter(location.state.filter);
+      window.history.replaceState({}, '');
+    }
+  }, [location.state]);
 
   const filteredItems = useMemo(() => {
     let items = [];
@@ -127,8 +129,6 @@ export default function Pipeline() {
       if (filter === 'call_again' && selected?._id && selected._id !== lead._id) {
         try { await updateCallAgain(selected._id, { status: 'done' }); } catch { }
       }
-      // Re-apply the status update after call-again sync (callagain PATCH may overwrite)
-      await updateLead(lead._id, { status: newStage, cnp: false });
       setSelected(null);
       await load();
     } catch (e) { 
@@ -409,6 +409,15 @@ export default function Pipeline() {
                     <>
                       <SectionHead label="Lead Information" />
                       <DetailRow label="Status" value={lead.status?.replace(/_/g,' ')} />
+                      {lead.status === 'on_hold' && lead.onHoldReason && (
+                        <div className="mt-2 mb-1 p-3 rounded-xl bg-gray-50 border border-gray-200">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">On Hold Info</p>
+                          <p className="text-sm text-gray-700 font-medium">{lead.onHoldReason}</p>
+                          {lead.onHoldUntil && (
+                            <p className="text-xs text-gray-500 mt-0.5">Until: {new Date(lead.onHoldUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                          )}
+                        </div>
+                      )}
                       <DetailRow label="Source" value={lead.source} />
                       <DetailRow label="Assigned To" value={lead.assignedTo?.name} />
                       <DetailRow label="Problem" value={lead.problem} />

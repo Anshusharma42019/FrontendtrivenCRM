@@ -208,10 +208,8 @@ export default function Tasks() {
           await updateLead(leadId, { status: 'closed_lost' }).catch(() => {});
         } else if (payload.status === 'cnp') {
           await updateLead(leadId, { cnp: true }).catch(() => {});
-          setModal(null); navigate('/cnp'); return;
         } else if (payload.status === 'cancelled') {
           await updateLead(leadId, { status: 'on_hold' }).catch(() => {});
-          setModal(null); navigate('/pipeline', { state: { filter: 'on_hold' } }); return;
         }
       }
 

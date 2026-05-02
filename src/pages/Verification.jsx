@@ -47,6 +47,7 @@ export default function Verification() {
   const [editForm, setEditForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [onHoldDate, setOnHoldDate] = useState('');
+  const [onHoldReason, setOnHoldReason] = useState('');
   const [showOnHoldPicker, setShowOnHoldPicker] = useState(false);
   const [dayFilter, setDayFilter] = useState('today');
   const [customDate, setCustomDate] = useState('');
@@ -63,8 +64,11 @@ export default function Verification() {
 
   useEffect(() => {
     load();
-    // Sync new tasks in background, then refresh list silently
-    syncVerificationRecords()
+    // Sync + repair in background, then refresh
+    Promise.allSettled([
+      syncVerificationRecords(),
+      API.post('/verification/repair'),
+    ])
       .then(() => getVerificationRecords())
       .then(data => setRecords(Array.isArray(data) ? data : []))
       .catch(() => {});
@@ -158,13 +162,16 @@ export default function Verification() {
     finally { setSaving(false); }
   };
 
-  const handleStatusUpdate = async (status, holdDate = null) => {
+  const handleStatusUpdate = async (status, holdDate = null, holdReason = null) => {
     setUpdating(selected._id);
     try {
-      await updateVerificationStatus(selected._id, status, holdDate);
-      if (status === 'verified') {
+      await updateVerificationStatus(selected._id, status, holdDate, holdReason);
+      if (status === 'verified' || status === 'on_hold') {
         setRecords(prev => prev.filter(r => r._id !== selected._id));
         setSelected(null);
+        if (status === 'on_hold') {
+          await API.post('/verification/repair').catch(() => {});
+        }
       } else {
         setRecords(prev => prev.map(r => r._id === selected._id ? { ...r, status } : r));
         setSelected(prev => ({ ...prev, status }));
@@ -450,13 +457,25 @@ export default function Verification() {
                   </button>
                 
                 {showOnHoldPicker ? (
-                  <div className="flex-[1.5] flex gap-1.5 items-center bg-gray-50 p-1.5 rounded-xl border border-gray-100">
+                  <div className="flex-[1.5] flex flex-col gap-1.5 bg-gray-50 p-2.5 rounded-xl border border-gray-200">
+                    <input
+                      placeholder="Reason (e.g. call back later)"
+                      value={onHoldReason}
+                      onChange={e => setOnHoldReason(e.target.value)}
+                      className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    />
                     <input type="date" value={onHoldDate} onChange={e => setOnHoldDate(e.target.value)}
                       min={new Date().toISOString().slice(0, 10)}
-                      className="flex-1 bg-transparent text-[11px] focus:outline-none" />
-                    <button onClick={() => handleStatusUpdate('on_hold', onHoldDate)} disabled={!onHoldDate}
-                      className="px-2 py-1 bg-gray-800 text-white text-[10px] font-bold rounded-lg disabled:opacity-50">Confirm</button>
-                    <button onClick={() => setShowOnHoldPicker(false)} className="text-gray-400 p-1">×</button>
+                      className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none" />
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => { handleStatusUpdate('on_hold', onHoldDate, onHoldReason); setShowOnHoldPicker(false); setOnHoldReason(''); setOnHoldDate(''); }}
+                        disabled={!onHoldDate || !onHoldReason}
+                        className="flex-1 py-1.5 bg-gray-800 text-white text-[10px] font-bold rounded-lg disabled:opacity-40 transition">
+                        Confirm
+                      </button>
+                      <button onClick={() => { setShowOnHoldPicker(false); setOnHoldReason(''); setOnHoldDate(''); }} className="px-2 text-gray-400 hover:text-gray-600 text-sm">×</button>
+                    </div>
                   </div>
                 ) : (
                   <button onClick={() => setShowOnHoldPicker(true)}
