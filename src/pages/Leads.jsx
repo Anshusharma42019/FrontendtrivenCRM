@@ -9,7 +9,7 @@ import Badge from '../components/ui/Badge';
 const STATUSES = ['new', 'old'];
 const SOURCES = ['website', 'referral', 'social_media', 'cold_call', 'email', 'walk_in', 'other'];
 const TYPES = ['general', 'ayurveda', 'panchakarma', 'consultation', 'product', 'other'];
-const EMPTY = { name: '', phone: '', email: '', address: '', source: 'other', status: 'new', type: 'general', problem: '', note: '', revenue: '' };
+const EMPTY = { name: '', phone: '', email: '', address: '', houseNo: '', cityVillage: '', cityVillageType: 'city', postOffice: '', landmark: '', district: '', state: '', pincode: '', source: 'other', status: 'new', type: 'general', problem: '', note: '', revenue: '' };
 
 const PIN_COLORS = [
   'bg-emerald-500', 'bg-blue-500', 'bg-indigo-500',
@@ -116,6 +116,14 @@ export default function Leads() {
         phone: form.phone,
         email: form.email || '',
         address: form.address || '',
+        houseNo: form.houseNo || '',
+        cityVillage: form.cityVillage || '',
+        cityVillageType: form.cityVillageType || 'city',
+        postOffice: form.postOffice || '',
+        landmark: form.landmark || '',
+        district: form.district || '',
+        state: form.state || '',
+        pincode: form.pincode || '',
         source: form.source,
         type: form.type,
         problem: form.problem || '',
@@ -289,6 +297,17 @@ export default function Leads() {
                 <input type="email" className={`${inputCls} mt-1`} value={form.email} onChange={e => sf('email', e.target.value)} /></div>
               <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Address</label>
                 <textarea rows={2} className={`${inputCls} mt-1`} value={form.address} onChange={e => sf('address', e.target.value)} /></div>
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Address Details</label>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <input placeholder="House No" className={inputCls} value={form.houseNo} onChange={e => sf('houseNo', e.target.value)} />
+                  <input placeholder="City/Village" className={inputCls} value={form.cityVillage} onChange={e => sf('cityVillage', e.target.value)} />
+                  <input placeholder="Post Office" className={inputCls} value={form.postOffice} onChange={e => sf('postOffice', e.target.value)} />
+                  <input placeholder="Landmark" className={inputCls} value={form.landmark} onChange={e => sf('landmark', e.target.value)} />
+                  <input placeholder="District" className={inputCls} value={form.district} onChange={e => sf('district', e.target.value)} />
+                  <input placeholder="State" className={inputCls} value={form.state} onChange={e => sf('state', e.target.value)} />
+                  <input placeholder="Pincode" maxLength={6} className={inputCls} value={form.pincode} onChange={e => sf('pincode', e.target.value)} />
+                </div>
+              </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Source</label>

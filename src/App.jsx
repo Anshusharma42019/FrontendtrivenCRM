@@ -18,6 +18,7 @@ import NdrDetail from './pages/NdrDetail';
 import FollowUp from './pages/FollowUp';
 import CallAgain from './pages/CallAgain';
 import Attendance from './pages/Attendance';
+import OrderDetail from './pages/OrderDetail';
 
 function AppRoutes() {
   const { user } = useAuth();
@@ -46,6 +47,7 @@ function AppRoutes() {
         <Route path="shiprocket/returns" element={<Shiprocket initialSection="returns" initialReturnsTab="returns" />} />
         <Route path="shiprocket/ndr" element={<Shiprocket initialSection="returns" initialReturnsTab="ndr" />} />
         <Route path="shiprocket/ndr/detail" element={<NdrDetail />} />
+        <Route path="orders/:id" element={<OrderDetail />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="users" element={
           <ProtectedRoute roles={['admin', 'manager']}>

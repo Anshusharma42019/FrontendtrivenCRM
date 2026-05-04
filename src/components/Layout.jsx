@@ -9,7 +9,7 @@ import API from '../api';
 const PAGE_TITLES = {
   '/dashboard': 'Dashboard',
   '/leads': 'Leads',
-  '/pipeline': 'Pipeline',
+  '/pipeline': 'Action Required',
   '/cnp': 'CNP',
   '/tasks': 'Tasks',
   '/verification': 'Verification',

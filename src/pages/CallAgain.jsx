@@ -194,6 +194,11 @@ export default function CallAgain() {
                         {record.assignedTo.name}
                       </span>
                     )}
+                    {record.createdBy && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                        Added by: {record.createdBy.name}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-1.5 shrink-0">

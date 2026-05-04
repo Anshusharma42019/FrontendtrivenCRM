@@ -258,7 +258,7 @@ export default function Dashboard() {
       )}
 
       {/* Order Status Cards — also drives Delivered Orders + Revenue stat cards above */}
-      <OrderStatusBoard onStatsChange={setDeliveredStats} />
+      <OrderStatusBoard onStatsChange={setDeliveredStats} defaultPreset="today" />
 
       {/* Tasks Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

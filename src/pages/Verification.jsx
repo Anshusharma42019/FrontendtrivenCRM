@@ -100,6 +100,7 @@ export default function Verification() {
       const to = new Date(from); to.setDate(to.getDate() + 1);
       filtered = recs.filter(r => { const d = new Date(r.createdAt); return d >= from && d < to; });
     }
+    // 'all' — no date filter
 
     if (search) {
       const q = search.toLowerCase();

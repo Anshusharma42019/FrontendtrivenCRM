@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getLeads, updateLead, getCallAgains, updateCallAgain, markCNP, createCallAgain } from '../services/lead.service';
-import { createTask, getCnpRecords, deleteCnpRecord } from '../services/task.service';
+import { getLeads, getLead, updateLead, getCallAgains, updateCallAgain, markCNP, createCallAgain } from '../services/lead.service';
+import { createTask, getCnpRecords, deleteCnpRecord, getTaskByLead } from '../services/task.service';
 import API from '../api';
 import Modal from '../components/ui/Modal';
 
@@ -45,8 +45,8 @@ export default function Pipeline() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const [leads, setLeads] = useState([]);
-
+  const [interestedLeads, setInterestedLeads] = useState([]);
+  const [onHoldLeads, setOnHoldLeads] = useState([]);
   const [closedLostLeads, setClosedLostLeads] = useState([]);
   const [deliveredOrders, setDeliveredOrders] = useState([]);
   const [cnpLeads, setCnpLeads] = useState([]);
@@ -56,6 +56,7 @@ export default function Pipeline() {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('interested');
   const [selected, setSelected] = useState(null);
+  const [leadTask, setLeadTask] = useState(null);
   const [search, setSearch] = useState('');
 
   
@@ -70,17 +71,15 @@ export default function Pipeline() {
       API.post('/verification/repair').catch(() => {});
 
       const [interestedRes, onHoldRes, closedLostRes, ordersRes, cnpRes, callAgainRes] = await Promise.all([
-        getLeads({ limit: 200, status: 'interested' }),
-        getLeads({ limit: 200, status: 'on_hold' }),
-        getLeads({ limit: 200, status: 'closed_lost' }),
+        getLeads({ limit: 500, status: 'interested' }),
+        getLeads({ limit: 500, status: 'on_hold' }),
+        getLeads({ limit: 500, status: 'closed_lost' }),
         API.get('/shiprocket/orders/with-followups'),
         getCnpRecords(),
         getCallAgains(),
       ]);
-      setLeads([
-        ...(Array.isArray(interestedRes?.leads) ? interestedRes.leads : []),
-        ...(Array.isArray(onHoldRes?.leads) ? onHoldRes.leads.filter(l => !l.cnp) : []),
-      ]);
+      setInterestedLeads(Array.isArray(interestedRes?.leads) ? interestedRes.leads : []);
+      setOnHoldLeads(Array.isArray(onHoldRes?.leads) ? onHoldRes.leads.filter(l => !l.cnp) : []);
       setClosedLostLeads(Array.isArray(closedLostRes?.leads) ? closedLostRes.leads : []);
       setDeliveredOrders(Array.isArray(ordersRes.data?.data) ? ordersRes.data.data : []);
       setCnpLeads(Array.isArray(cnpRes) ? cnpRes : []);
@@ -104,7 +103,8 @@ export default function Pipeline() {
     if (filter === 'cnp') items = cnpLeads;
     else if (filter === 'call_again') items = callAgainLeads;
     else if (filter === 'closed_lost') items = closedLostLeads;
-    else items = leads.filter(l => l.status === filter);
+    else if (filter === 'on_hold') items = onHoldLeads;
+    else items = interestedLeads;
 
     if (!search) return items;
     
@@ -117,7 +117,7 @@ export default function Pipeline() {
         lead.problem?.toLowerCase().includes(q)
       );
     });
-  }, [filter, leads, closedLostLeads, cnpLeads, callAgainLeads, search]);
+  }, [filter, interestedLeads, onHoldLeads, closedLostLeads, cnpLeads, callAgainLeads, search]);
 
   const handleMove = async (lead, newStage) => {
     setUpdating(lead._id);
@@ -169,7 +169,8 @@ export default function Pipeline() {
   const [taskCnpId, setTaskCnpId] = useState(null);
 
   const openTaskModal = (lead) => {
-    setTaskForm({ ...TASK_EMPTY, dueDate: todayISO(), lead: lead._id, assignedTo: lead.assignedTo?._id || user?._id || '', title: lead.name || '', phone: lead.phone || '', problem: lead.problem || '', age: lead.age || '', weight: lead.weight || '', height: lead.height || '', cityVillageType: lead.cityVillageType || 'city', cityVillage: lead.cityVillage || '', houseNo: lead.houseNo || '', postOffice: lead.postOffice || '', district: lead.district || '', landmark: lead.landmark || '', pincode: lead.pincode || '', state: lead.state || '', otherProblems: lead.otherProblems || '', problemDuration: lead.problemDuration || '', price: lead.price || '' });
+    const t = leadTask;
+    setTaskForm({ ...TASK_EMPTY, dueDate: todayISO(), lead: lead._id, assignedTo: lead.assignedTo?._id || user?._id || '', title: lead.name || '', phone: t?.phone || lead.phone || '', problem: t?.problem || lead.problem || '', age: t?.age || '', weight: t?.weight || '', height: t?.height || '', cityVillageType: t?.cityVillageType || 'city', cityVillage: t?.cityVillage || '', houseNo: t?.houseNo || '', postOffice: t?.postOffice || '', district: t?.district || '', landmark: t?.landmark || '', pincode: t?.pincode || '', state: t?.state || '', otherProblems: t?.otherProblems || '', problemDuration: t?.problemDuration || '', price: t?.price || '' });
     setTaskCnpId(filter === 'cnp' ? selected?._id : null);
     setTaskError('');
     setTaskModal(true);
@@ -237,7 +238,7 @@ export default function Pipeline() {
                 { key: 'cnp', label: 'CNP', bar: 'bg-red-600' },
                 { key: 'call_again', label: 'Call Again', bar: 'bg-amber-600' }
               ].map(s => (
-                <button key={s.key} onClick={() => { setFilter(s.key); setSelected(null); }}
+                <button key={s.key} onClick={() => { setFilter(s.key); setSelected(null); setLeadTask(null); }}
                   className={`px-4 py-2 rounded-xl text-xs font-bold border whitespace-nowrap transition-all flex items-center gap-2 ${filter === s.key
                     ? 'bg-gray-900 text-white border-gray-900 shadow-md'
                     : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50'
@@ -309,13 +310,46 @@ export default function Pipeline() {
                 const isActive = selected?._id === item._id;
                 const color = PIN_COLORS[i % PIN_COLORS.length];
                 const stage = STAGES.find(s => s.key === lead.status);
+                const staffName = lead.assignedTo?.name || item.assignedTo?.name;
+                const addedByName = lead.createdBy?.name || item.createdBy?.name;
+                // Bar color for CNP/CallAgain tabs
+                const barColor = filter === 'cnp' ? 'bg-red-600' : filter === 'call_again' ? 'bg-amber-600' : (stage?.bar || 'bg-gray-300');
+                const stageLabel = filter === 'cnp' ? 'CNP' : filter === 'call_again' ? 'CALL AGAIN' : (stage?.label || lead.status || 'unknown');
                 
                 return (
-                  <div key={item._id} onClick={() => setSelected(isActive ? null : item)}
+                  <div key={item._id} onClick={async () => {
+                    if (isActive) { setSelected(null); setLeadTask(null); return; }
+                    setSelected(item);
+                    setLeadTask(null);
+                    const leadId = item.lead?._id || item._id;
+                    // For CNP, use the record itself as task data (it has address fields synced)
+                    if (filter === 'cnp') {
+                      setLeadTask(item);
+                      const leadId = item.lead?._id || item.lead;
+                      if (leadId) {
+                        try {
+                          const fullLead = await getLead(leadId);
+                          setSelected(prev => ({ ...prev, lead: fullLead }));
+                        } catch { }
+                      }
+                    } else if (filter === 'call_again') {
+                      const leadId = item.lead?._id || item._id;
+                      try {
+                        const [task, fullLead] = await Promise.all([
+                          getTaskByLead(leadId).catch(() => null),
+                          getLead(leadId).catch(() => null),
+                        ]);
+                        setLeadTask(task || fullLead);
+                        if (fullLead) setSelected(prev => ({ ...prev, lead: fullLead }));
+                      } catch { }
+                    } else {
+                      try { const task = await getTaskByLead(leadId); setLeadTask(task); } catch { }
+                    }
+                  }}
                     className={`relative flex items-center gap-4 px-4 py-4 rounded-2xl cursor-pointer transition-all duration-200 border
                       ${isActive ? 'bg-green-50 border-green-200 shadow-sm' : 'bg-white border-gray-100 hover:border-green-200'}`}>
                     
-                    <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${stage?.bar || 'bg-gray-300'}`} />
+                    <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${barColor}`} />
                     
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0 ${color}`}>
                       {initials(lead.name || item.title)}
@@ -325,15 +359,16 @@ export default function Pipeline() {
                       <p className="text-sm font-bold text-gray-800 truncate">{lead.name || item.title}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs text-gray-400">{lead.phone}</span>
-                        {item.cnpCount && <span className="text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-md">{item.cnpCount}/3 CNP</span>}
+                        {item.cnpCount > 0 && <span className="text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-md">{item.cnpCount}/3 CNP</span>}
                       </div>
                     </div>
 
                     <div className="hidden sm:flex flex-col items-end gap-1 shrink-0">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${stage?.bar.replace('bg-','bg-opacity-10 text-')} ${stage?.bar.replace('bg-','border-opacity-20 border-')}`}>
-                        {(stage?.label || lead.status || 'unknown').toUpperCase()}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg bg-gray-100 text-gray-500`}>
+                        {stageLabel.toUpperCase()}
                       </span>
-                      {lead.assignedTo?.name && <span className="text-[10px] text-gray-400">By {lead.assignedTo.name}</span>}
+                      {staffName && <span className="text-[10px] text-gray-400">Assigned: {staffName}</span>}
+                      {addedByName && <span className="text-[10px] text-blue-400">Added by: {addedByName}</span>}
                     </div>
 
                     <svg className={`w-4 h-4 text-gray-300 transition-transform ${isActive ? 'rotate-90 text-green-400' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -409,6 +444,8 @@ export default function Pipeline() {
                     <>
                       <SectionHead label="Lead Information" />
                       <DetailRow label="Status" value={lead.status?.replace(/_/g,' ')} />
+                      <DetailRow label="Assigned To" value={lead.assignedTo?.name || selected.assignedTo?.name} />
+                      <DetailRow label="Added By" value={lead.createdBy?.name || selected.createdBy?.name} />
                       {lead.status === 'on_hold' && lead.onHoldReason && (
                         <div className="mt-2 mb-1 p-3 rounded-xl bg-gray-50 border border-gray-200">
                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">On Hold Info</p>
@@ -419,12 +456,19 @@ export default function Pipeline() {
                         </div>
                       )}
                       <DetailRow label="Source" value={lead.source} />
-                      <DetailRow label="Assigned To" value={lead.assignedTo?.name} />
                       <DetailRow label="Problem" value={lead.problem} />
                       
                       <SectionHead label="Contact Details" />
                       <DetailRow label="Email" value={lead.email} />
-                      <DetailRow label="Address" value={lead.address} />
+                      <DetailRow label="Phone" value={leadTask?.phone || lead.phone} />
+                      <DetailRow label="House No" value={leadTask?.houseNo || lead.houseNo} />
+                      <DetailRow label="City/Village" value={leadTask?.cityVillage || lead.cityVillage} />
+                      <DetailRow label="Post Office" value={leadTask?.postOffice || lead.postOffice} />
+                      <DetailRow label="Landmark" value={leadTask?.landmark || lead.landmark} />
+                      <DetailRow label="District" value={leadTask?.district || lead.district} />
+                      <DetailRow label="State" value={leadTask?.state || lead.state} />
+                      <DetailRow label="Pincode" value={leadTask?.pincode || lead.pincode} />
+                      <DetailRow label="Address" value={leadTask?.address || lead.address} />
 
                       <SectionHead label="Follow-up Action" />
                       <div className="space-y-3 mt-3 p-4 rounded-2xl bg-gray-50 border border-gray-100">
@@ -545,8 +589,20 @@ export default function Pipeline() {
             </div>
 
             <div className="space-y-4 px-2 pb-8">
-              <DetailRow label="Status" value={selected.status?.replace(/_/g,' ')} />
-              <DetailRow label="Address" value={selected.address || selected.billing_city} />
+              {(() => { const ml = selected.lead || selected; return (
+                <>
+                  <DetailRow label="Status" value={ml.status?.replace(/_/g,' ')} />
+                  <DetailRow label="Problem" value={ml.problem} />
+                  <DetailRow label="House No" value={leadTask?.houseNo || ml.houseNo} />
+                  <DetailRow label="City/Village" value={leadTask?.cityVillage || ml.cityVillage} />
+                  <DetailRow label="Post Office" value={leadTask?.postOffice || ml.postOffice} />
+                  <DetailRow label="Landmark" value={leadTask?.landmark || ml.landmark} />
+                  <DetailRow label="District" value={leadTask?.district || ml.district} />
+                  <DetailRow label="State" value={leadTask?.state || ml.state} />
+                  <DetailRow label="Pincode" value={leadTask?.pincode || ml.pincode} />
+                  <DetailRow label="Address" value={leadTask?.address || ml.address} />
+                </>
+              );})()}
               
               <div className="grid grid-cols-2 gap-3 pt-6">
                 <button disabled={updating} onClick={() => handleMove(selected.lead || selected, 'interested')}

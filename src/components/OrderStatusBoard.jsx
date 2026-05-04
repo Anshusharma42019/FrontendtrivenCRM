@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as srSvc from '../services/shiprocket.service';
 
 const cardCls = 'bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow';
@@ -63,7 +64,7 @@ const formatDateInput = (date) => {
 };
 
 const normalizeStatus = (status) => String(status || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
-const formatStatusLabel = (status) => String(status || '').replace(/_/g, ' ');
+const formatStatusLabel = (status) => String(status || '').replace(/[-_]+/g, ' ');
 const formatMoney = (value) => `Rs ${Number(value || 0).toLocaleString()}`;
 
 const formatDateTime = (value) => {
@@ -117,6 +118,28 @@ export default function OrderStatusBoard({
   const [statusError, setStatusError] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [noteInput, setNoteInput] = useState({});   // { [_id]: string }
+  const [comments, setComments] = useState({});      // { [_id]: [{text, createdAt}] }
+  const [savingNote, setSavingNote] = useState(null);
+  const [noteError, setNoteError] = useState({});
+  const navigate = useNavigate();
+
+  const handleSaveNote = async (e, mongoId) => {
+    e.stopPropagation();
+    const text = (noteInput[mongoId] ?? '').trim();
+    if (!text) return;
+    setSavingNote(mongoId);
+    setNoteError(prev => ({ ...prev, [mongoId]: '' }));
+    try {
+      const res = await srSvc.saveOrderNote(mongoId, text);
+      setComments(prev => ({ ...prev, [mongoId]: res.data?.data || [] }));
+      setNoteInput(prev => ({ ...prev, [mongoId]: '' }));
+    } catch (err) {
+      setNoteError(prev => ({ ...prev, [mongoId]: err?.response?.data?.message || 'Save failed' }));
+    } finally {
+      setSavingNote(null);
+    }
+  };
 
   const loadDelivered = useCallback((params = {}) => {
     srSvc.getDeliveredStats(params).then(res => {
@@ -131,7 +154,11 @@ export default function OrderStatusBoard({
     setStatusLoading(true);
     setStatusError('');
     srSvc.getStatusOrders({ ...params, status, limit: 100 }).then(res => {
-      setStatusOrders(res.data?.data?.data || []);
+      const list = res.data?.data?.data || [];
+      setStatusOrders(list);
+      const c = {};
+      list.forEach(o => { if (o.comments?.length) c[o._id] = o.comments; });
+      setComments(prev => ({ ...prev, ...c }));
     }).catch(e => {
       setStatusOrders([]);
       setStatusError(e?.response?.data?.message || e.message || 'Unable to load orders');
@@ -188,7 +215,7 @@ export default function OrderStatusBoard({
 
   const listedStatuses = new Set(STATUS_LIST.map(normalizeStatus));
   const statusCards = [
-    ...STATUS_LIST.map(status => ({ status, count: statusCounts[normalizeStatus(status)] || 0 })),
+    ...STATUS_LIST.map(status => ({ status: normalizeStatus(status), count: statusCounts[normalizeStatus(status)] || 0 })),
     ...deliveredStats.statusBreakdown
       .filter(item => item._id && !listedStatuses.has(normalizeStatus(item._id)))
       .map(item => ({ status: normalizeStatus(item._id), count: item.count })),
@@ -314,7 +341,8 @@ export default function OrderStatusBoard({
           {!statusLoading && !statusError && statusOrders.length > 0 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {statusOrders.map(order => (
-                <div key={order._id} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                <div key={order._id} onClick={() => navigate(`/orders/${order.order_id || order.shiprocket_order_id}`)}
+                  className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-xs text-gray-400 font-semibold">Order</p>
@@ -345,7 +373,10 @@ export default function OrderStatusBoard({
                     </div>
                     <div>
                       <p className="text-gray-400 font-semibold">AWB</p>
-                      <p className="font-mono font-semibold text-blue-600 truncate">{order.awb_code || '-'}</p>
+                      {order.awb_code
+                        ? <span className="font-mono font-semibold text-blue-600 truncate">{order.awb_code}</span>
+                        : <p className="font-mono font-semibold text-blue-600 truncate">-</p>
+                      }
                     </div>
                     <div>
                       <p className="text-gray-400 font-semibold">Courier</p>
@@ -368,6 +399,42 @@ export default function OrderStatusBoard({
                       </p>
                     </div>
                   )}
+                  {/* Comments */}
+                  <div className="mt-3" onClick={e => e.stopPropagation()}>
+                    <p className="text-[11px] text-gray-400 font-semibold mb-2">Comments</p>
+                    {/* Existing comments list */}
+                    {(comments[order._id] || order.comments || []).length > 0 && (
+                      <div className="mb-2 space-y-1.5 max-h-32 overflow-y-auto">
+                        {(comments[order._id] || order.comments || []).map((c, i) => (
+                          <div key={i} className="bg-gray-50 rounded-lg px-3 py-2">
+                            <p className="text-xs text-gray-700">{c.text}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">
+                              {new Date(c.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Add new comment */}
+                    <div className="flex gap-2">
+                      <textarea
+                        rows={2}
+                        placeholder="Add a comment..."
+                        value={noteInput[order._id] || ''}
+                        onChange={e => setNoteInput(prev => ({ ...prev, [order._id]: e.target.value }))}
+                        className="flex-1 text-xs border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:border-green-500 bg-gray-50"
+                      />
+                      <button
+                        onClick={e => handleSaveNote(e, order._id)}
+                        disabled={savingNote === order._id || !(noteInput[order._id] || '').trim()}
+                        className="self-end px-3 py-2 rounded-xl bg-green-600 text-white text-[11px] font-bold hover:bg-green-700 disabled:opacity-50 transition shrink-0">
+                        {savingNote === order._id ? '...' : 'Add'}
+                      </button>
+                    </div>
+                    {noteError[order._id] && (
+                      <p className="text-[10px] mt-1 font-semibold text-red-500">{noteError[order._id]}</p>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

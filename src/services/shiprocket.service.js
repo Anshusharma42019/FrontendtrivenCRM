@@ -88,3 +88,4 @@ export const ndrAction = (body) => api.post(`${BASE}/ndr/action`, body);
 
 // ── Next order ID ─────────────────────────────────────────────────────────────
 export const getNextOrderId = () => api.get(`${BASE}/next-order-id`);
+export const saveOrderNote = (id, text) => api.patch(`${BASE}/orders/${id}/notes`, { text });
