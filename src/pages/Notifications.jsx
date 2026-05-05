@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getNotifications, markRead, markAllRead } from '../services/notification.service';
+import { getNotifications, markRead, markAllRead, deleteNotification, deleteAllNotifications } from '../services/notification.service';
 
 const TYPE_CONFIG = {
   lead_assigned:       { icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, bg: 'bg-blue-50',   text: 'text-blue-600' },
@@ -25,6 +25,8 @@ export default function Notifications() {
 
   const handleMarkRead = async (id) => { await markRead(id).catch(() => {}); load(); };
   const handleMarkAll = async () => { await markAllRead().catch(() => {}); load(); };
+  const handleDelete = async (id) => { await deleteNotification(id).catch(() => {}); load(); };
+  const handleDeleteAll = async () => { await deleteAllNotifications().catch(() => {}); load(); };
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -53,6 +55,12 @@ export default function Notifications() {
           <button onClick={handleMarkAll}
             className="text-sm font-semibold text-green-700 hover:text-green-800 bg-green-50 hover:bg-green-100 px-4 py-2 rounded-xl transition">
             Mark all read
+          </button>
+        )}
+        {data.total > 0 && (
+          <button onClick={handleDeleteAll}
+            className="text-sm font-semibold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-4 py-2 rounded-xl transition">
+            Delete all
           </button>
         )}
       </div>
@@ -87,6 +95,10 @@ export default function Notifications() {
                   Read
                 </button>
               )}
+              <button onClick={() => handleDelete(n._id)}
+                className="text-xs font-semibold text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-xl transition shrink-0">
+                Delete
+              </button>
             </div>
           );
         })}

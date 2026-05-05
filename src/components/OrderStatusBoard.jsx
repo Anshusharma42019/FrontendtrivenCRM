@@ -407,10 +407,16 @@ export default function OrderStatusBoard({
                       <div className="mb-2 space-y-1.5 max-h-32 overflow-y-auto">
                         {(comments[order._id] || order.comments || []).map((c, i) => (
                           <div key={i} className="bg-gray-50 rounded-lg px-3 py-2">
+                            <div className="flex items-center justify-between gap-2 mb-0.5">
+                              <span className="text-[10px] font-bold text-green-700">
+                                {c.createdBy?.name || 'Unknown'}
+                                <span className="text-gray-400 font-normal ml-1 capitalize">({c.createdBy?.role || 'user'})</span>
+                              </span>
+                              <span className="text-[10px] text-gray-400">
+                                {new Date(c.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
                             <p className="text-xs text-gray-700">{c.text}</p>
-                            <p className="text-[10px] text-gray-400 mt-0.5">
-                              {new Date(c.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                            </p>
                           </div>
                         ))}
                       </div>

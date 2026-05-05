@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import * as srSvc from '../services/shiprocket.service';
 import OrderStatusBoard from '../components/OrderStatusBoard';
@@ -57,6 +57,44 @@ const formatDetailValue = (value) => {
   return String(value);
 };
 
+const TX_STATUSES = ['DELIVERED','RTO_DELIVERED','IN_TRANSIT','CANCELED','NEW','RTO_IN_TRANSIT',
+  'OUT_FOR_DELIVERY','REACHED_BACK_AT_SELLER_CITY','UNDELIVERED-1ST ATTEMPT','PICKUP_EXCEPTION',
+  'UNDELIVERED-2ND ATTEMPT','UNDELIVERED-3RD ATTEMPT','RTO_INITIATED','REACHED_AT_DESTINATION_HUB',
+  'SHIPPED','RTO_OFD','PICKUP_SCHEDULED','MISROUTED','OUT_FOR_PICKUP','UNTRACEABLE'];
+
+function StatusDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+  return (
+    <div ref={ref} className="relative flex-1 min-w-[150px]">
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 bg-white hover:border-green-400 focus:outline-none focus:ring-1 focus:ring-green-400 transition">
+        <span>{value ? value.replace(/_/g,' ') : 'All Statuses'}</span>
+        <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-50 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+          <div onClick={() => { onChange(''); setOpen(false); }}
+            className={`px-3 py-2 text-xs font-semibold cursor-pointer hover:bg-green-50 hover:text-green-700 rounded-t-xl ${!value ? 'bg-green-50 text-green-700' : 'text-gray-600'}`}>
+            All Statuses
+          </div>
+          {TX_STATUSES.map(s => (
+            <div key={s} onClick={() => { onChange(s); setOpen(false); }}
+              className={`px-3 py-2 text-xs font-semibold cursor-pointer hover:bg-green-50 hover:text-green-700 ${value === s ? 'bg-green-50 text-green-700' : 'text-gray-600'}`}>
+              {s.replace(/_/g,' ')}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const detailCardCls = 'rounded-2xl border border-gray-200 bg-white px-4 py-4 sm:px-5';
 
 export default function ShiprocketReturns({ initialTab = 'returns' }) {
@@ -69,6 +107,9 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
 
   // Returns
   const [returns, setReturns] = useState([]);
+  const [returnsTotal, setReturnsTotal] = useState(0);
+  const [returnsPage, setReturnsPage] = useState(1);
+  const RETURNS_PER_PAGE = 20;
   const [returnForm, setReturnForm] = useState({
     order_id: '', channel_id: '', pickup_customer_name: '', pickup_phone: '',
     pickup_address: '', pickup_city: '', pickup_state: '', pickup_pincode: '',
@@ -82,6 +123,12 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
   // Wallet
   const [walletBalance, setWalletBalance] = useState(null);
   const [transactions, setTransactions] = useState([]);
+  const [txFrom, setTxFrom] = useState('');
+  const [txTo, setTxTo] = useState('');
+  const [txStatus, setTxStatus] = useState('');
+  const [txPage, setTxPage] = useState(1);
+  const [txTotal, setTxTotal] = useState(0);
+  const TX_PER_PAGE = 20;
 
   // NDR
   const [ndrs, setNdrs] = useState([]);
@@ -92,6 +139,26 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
   const [ndrAttemptFilter, setNdrAttemptFilter] = useState('all');
   const [selectedNdr, setSelectedNdr] = useState(null);
   const [ndrDetailOpen, setNdrDetailOpen] = useState(false);
+
+  const fetchTransactions = (from = txFrom, to = txTo, status = txStatus, page = txPage) => {
+    const params = { per_page: TX_PER_PAGE, page };
+    if (from) params.from = from;
+    if (to) params.to = to;
+    if (status) params.status = status;
+    srSvc.getWalletTransactions(params).then(r => {
+      const d = r.data?.data;
+      setTransactions(Array.isArray(d?.data) ? d.data : (Array.isArray(d) ? d : []));
+      setTxTotal(d?.total || 0);
+    }).catch(e => setError(e?.response?.data?.message || e.message));
+  };
+
+  const fetchReturns = (page = returnsPage) => {
+    srSvc.getReturns({ page, per_page: RETURNS_PER_PAGE }).then(r => {
+      const d = r.data?.data;
+      setReturns(Array.isArray(d?.data) ? d.data : (Array.isArray(d) ? d : []));
+      setReturnsTotal(d?.total || 0);
+    }).catch(e => { setError(e?.response?.data?.message || e.message); });
+  };
 
   const fetchNDR = (from = ndrFrom, to = ndrTo) => {
     setNdrLoading(true);
@@ -173,9 +240,7 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
 
   useEffect(() => {
     if (tab === 'returns') {
-      srSvc.getReturns().then(r => {
-        setReturns(r.data?.data?.data || []);
-      }).catch(e => { setError(e?.response?.data?.message || e.message); });
+      fetchReturns(1);
     }
     if (tab === 'create_return') {
       loadOrdersForReturn();
@@ -184,10 +249,7 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
       srSvc.getWalletBalance().then(r => {
         setWalletBalance(r.data?.data?.data);
       }).catch(e => { setError(e?.response?.data?.message || e.message); });
-      srSvc.getWalletTransactions().then(r => {
-        const d = r.data?.data;
-        setTransactions(d?.data || (Array.isArray(d) ? d : []));
-      }).catch(e => setError(e?.response?.data?.message || e.message));
+      fetchTransactions();
     }
     if (tab === 'ndr') {
       fetchNDR();
@@ -216,68 +278,80 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
         ))}
       </div>
 
-      {/* Returns List */}
       {tab === 'returns' && (
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
           <div className="h-1 bg-orange-500" />
-          <div className="px-5 py-3 border-b border-gray-50">
-            <span className="font-semibold text-gray-700 text-sm">Return Orders</span>
+          <div className="px-5 py-3 border-b border-gray-50 flex items-center justify-between">
+            <span className="font-semibold text-gray-700 text-sm">Return Orders {returnsTotal > 0 && <span className="text-xs text-gray-400 font-normal ml-1">({returnsTotal})</span>}</span>
           </div>
           {returns.length === 0 ? (
-            <div className="px-5 py-8 text-center text-gray-400 text-sm">No returns found.</div>
+            <div className="px-5 py-8 text-center text-gray-400 text-sm">No RTO orders found.</div>
           ) : (
-          <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0 custom-scrollbar">
-            {/* Desktop Table View */}
-            <table className="hidden sm:table w-full text-sm">
-              <thead className="bg-gray-50 text-[10px] text-gray-500 uppercase tracking-[0.1em] sticky top-0 z-10">
-                <tr>
-                  {['Order ID', 'AWB', 'Customer', 'Status', 'Date'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left font-bold">{h}</th>
+            <>
+              <div className="overflow-x-auto">
+                <table className="hidden sm:table w-full text-sm">
+                  <thead className="bg-gray-50 text-[10px] text-gray-500 uppercase tracking-[0.1em] sticky top-0 z-10">
+                    <tr>{['Order ID','AWB','Customer','Status','Amount','Date'].map(h => <th key={h} className="px-4 py-3 text-left font-bold">{h}</th>)}</tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {returns.map((r, i) => (
+                      <tr key={i} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-4 py-3 font-mono text-[11px] text-gray-600">{r.order_id}</td>
+                        <td className="px-4 py-3 font-mono text-[11px] text-blue-600 font-bold">{r.awb_code || '—'}</td>
+                        <td className="px-4 py-3 font-bold text-gray-800 text-[13px]">{r.billing_customer_name || '—'}</td>
+                        <td className="px-4 py-3">
+                          <span className="text-[10px] font-bold bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full border border-orange-100">{r.status || '—'}</span>
+                        </td>
+                        <td className="px-4 py-3 font-bold text-gray-900 text-[12px]">{r.sub_total ? `₹${r.sub_total}` : '—'}</td>
+                        <td className="px-4 py-3 text-gray-400 text-[11px] font-medium">{r.return_date ? new Date(r.return_date).toLocaleDateString('en-IN') : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="sm:hidden divide-y divide-gray-50">
+                  {returns.map((r, i) => (
+                    <div key={i} className="p-4 flex flex-col gap-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-900 text-sm truncate">{r.billing_customer_name || 'Unknown'}</p>
+                          <p className="text-[10px] font-mono text-gray-400 uppercase mt-0.5">ID: {r.order_id}</p>
+                        </div>
+                        <span className="text-[10px] font-bold bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full border border-orange-100">{r.status || '—'}</span>
+                      </div>
+                      <div className="bg-gray-50 rounded-xl p-2.5 flex items-center justify-between">
+                        <div>
+                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">AWB</p>
+                          <p className="text-xs font-mono text-blue-600 font-bold mt-0.5">{r.awb_code || '—'}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Amount</p>
+                          <p className="text-xs font-bold text-gray-700 mt-0.5">{r.sub_total ? `₹${r.sub_total}` : '—'}</p>
+                        </div>
+                      </div>
+                    </div>
                   ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {returns.map((r, i) => (
-                  <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-[11px] text-gray-600">{r.channel_order_id || r.order_id}</td>
-                    <td className="px-4 py-3 font-mono text-[11px] text-blue-600 font-bold">{r.awb_code || '—'}</td>
-                    <td className="px-4 py-3 font-bold text-gray-800 text-[13px]">{r.customer_name || '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className="text-[10px] font-bold bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full border border-orange-100">{r.status || '—'}</span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-400 text-[11px] font-medium">{r.created_at?.split('T')[0]}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {/* Mobile Card View */}
-            <div className="sm:hidden divide-y divide-gray-50">
-              {returns.map((r, i) => (
-                <div key={i} className="p-4 flex flex-col gap-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-bold text-gray-900 text-sm truncate">{r.customer_name || 'Unknown'}</p>
-                      <p className="text-[10px] font-mono text-gray-400 uppercase mt-0.5">ID: {r.channel_order_id || r.order_id}</p>
-                    </div>
-                    <span className="text-[10px] font-bold bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full border border-orange-100">
-                      {r.status || '—'}
-                    </span>
-                  </div>
-                  <div className="bg-gray-50 rounded-xl p-2.5 flex items-center justify-between">
-                    <div>
-                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">AWB Code</p>
-                      <p className="text-xs font-mono text-blue-600 font-bold mt-0.5">{r.awb_code || '—'}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Date</p>
-                      <p className="text-xs font-bold text-gray-700 mt-0.5">{r.created_at?.split('T')[0]}</p>
-                    </div>
+                </div>
+              </div>
+              {returnsTotal > RETURNS_PER_PAGE && (
+                <div className="px-5 py-3 border-t border-gray-50 flex items-center justify-between">
+                  <span className="text-xs text-gray-400">{((returnsPage-1)*RETURNS_PER_PAGE)+1}–{Math.min(returnsPage*RETURNS_PER_PAGE, returnsTotal)} of {returnsTotal}</span>
+                  <div className="flex items-center gap-1">
+                    <button disabled={returnsPage===1} onClick={() => { const p=returnsPage-1; setReturnsPage(p); fetchReturns(p); }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition">← Prev</button>
+                    {Array.from({length:Math.ceil(returnsTotal/RETURNS_PER_PAGE)},(_,i)=>i+1)
+                      .filter(p=>p===1||p===Math.ceil(returnsTotal/RETURNS_PER_PAGE)||Math.abs(p-returnsPage)<=1)
+                      .reduce((acc,p,i,arr)=>{ if(i>0&&p-arr[i-1]>1) acc.push('…'); acc.push(p); return acc; },[])
+                      .map((p,i)=> p==='…'
+                        ? <span key={i} className="px-1 text-xs text-gray-400">…</span>
+                        : <button key={p} onClick={()=>{ setReturnsPage(p); fetchReturns(p); }}
+                            className={`w-8 h-8 rounded-lg text-xs font-bold border transition ${returnsPage===p?'bg-orange-500 text-white border-orange-500':'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{p}</button>
+                      )}
+                    <button disabled={returnsPage===Math.ceil(returnsTotal/RETURNS_PER_PAGE)} onClick={()=>{ const p=returnsPage+1; setReturnsPage(p); fetchReturns(p); }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition">Next →</button>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -388,71 +462,91 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
       {tab === 'wallet' && (
         <div className="space-y-4">
           {walletBalance && (
-            <div className="grid grid-cols-1 gap-4">
-              <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
-                <div className="h-1 bg-green-500" />
-                <div className="px-5 py-4">
-                  <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Wallet Balance</p>
-                  <p className="text-3xl font-bold text-gray-800 mt-1">₹{walletBalance.balance_amount ?? walletBalance.wallet_balance ?? '—'}</p>
-                </div>
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
+              <div className="h-1 bg-green-500" />
+              <div className="px-5 py-4">
+                <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Wallet Balance</p>
+                <p className="text-3xl font-bold text-gray-800 mt-1">₹{walletBalance.balance_amount ?? walletBalance.wallet_balance ?? '—'}</p>
               </div>
             </div>
           )}
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
             <div className="h-1 bg-green-500" />
-            <div className="px-5 py-3 border-b border-gray-50"><span className="font-semibold text-gray-700 text-sm">Transactions</span></div>
+            <div className="px-5 py-3 border-b border-gray-50">
+              <div className="flex items-center justify-between mb-3">
+                <span className="font-semibold text-gray-700 text-sm">Transactions {txTotal > 0 && <span className="text-xs text-gray-400 font-normal ml-1">({txTotal})</span>}</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <StatusDropdown value={txStatus} onChange={v => { setTxStatus(v); setTxPage(1); fetchTransactions(txFrom, txTo, v, 1); }} />
+                <input type="date" value={txFrom} onChange={e => { setTxFrom(e.target.value); setTxPage(1); fetchTransactions(e.target.value, txTo, txStatus, 1); }}
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-green-400 bg-white" />
+                <input type="date" value={txTo} onChange={e => { setTxTo(e.target.value); setTxPage(1); fetchTransactions(txFrom, e.target.value, txStatus, 1); }}
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-green-400 bg-white" />
+              </div>
+            </div>
             {transactions.length === 0 ? (
               <div className="px-5 py-8 text-center text-gray-400 text-sm">No transactions found.</div>
             ) : (
-              <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0 custom-scrollbar">
-                {/* Desktop Table View */}
-                <table className="hidden sm:table w-full text-sm">
-                  <thead className="bg-gray-50 text-[10px] text-gray-500 uppercase tracking-[0.1em] sticky top-0 z-10">
-                    <tr>{['Date', 'Type', 'Amount', 'Closing Balance', 'Note'].map(h => <th key={h} className="px-4 py-3 text-left font-bold">{h}</th>)}</tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
+              <>
+                <div className="overflow-x-auto">
+                  <table className="hidden sm:table w-full text-sm">
+                    <thead className="bg-gray-50 text-[10px] text-gray-500 uppercase tracking-[0.1em] sticky top-0 z-10">
+                      <tr>{['Date','Type','Amount','Status','Note'].map(h => <th key={h} className="px-4 py-3 text-left font-bold">{h}</th>)}</tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {transactions.map((t, i) => (
+                        <tr key={i} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-4 py-3 text-[11px] text-gray-400 font-medium">{(t.transaction_date || t.created_at)?.split('T')[0]}</td>
+                          <td className="px-4 py-3">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${t.type === 'prepaid' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
+                              {t.type?.toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 font-bold text-gray-900 text-[13px]">₹{t.amount}</td>
+                          <td className="px-4 py-3 text-[11px] font-semibold text-gray-600">{t.status || '—'}</td>
+                          <td className="px-4 py-3 text-gray-400 text-[11px] max-w-[250px] truncate" title={t.note}>{t.note || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="sm:hidden divide-y divide-gray-50">
                     {transactions.map((t, i) => (
-                      <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                        <td className="px-4 py-3 text-[11px] text-gray-400 font-medium">{t.created_at?.split('T')[0]}</td>
-                        <td className="px-4 py-3">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${t.type === 'credit' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
-                            {t.type?.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 font-bold text-gray-900 text-[13px]">₹{t.amount}</td>
-                        <td className="px-4 py-3 text-gray-600 font-semibold text-[12px]">₹{t.closing_balance}</td>
-                        <td className="px-4 py-3 text-gray-400 text-[11px] max-w-[200px] truncate" title={t.note}>{t.note || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                {/* Mobile Card View */}
-                <div className="sm:hidden divide-y divide-gray-50">
-                  {transactions.map((t, i) => (
-                    <div key={i} className="p-4 flex flex-col gap-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${t.type === 'credit' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
-                            {t.type?.toUpperCase()}
-                          </span>
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">{t.created_at?.split('T')[0]}</p>
+                      <div key={i} className="p-4 flex flex-col gap-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${t.type === 'prepaid' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>{t.type?.toUpperCase()}</span>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">{(t.transaction_date || t.created_at)?.split('T')[0]}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-gray-900 text-base">₹{t.amount}</p>
+                            <p className="text-[10px] font-bold text-gray-400 mt-1">{t.status}</p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-bold text-gray-900 text-base">₹{t.amount}</p>
-                          <p className="text-[10px] font-bold text-gray-400 mt-1">Bal: ₹{t.closing_balance}</p>
-                        </div>
+                        {t.note && <div className="bg-gray-50 rounded-xl p-2.5"><p className="text-[11px] text-gray-600 font-medium leading-relaxed">{t.note}</p></div>}
                       </div>
-                      {t.note && (
-                        <div className="bg-gray-50 rounded-xl p-2.5">
-                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Note</p>
-                          <p className="text-[11px] text-gray-600 mt-1 font-medium leading-relaxed">{t.note}</p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+                {txTotal > TX_PER_PAGE && (
+                  <div className="px-5 py-3 border-t border-gray-50 flex items-center justify-between">
+                    <span className="text-xs text-gray-400">{((txPage-1)*TX_PER_PAGE)+1}–{Math.min(txPage*TX_PER_PAGE, txTotal)} of {txTotal}</span>
+                    <div className="flex items-center gap-1">
+                      <button disabled={txPage===1} onClick={() => { const p=txPage-1; setTxPage(p); fetchTransactions(txFrom,txTo,txStatus,p); }}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition">← Prev</button>
+                      {Array.from({length: Math.ceil(txTotal/TX_PER_PAGE)},(_,i)=>i+1)
+                        .filter(p=>p===1||p===Math.ceil(txTotal/TX_PER_PAGE)||Math.abs(p-txPage)<=1)
+                        .reduce((acc,p,i,arr)=>{ if(i>0&&p-arr[i-1]>1) acc.push('…'); acc.push(p); return acc; },[])
+                        .map((p,i)=> p==='…'
+                          ? <span key={i} className="px-1 text-xs text-gray-400">…</span>
+                          : <button key={p} onClick={()=>{ setTxPage(p); fetchTransactions(txFrom,txTo,txStatus,p); }}
+                              className={`w-8 h-8 rounded-lg text-xs font-bold border transition ${txPage===p?'bg-green-600 text-white border-green-600':'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{p}</button>
+                        )}
+                      <button disabled={txPage===Math.ceil(txTotal/TX_PER_PAGE)} onClick={()=>{ const p=txPage+1; setTxPage(p); fetchTransactions(txFrom,txTo,txStatus,p); }}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition">Next →</button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

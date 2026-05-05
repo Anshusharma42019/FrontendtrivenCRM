@@ -38,6 +38,8 @@ export const cancelOrders = (ids) => api.post(`${BASE}/orders/cancel`, { ids });
 export const deleteLocalOrder = (id) => api.delete(`${BASE}/orders/delete/${id}`);
 export const getOrders = (params) => api.get(`${BASE}/orders`, { params });
 export const getDeliveredOrders = (params) => api.get(`${BASE}/orders/delivered`, { params });
+export const getDeliveredOrdersFromSchema = (params) => api.get(`${BASE}/orders/delivered-schema`, { params });
+export const getInTransitOrdersFromSchema = (params) => api.get(`${BASE}/orders/in-transit-schema`, { params });
 export const getDeliveredOrdersLive = () => api.get(`${BASE}/orders/delivered-live`);
 export const getDeliveredStats = (params) => api.get(`${BASE}/orders/delivered-stats`, { params });
 export const getStatusOrders = (params) => api.get(`${BASE}/orders/status-details`, { params });

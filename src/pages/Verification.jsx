@@ -88,7 +88,7 @@ export default function Verification() {
   const filterRecords = (recs) => {
     const startOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const today = startOf(new Date());
-    let filtered = recs;
+    let filtered = recs.filter(r => r.status !== 'on_hold');
 
     if (dayFilter === 'today') filtered = recs.filter(r => new Date(r.createdAt) >= today);
     else if (dayFilter === 'yesterday') {

@@ -69,7 +69,7 @@ export default function CNP() {
 
   const openTaskModal = (item) => {
     const lead = item.lead || {};
-    setTaskForm({ title: lead.name || item.title || '', phone: lead.phone || '', problem: lead.problem || '', age: '', weight: '', height: '', otherProblems: '', problemDuration: '', price: '', reminderAt: '', dueDate: todayISO(), cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', type: 'task', priority: 'medium', lead: lead._id || '', assignedTo: item.assignedTo?._id || '', cnpRecordId: item._id });
+    setTaskForm({ title: lead.name || item.title || '', phone: lead.phone || '', problem: lead.problem || '', age: '', weight: '', height: '', otherProblems: '', problemDuration: '', price: '', reminderAt: '', dueDate: todayISO(), cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', type: 'task', priority: 'medium', lead: lead._id || '', assignedTo: item.assignedTo?._id || '', cnpRecordId: item._id, isCallAgain: tab === 'callAgain' });
     setTaskError('');
     setTaskModal(true);
   };
@@ -77,10 +77,14 @@ export default function CNP() {
   const handleTaskSubmit = async (e) => {
     e.preventDefault(); setTaskLoading(true); setTaskError('');
     try {
-      const { cnpRecordId, ...payload } = taskForm;
+      const { cnpRecordId, isCallAgain, ...payload } = taskForm;
       if (!payload.assignedTo) delete payload.assignedTo;
       await createTask(payload);
-      if (cnpRecordId) await deleteCnpRecord(cnpRecordId).catch(() => {});
+      if (cnpRecordId) {
+        if (isCallAgain) await updateCallAgain(cnpRecordId, { status: 'done' }).catch(() => {});
+        else await deleteCnpRecord(cnpRecordId).catch(() => {});
+      }
+      if (payload.lead) await updateLead(payload.lead, { cnp: false }).catch(() => {});
       setTaskModal(false);
       setSelected(null);
       load(dateFilter, callAgainDateFilter);
