@@ -41,6 +41,7 @@ export default function Leads() {
   const [data, setData] = useState({ leads: [], total: 0, totalPages: 1 });
   const today = new Date().toISOString().split('T')[0];
   const [filters, setFilters] = useState({ search: '', dateFrom: today, dateTo: today, status: 'new', datePreset: 'today', page: 1 });
+  const [highlightId, setHighlightId] = useState(null);
   const [salesUsers, setSalesUsers] = useState([]);
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState(EMPTY);
@@ -80,6 +81,10 @@ export default function Leads() {
     if (pendingOpenId) {
       getLead(pendingOpenId).then(full => {
         setSelected(full);
+        setIsCreating(false);
+        setHighlightId(full._id);
+        const { assignedTo, notes, follow_ups, cnpCount, createdAt, updatedAt, __v, ...formFields } = full;
+        setForm({ ...EMPTY, ...formFields });
         setSearchParams({}, { replace: true });
       }).catch(() => {});
     }
@@ -101,6 +106,7 @@ export default function Leads() {
       const lead = await createLead(payload);
       if (action === 'cnp') { await markCNP(lead._id).catch(() => {}); }
       else if (action === 'callAgain') { await createCallAgain(lead._id).catch(() => {}); }
+      else if (action === 'lost') { await updateLead(lead._id, { status: 'closed_lost' }).catch(() => {}); }
       setIsCreating(false);
       load();
     } catch (err) { setError(err.response?.data?.message || 'Failed to create lead'); }
@@ -219,9 +225,9 @@ export default function Leads() {
                 const isActive = selected?._id === lead._id;
                 const color = PIN_COLORS[i % PIN_COLORS.length];
                 return (
-                  <div key={lead._id} onClick={async () => { if (isActive) { setSelected(null); return; } setIsCreating(false); const full = await getLead(lead._id).catch(() => lead); setSelected(full); const { assignedTo, notes, follow_ups, cnpCount, createdAt, updatedAt, __v, ...formFields } = full; setForm({ ...EMPTY, ...formFields }); }}
+                  <div key={lead._id} onClick={async () => { if (isActive) { setSelected(null); return; } setIsCreating(false); setHighlightId(null); const full = await getLead(lead._id).catch(() => lead); setSelected(full); const { assignedTo, notes, follow_ups, cnpCount, createdAt, updatedAt, __v, ...formFields } = full; setForm({ ...EMPTY, ...formFields }); }}
                     className={`relative flex items-center gap-4 px-4 py-4 rounded-2xl cursor-pointer transition-all duration-200 border
-                      ${isActive ? 'bg-emerald-50 border-emerald-200 shadow-sm' : 'bg-white border-gray-100 hover:border-emerald-200'}`}>
+                      ${isActive ? 'bg-emerald-50 border-emerald-200 shadow-sm' : highlightId === lead._id ? 'bg-yellow-50 border-yellow-300 shadow-sm' : 'bg-white border-gray-100 hover:border-emerald-200'}`}>
                     
                     <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${
                       lead.status === 'closed_won' ? 'bg-green-500' :
@@ -404,7 +410,7 @@ export default function Leads() {
                   {STATUSES.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
                 </select></div>
 
-              <div className="pt-6 grid grid-cols-4 gap-3">
+              <div className="pt-6 grid grid-cols-5 gap-3">
                  <button type="submit" disabled={loading}
                   className="py-3.5 rounded-2xl text-sm font-bold text-white bg-[#16a34a] hover:bg-[#15803d] transition-all shadow-lg shadow-green-100 disabled:opacity-50">
                   {loading ? '...' : 'Create Lead'}
@@ -416,6 +422,10 @@ export default function Leads() {
                 <button type="button" onClick={(e) => handleCreate(e, 'callAgain')} disabled={loading}
                   className="py-3.5 rounded-2xl text-sm font-bold text-white bg-[#f59e0b] hover:bg-[#d97706] transition-all shadow-lg shadow-amber-100 disabled:opacity-50">
                   {loading ? '...' : 'Call Again'}
+                </button>
+                <button type="button" onClick={(e) => handleCreate(e, 'lost')} disabled={loading}
+                  className="py-3.5 rounded-2xl text-sm font-bold text-white bg-[#6b7280] hover:bg-[#4b5563] transition-all shadow-lg shadow-gray-100 disabled:opacity-50">
+                  {loading ? '...' : 'Mark Lost'}
                 </button>
                 <button type="button" onClick={() => setIsCreating(false)}
                   className="py-3.5 rounded-2xl text-sm font-bold text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 transition-all">

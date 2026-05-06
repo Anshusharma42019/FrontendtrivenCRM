@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { getTasks, getDailyTasks, createTask, updateTask, deleteTask, addTaskNote, deleteCnpRecord } from '../services/task.service';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { getTasks, getDailyTasks, createTask, updateTask, deleteTask, addTaskNote, deleteCnpRecord, getTask } from '../services/task.service';
 import API from '../api';
 import { getLeads, updateLead } from '../services/lead.service';
 import { getUsers } from '../services/user.service';
@@ -75,6 +75,8 @@ export default function Tasks() {
 
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const pendingOpenId = searchParams.get('openId');
   const canManage = user?.role === 'admin' || user?.role === 'manager';
 
   const load = useCallback(async () => {
@@ -100,12 +102,22 @@ export default function Tasks() {
   }, [canManage]);
 
   useEffect(() => {
+    if (pendingOpenId) {
+      getTask(pendingOpenId).then(task => {
+        setSelected(task);
+        setTab('all');
+        setSearchParams({}, { replace: true });
+      }).catch(() => {});
+    }
+  }, [pendingOpenId, setSearchParams]);
+
+  useEffect(() => {
     if (location.state?.leadId) {
       const ld = location.state.leadData || {};
       setForm({
         ...EMPTY,
         lead: location.state.leadId,
-        assignedTo: location.state.assignedTo || '',
+        assignedTo: location.state.assignedTo || ld.assignedTo?._id || '',
         title: ld.name || '',
         phone: ld.phone || '',
         problem: ld.problem || '',
@@ -123,13 +135,13 @@ export default function Tasks() {
         state: ld.state || '',
         otherProblems: ld.otherProblems || '',
         problemDuration: ld.problemDuration || '',
-        price: ld.price || '',
+        price: ld.price || ld.revenue || '',
       });
       setError('');
       setModal('create');
       window.history.replaceState({}, document.title);
     }
-  }, [location.state?.leadId]);
+  }, [location.state]);
 
   const openCreate = () => { setForm(EMPTY); setError(''); setPincodeData([]); setModal('create'); };
   const openEdit = (task) => {
@@ -556,7 +568,7 @@ export default function Tasks() {
           {error && <div className="bg-red-50 border border-red-100 text-red-600 text-sm p-3 rounded-xl mb-4">{error}</div>}
           <form id="task-form" onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Task Name *</label>
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Task</label>
                 <input required className={`${inputCls} mt-1`} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
               <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Phone</label>
                 <input className={`${inputCls} mt-1`} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>

@@ -64,11 +64,8 @@ export default function Verification() {
 
   useEffect(() => {
     load();
-    // Sync + repair in background, then refresh
-    Promise.allSettled([
-      syncVerificationRecords(),
-      API.post('/verification/repair'),
-    ])
+    // Sync in background silently after data is shown
+    syncVerificationRecords()
       .then(() => getVerificationRecords())
       .then(data => setRecords(Array.isArray(data) ? data : []))
       .catch(() => {});

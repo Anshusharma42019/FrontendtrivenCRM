@@ -6,13 +6,15 @@ import Modal from '../components/ui/Modal';
 import Badge from '../components/ui/Badge';
 import { useAuth } from '../context/AuthContext';
 
-const ROLES = ['manager', 'sales'];
-const EMPTY = { name: '', phone: '', password: '', role: 'manager', baseSalary: 0 };
+const ROLES = ['manager', 'sales', 'doctor', 'staff'];
+const EMPTY = { name: '', phone: '', password: '', role: 'manager', baseSalary: 0, specialization: '' };
 
 const ROLE_GRADIENT = {
   admin:   'from-purple-500 to-violet-600',
   manager: 'from-blue-500 to-cyan-500',
   sales:   'from-green-500 to-emerald-500',
+  doctor:  'from-teal-500 to-cyan-600',
+  staff:   'from-orange-500 to-amber-500',
 };
 
 export default function Users() {
@@ -78,7 +80,7 @@ export default function Users() {
   const openCreate = () => { setForm(EMPTY); setError(''); setModal('create'); };
   const openEdit = (u) => {
     setSelected(u);
-    setForm({ name: u.name, phone: u.phone || '', password: '', role: u.role, baseSalary: u.baseSalary || 0 });
+    setForm({ name: u.name, phone: u.phone || '', password: '', role: u.role, baseSalary: u.baseSalary || 0, specialization: u.specialization || '' });
     setError(''); setModal('edit');
   };
 
@@ -347,7 +349,13 @@ export default function Users() {
                 {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
               </select>
             </div>
-            {form.role !== 'admin' && (
+            {form.role === 'doctor' && (
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Specialization</label>
+                <input className={`${inputCls} mt-1.5`} placeholder="e.g. Ayurveda, Panchakarma" value={form.specialization} onChange={(e) => setForm({ ...form, specialization: e.target.value })} />
+              </div>
+            )}
+            {form.role !== 'admin' && form.role !== 'doctor' && (
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Base Salary (Monthly)</label>
                 <input type="number" className={`${inputCls} mt-1.5`} value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: Number(e.target.value) })} />

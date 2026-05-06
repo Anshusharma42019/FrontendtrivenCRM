@@ -28,13 +28,14 @@ const PIN_COLORS = [
 const initials = (name = '') =>
   name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
 
-const DetailRow = ({ label, value, color = "gray" }) =>
-  value ? (
-    <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">{label}</span>
-      <span className={`text-sm font-medium capitalize flex-1 ${color === 'red' ? 'text-red-600' : 'text-gray-800'}`}>{value}</span>
-    </div>
-  ) : null;
+const DetailRow = ({ label, value, color = "gray" }) => (
+  <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">{label}</span>
+    <span className={`text-sm font-medium capitalize flex-1 ${color === 'red' ? 'text-red-600' : value ? 'text-gray-800' : 'text-gray-400'}`}>
+      {value || 'Not provided'}
+    </span>
+  </div>
+);
 
 const SectionHead = ({ label, color = "red" }) => (
   <div className="flex items-center gap-2 mt-4 mb-1">
@@ -63,6 +64,10 @@ export default function CNP() {
   const [taskForm, setTaskForm] = useState({});
   const [taskLoading, setTaskLoading] = useState(false);
   const [taskError, setTaskError] = useState('');
+  const [editModal, setEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
 
   const todayISO = () => { const d = new Date(); d.setHours(23,59,59,999); return d.toISOString(); };
   const inputCls = "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-400 transition";
@@ -72,6 +77,26 @@ export default function CNP() {
     setTaskForm({ title: lead.name || item.title || '', phone: lead.phone || '', problem: lead.problem || '', age: '', weight: '', height: '', otherProblems: '', problemDuration: '', price: '', reminderAt: '', dueDate: todayISO(), cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', type: 'task', priority: 'medium', lead: lead._id || '', assignedTo: item.assignedTo?._id || '', cnpRecordId: item._id, isCallAgain: tab === 'callAgain' });
     setTaskError('');
     setTaskModal(true);
+  };
+
+  const openEditModal = (item) => {
+    const lead = item.lead || {};
+    setEditForm({
+      name: lead.name || '',
+      phone: lead.phone || '',
+      email: lead.email || '',
+      address: lead.address || '',
+      problem: lead.problem || '',
+      houseNo: lead.houseNo || '',
+      cityVillage: lead.cityVillage || '',
+      postOffice: lead.postOffice || '',
+      district: lead.district || '',
+      state: lead.state || '',
+      pincode: lead.pincode || '',
+      landmark: lead.landmark || ''
+    });
+    setEditError('');
+    setEditModal(true);
   };
 
   const handleTaskSubmit = async (e) => {
@@ -92,14 +117,77 @@ export default function CNP() {
     finally { setTaskLoading(false); }
   };
 
+  const handleEditSubmit = async (e) => {
+    e.preventDefault(); setEditLoading(true); setEditError('');
+    try {
+      const leadId = selected?.lead?._id;
+      if (!leadId) throw new Error('No lead ID found');
+      
+      console.log('Sending edit data:', editForm);
+      
+      // Save to database first
+      const updated = await updateLead(leadId, editForm);
+      console.log('Server response:', updated);
+      
+      // Merge all data: original + form + server response
+      const updatedLeadData = { 
+        ...selected.lead, 
+        ...editForm, 
+        ...(updated || {})
+      };
+      
+      console.log('Final merged data:', updatedLeadData);
+      
+      // Update the selected item with new data immediately
+      setSelected(prev => ({ 
+        ...prev, 
+        lead: updatedLeadData
+      }));
+      
+      // Update the lists as well
+      setCnpTasks(prev => prev.map(task => 
+        task._id === selected._id 
+          ? { ...task, lead: updatedLeadData }
+          : task
+      ));
+      
+      setCallAgainLeads(prev => prev.map(lead => 
+        lead._id === selected._id 
+          ? { ...lead, lead: updatedLeadData }
+          : lead
+      ));
+      
+      setEditModal(false);
+      
+    } catch (err) { 
+      console.error('Failed to update lead:', err);
+      setEditError(err.response?.data?.message || 'Failed to update lead permanently'); 
+    }
+    finally { 
+      setEditLoading(false); 
+    }
+  };
+
   const handleSaveNote = async () => {
     if (!note.trim() && !nextDate) return;
     setSavingNote(true);
-    const leadId = selected?.lead?._id || selected?._id;
+    const leadId = selected?.lead?._id;
     try {
       const res = await API.post(`/leads/${leadId}/follow-up`, { note, next_date: nextDate || undefined });
       const updated = res.data.data;
-      setSelected(prev => ({ ...prev, lead: { ...(prev.lead || {}), ...updated } }));
+      const newFollowUp = { note, next_date: nextDate || undefined, date: new Date().toISOString() };
+      const updatedLead = { 
+        ...(selected.lead || {}), 
+        ...updated,
+        follow_ups: [...(selected.lead?.follow_ups || []), newFollowUp]
+      };
+      setSelected(prev => ({ ...prev, lead: updatedLead }));
+      setCnpTasks(prev => prev.map(task =>
+        task._id === selected._id ? { ...task, lead: updatedLead } : task
+      ));
+      setCallAgainLeads(prev => prev.map(lead =>
+        lead._id === selected._id ? { ...lead, lead: updatedLead } : lead
+      ));
       setNote(''); setNextDate('');
     } catch { }
     finally { setSavingNote(false); }
@@ -309,19 +397,36 @@ export default function CNP() {
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold ${PIN_COLORS[filteredItems.findIndex(i => i._id === selected._id) % PIN_COLORS.length]}`}>
                 {initials(selected.lead?.name || selected.title)}
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="text-sm font-bold text-gray-800 leading-tight">{selected.lead?.name || 'Task Details'}</p>
                 <p className="text-xs text-gray-400">{selected.lead?.phone}</p>
               </div>
             </div>
-            <button onClick={() => setSelected(null)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition text-xl">×</button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => openEditModal(selected)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-purple-500 hover:bg-purple-50 transition">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+              </button>
+              <button onClick={() => setSelected(null)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition text-xl">×</button>
+            </div>
           </div>
 
           <div className="px-5 py-4 overflow-y-auto flex-1 custom-scrollbar">
             <SectionHead label="Contact Information" color={tab === 'tasks' ? 'red' : 'amber'} />
             <DetailRow label="Phone" value={selected.lead?.phone} />
-            <DetailRow label="Email" value={selected.lead?.email} />
+            <DetailRow label="Problem" value={selected.lead?.problem} />
+            
+            <SectionHead label="Address Details" color={tab === 'tasks' ? 'red' : 'amber'} />
             <DetailRow label="Address" value={selected.lead?.address} />
+            <DetailRow label="House No" value={selected.lead?.houseNo} />
+            <DetailRow label="City/Village" value={selected.lead?.cityVillage} />
+            <DetailRow label="Post Office" value={selected.lead?.postOffice} />
+            <DetailRow label="District" value={selected.lead?.district} />
+            <DetailRow label="State" value={selected.lead?.state} />
+            <DetailRow label="Pincode" value={selected.lead?.pincode} />
+            <DetailRow label="Landmark" value={selected.lead?.landmark} />
 
             <SectionHead label="Status & History" color={tab === 'tasks' ? 'red' : 'amber'} />
             <DetailRow label="Current Status" value={selected.lead?.status?.replace(/_/g, ' ')} />
@@ -450,12 +555,20 @@ export default function CNP() {
         <div className="lg:hidden">
           <Modal hideHeader={true} onClose={() => setSelected(null)}>
             <div className={`-mx-4 -mt-4 mb-5 px-6 py-6 rounded-b-3xl relative ${tab === 'tasks' ? 'bg-gradient-to-br from-red-900 to-red-800' : 'bg-gradient-to-br from-amber-900 to-amber-800'}`}>
-              <button onClick={() => setSelected(null)} className="absolute right-4 top-4 w-7 h-7 flex items-center justify-center rounded-full bg-white/10 text-white transition text-xl">×</button>
+              <div className="absolute right-4 top-4 flex items-center gap-2">
+                <button onClick={() => openEditModal(selected)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 text-white hover:bg-white/20 transition">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </button>
+                <button onClick={() => setSelected(null)} className="w-7 h-7 flex items-center justify-center rounded-full bg-white/10 text-white transition text-xl">×</button>
+              </div>
               <div className="flex items-center gap-4">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold text-white shadow-xl ${PIN_COLORS[filteredItems.findIndex(i => i._id === selected._id) % PIN_COLORS.length]}`}>
                   {initials(selected.lead?.name || selected.title)}
                 </div>
-                <div>
+                <div className="flex-1">
                   <h3 className="text-white font-bold text-lg tracking-tight">{selected.lead?.name || selected.title}</h3>
                   <p className="text-white/60 text-sm">{selected.lead?.phone}</p>
                 </div>
@@ -530,6 +643,51 @@ export default function CNP() {
                 {taskLoading ? 'Saving...' : 'Create Task'}
               </button>
               <button type="button" onClick={() => setTaskModal(false)} className="flex-1 border border-gray-100 hover:bg-gray-50 py-3 rounded-xl text-sm font-bold text-gray-500">Cancel</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+      
+      {/* Edit Modal */}
+      {editModal && (
+        <Modal title="Edit Lead" onClose={() => setEditModal(false)}>
+          {editError && <div className="bg-red-50 border border-red-100 text-red-600 text-sm p-3 rounded-xl mb-4">{editError}</div>}
+          <form onSubmit={handleEditSubmit} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Name *</label>
+                <input required className={`${inputCls} mt-1`} value={editForm.name||''} onChange={e => setEditForm(f => ({...f, name: e.target.value}))} /></div>
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Phone</label>
+                <input className={`${inputCls} mt-1`} value={editForm.phone||''} onChange={e => setEditForm(f => ({...f, phone: e.target.value}))} /></div>
+            </div>
+            <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Problem</label>
+              <textarea rows={2} className={`${inputCls} mt-1`} value={editForm.problem||''} onChange={e => setEditForm(f => ({...f, problem: e.target.value}))} /></div>
+            <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Address</label>
+              <textarea rows={2} className={`${inputCls} mt-1`} value={editForm.address||''} onChange={e => setEditForm(f => ({...f, address: e.target.value}))} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">House No</label>
+                <input className={`${inputCls} mt-1`} value={editForm.houseNo||''} onChange={e => setEditForm(f => ({...f, houseNo: e.target.value}))} /></div>
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">City/Village</label>
+                <input className={`${inputCls} mt-1`} value={editForm.cityVillage||''} onChange={e => setEditForm(f => ({...f, cityVillage: e.target.value}))} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Post Office</label>
+                <input className={`${inputCls} mt-1`} value={editForm.postOffice||''} onChange={e => setEditForm(f => ({...f, postOffice: e.target.value}))} /></div>
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">District</label>
+                <input className={`${inputCls} mt-1`} value={editForm.district||''} onChange={e => setEditForm(f => ({...f, district: e.target.value}))} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">State</label>
+                <input className={`${inputCls} mt-1`} value={editForm.state||''} onChange={e => setEditForm(f => ({...f, state: e.target.value}))} /></div>
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Pincode</label>
+                <input className={`${inputCls} mt-1`} value={editForm.pincode||''} onChange={e => setEditForm(f => ({...f, pincode: e.target.value}))} /></div>
+            </div>
+            <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Landmark</label>
+              <input className={`${inputCls} mt-1`} value={editForm.landmark||''} onChange={e => setEditForm(f => ({...f, landmark: e.target.value}))} /></div>
+            <div className="flex gap-3 pt-2">
+              <button type="submit" disabled={editLoading} className="flex-1 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-60 bg-purple-500 hover:bg-purple-600">
+                {editLoading ? 'Saving...' : 'Update Lead'}
+              </button>
+              <button type="button" onClick={() => setEditModal(false)} className="flex-1 border border-gray-100 hover:bg-gray-50 py-3 rounded-xl text-sm font-bold text-gray-500">Cancel</button>
             </div>
           </form>
         </Modal>

@@ -10,6 +10,7 @@ export const addLeadNote = (id, text) => API.post(`/leads/${id}/notes`, { text }
 export const markCNP = (id) => API.patch(`/leads/${id}/cnp`).then(r => r.data.data);
 export const unmarkCNP = (id) => API.patch(`/leads/${id}/uncnp`).then(r => r.data.data);
 export const searchByPhone = (phone) => API.get('/leads/search-phone', { params: { phone } }).then(r => r.data.data);
+export const globalSearch = (q) => API.get('/search', { params: { q } }).then(r => r.data.data);
 export const createCallAgain = (leadId) => API.post('/call-again', { leadId }).then(r => r.data.data);
 export const getCallAgains = (filter) => API.get('/call-again', { params: filter ? { filter } : {} }).then(r => r.data.data);
 export const updateCallAgain = (id, data) => API.patch(`/call-again/${id}`, data).then(r => r.data.data);

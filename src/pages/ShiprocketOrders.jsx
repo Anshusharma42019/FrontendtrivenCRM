@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import * as srSvc from '../services/shiprocket.service';
 
 const inp = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 bg-white';
@@ -112,6 +113,9 @@ export default function ShiprocketOrders() {
   const [page, setPage] = useState(1);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [highlightOrderId, setHighlightOrderId] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const pendingOpenId = searchParams.get('openId');
 
   const totalPages = Math.ceil(orders.length / PAGE_SIZE);
   const paged = orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -130,6 +134,14 @@ export default function ShiprocketOrders() {
   };
 
   useEffect(() => { if (tab === 'list') fetchOrders(); }, [tab]);
+
+  useEffect(() => {
+    if (pendingOpenId && orders.length > 0) {
+      const order = orders.find(o => String(o._id) === pendingOpenId);
+      if (order) setHighlightOrderId(String(order.id || order.order_id));
+      setSearchParams({}, { replace: true });
+    }
+  }, [pendingOpenId, orders, setSearchParams]);
 
   const cancelOne = async (oid) => {
     if (!window.confirm(`Cancel order ${oid} on Shiprocket?`)) return;
@@ -341,7 +353,7 @@ export default function ShiprocketOrders() {
                     {paged.map((o) => {
                       const oid = o.id || o.order_id;
                       return (
-                        <tr key={oid} className={`hover:bg-gray-50/50 transition-colors ${['CANCELLED','CANCELED'].includes(o.status) ? 'opacity-60' : ''}`}>
+                        <tr key={oid} className={`hover:bg-gray-50/50 transition-colors ${['CANCELLED','CANCELED'].includes(o.status) ? 'opacity-60' : ''} ${highlightOrderId === String(oid) ? 'bg-yellow-50 border-l-4 border-yellow-400' : ''}`}>
                           <td className="px-4 py-3 text-center">
                             <input type="checkbox" className="w-4 h-4 rounded accent-green-600"
                               checked={selected.has(String(oid))}

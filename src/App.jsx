@@ -19,6 +19,8 @@ import FollowUp from './pages/FollowUp';
 import CallAgain from './pages/CallAgain';
 import Attendance from './pages/Attendance';
 import OrderDetail from './pages/OrderDetail';
+import AppointmentBook from './pages/AppointmentBook';
+import DoctorDashboard from './pages/DoctorDashboard';
 
 function AppRoutes() {
   const { user } = useAuth();
@@ -26,11 +28,14 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route index element={<Navigate to={user?.role === 'doctor' ? '/doctor-dashboard' : '/dashboard'} replace />} />
         <Route path="dashboard" element={
           user?.role === 'sales'
             ? <StaffDashboard />
             : <ProtectedRoute roles={['admin', 'manager']}><Dashboard /></ProtectedRoute>
+        } />
+        <Route path="doctor-dashboard" element={
+          <ProtectedRoute roles={['doctor']}><DoctorDashboard /></ProtectedRoute>
         } />
         <Route path="leads" element={<Leads />} />
         <Route path="pipeline" element={<Pipeline />} />
@@ -38,6 +43,7 @@ function AppRoutes() {
         <Route path="call-again" element={<CallAgain />} />
         <Route path="tasks" element={<Tasks />} />
         <Route path="attendance" element={<Attendance />} />
+        <Route path="appointments" element={<AppointmentBook />} />
         <Route path="follow-up" element={<FollowUp />} />
         <Route path="verification" element={<Verification />} />
         <Route path="ready-to-shipment" element={<ReadyToShipment />} />

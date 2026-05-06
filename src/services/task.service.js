@@ -1,6 +1,7 @@
 import API from '../api';
 
 export const getTasks = (params) => API.get('/tasks', { params }).then(r => r.data.data);
+export const getTask = (id) => API.get(`/tasks/${id}`).then(r => r.data.data);
 export const getTaskByLead = (leadId) => API.get(`/tasks/by-lead/${leadId}`).then(r => r.data.data);
 export const getDailyTasks = () => API.get('/tasks/daily').then(r => r.data.data);
 export const createTask = (data) => API.post('/tasks', data).then(r => r.data.data);

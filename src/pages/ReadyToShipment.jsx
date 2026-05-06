@@ -54,16 +54,17 @@ export default function ReadyToShipment() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
-
   const handleRepair = async () => {
     setRepairing(true);
     try {
-      await load();
-    } finally {
-      setRepairing(false);
-    }
+      const res = await API.post('/ready-to-shipment/sync');
+      const data = res.data.data;
+      setRecords(Array.isArray(data) ? data : []);
+    } catch { /* ignore */ }
+    finally { setRepairing(false); }
   };
+
+  useEffect(() => { load(); }, [load]);
 
   const handleDelete = async (record) => {
     if (!window.confirm('Delete this record? The task will be marked as cancelled.')) return;

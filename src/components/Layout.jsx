@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useAuth } from '../context/AuthContext';
 import { getNotifications } from '../services/notification.service';
-import { searchByPhone } from '../services/lead.service';
+import { globalSearch, getLead } from '../services/lead.service';
 import API from '../api';
 
 const PAGE_TITLES = {
@@ -39,6 +39,9 @@ export default function Layout() {
   const [searchResults, setSearchResults] = useState([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [quickDetail, setQuickDetail] = useState(null);
+  const [quickLoading, setQuickLoading] = useState(false);
+  const [showFullDetail, setShowFullDetail] = useState(false);
   const initials = user?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const pageTitle = PAGE_TITLES[location.pathname] || '';
 
@@ -57,7 +60,7 @@ export default function Layout() {
     if (q.trim().length < 3) { setSearchResults([]); setSearchOpen(false); return; }
     setSearchLoading(true);
     try {
-      const data = await searchByPhone(q.trim());
+      const data = await globalSearch(q.trim());
       setSearchResults(data);
       setSearchOpen(true);
     } catch { setSearchResults([]); }
@@ -89,6 +92,20 @@ export default function Layout() {
     const t = setInterval(poll, Number(import.meta.env.VITE_NOTIFICATION_POLL_INTERVAL) || 30000);
     return () => { active = false; clearInterval(t); };
   }, []);
+
+  const handleResultClick = async (item) => {
+    setSearchOpen(false); setPhoneQuery(''); setSearchResults([]);
+    setQuickLoading(true); setQuickDetail(null); setShowFullDetail(false);
+    try {
+      if (item.type === 'lead') {
+        const full = await getLead(item._id);
+        setQuickDetail({ type: 'lead', data: full });
+      } else {
+        setQuickDetail({ type: item.type, data: item });
+      }
+    } catch { setQuickDetail(null); }
+    finally { setQuickLoading(false); }
+  };
 
   const handleAvatarFileChange = async (e) => {
     const file = e.target.files[0];
@@ -170,50 +187,43 @@ export default function Layout() {
                 )}
               </div>
               {searchOpen && (
-                <div className="absolute top-full left-0 mt-1.5 w-[92vw] sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+                <div className="absolute top-full left-0 mt-1.5 w-[92vw] sm:w-[420px] bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
                   {searchResults.length === 0 ? (
-                    <div className="px-4 py-6 text-center text-sm text-gray-400">No person found with this phone number</div>
+                    <div className="px-4 py-6 text-center text-sm text-gray-400">No results found</div>
                   ) : (
-                    <div className="max-h-96 overflow-y-auto divide-y divide-gray-50">
-                      {searchResults.map(lead => (
-                        <div key={lead._id} className="px-4 py-3 hover:bg-gray-50 transition-colors">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-semibold text-gray-800 text-sm">{lead.name}</span>
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${STATUS_COLORS[lead.status] || 'bg-gray-100 text-gray-600'}`}>
-                                  {lead.status?.replace('_', ' ')}
-                                </span>
-                                {lead.cnp && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-red-100 text-red-600">CNP</span>}
-                              </div>
-                              <div className="text-xs text-green-700 font-medium mt-0.5">{lead.phone}</div>
-                              {lead.email && <div className="text-xs text-gray-500 truncate">{lead.email}</div>}
-                              {lead.address && <div className="text-xs text-gray-400 truncate">{lead.address}</div>}
-                              <div className="flex flex-wrap gap-1.5 mt-1.5">
-                                {lead.source && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full capitalize">{lead.source.replace('_', ' ')}</span>}
-                                {lead.type && <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded-full capitalize">{lead.type}</span>}
-                                {lead.assignedTo && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full flex items-center gap-0.5"><svg className="w-2.5 h-2.5 inline-block" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> {lead.assignedTo.name}</span>}
-                              </div>
-                              {lead.problem && <div className="text-xs text-gray-500 mt-1 italic truncate">&ldquo;{lead.problem}&rdquo;</div>}
+                    <div className="max-h-96 overflow-y-auto">
+                      {['lead', 'order', 'task'].map(type => {
+                        const items = searchResults.filter(r => r.type === type);
+                        if (!items.length) return null;
+                        const labels = { lead: '👤 Leads', order: '📦 Orders', task: '✅ Tasks' };
+                        return (
+                          <div key={type}>
+                            <div className="px-4 py-1.5 bg-gray-50 text-[10px] font-extrabold uppercase tracking-widest text-gray-400 sticky top-0">
+                              {labels[type]}
                             </div>
-                            {lead.revenue > 0 && (
-                              <div className="text-xs font-semibold text-emerald-600 flex-shrink-0">₹{lead.revenue.toLocaleString()}</div>
-                            )}
+                            {items.map(item => (
+                              <button key={item._id} onClick={() => handleResultClick(item)}
+                                className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 flex items-center gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-semibold text-gray-800 truncate">{item.title}</span>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
+                                      STATUS_COLORS[item.meta?.toLowerCase()] || 'bg-gray-100 text-gray-500'
+                                    }`}>{item.meta?.replace(/_/g, ' ')}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    {item.subtitle && <span className="text-xs text-green-700 font-medium">{item.subtitle}</span>}
+                                    {item.orderId && <span className="text-xs text-gray-400">#{item.orderId}</span>}
+                                    {item.awb && <span className="text-xs text-gray-400">AWB: {item.awb}</span>}
+                                    {item.assignedTo && <span className="text-xs text-blue-500">→ {item.assignedTo}</span>}
+                                  </div>
+                                </div>
+                                <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+                              </button>
+                            ))}
                           </div>
-                          <div className="flex items-center justify-between mt-1.5">
-                            <span className="text-[10px] text-gray-400">
-                              Added {new Date(lead.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            </span>
-                            <button
-                              onClick={() => { navigate(`/leads?openId=${lead._id}`); setSearchOpen(false); setPhoneQuery(''); setSearchResults([]); }}
-                              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white"
-                              style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}
-                            >
-                              View Detail
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -327,6 +337,161 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Quick Detail Modal */}
+      {(quickLoading || quickDetail) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setQuickDetail(null)}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            {quickLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="w-8 h-8 border-[3px] border-emerald-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : quickDetail?.type === 'lead' ? (
+              <>
+                <div className="h-1.5 bg-emerald-600 shrink-0" />
+                <div className="px-6 py-4 flex items-center justify-between border-b border-gray-50 shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-emerald-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
+                      {quickDetail.data.name?.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-gray-800">{quickDetail.data.name}</p>
+                      <p className="text-xs text-emerald-600 font-medium">{quickDetail.data.phone}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setQuickDetail(null)} className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 text-xl">×</button>
+                </div>
+                <div className="overflow-y-auto flex-1 px-6 py-4">
+                  {(showFullDetail ? [
+                    ['Status', quickDetail.data.status?.replace(/_/g,' ')],
+                    ['Phone', quickDetail.data.phone],
+                    ['Email', quickDetail.data.email],
+                    ['Source', quickDetail.data.source],
+                    ['Type', quickDetail.data.type],
+                    ['Assigned To', quickDetail.data.assignedTo?.name],
+                    ['Problem', quickDetail.data.problem],
+                    ['House No', quickDetail.data.houseNo],
+                    ['City/Village', quickDetail.data.cityVillage],
+                    ['Post Office', quickDetail.data.postOffice],
+                    ['Landmark', quickDetail.data.landmark],
+                    ['District', quickDetail.data.district],
+                    ['State', quickDetail.data.state],
+                    ['Pincode', quickDetail.data.pincode],
+                    ['Revenue', quickDetail.data.revenue > 0 ? `₹${quickDetail.data.revenue.toLocaleString()}` : null],
+                    ['CNP', quickDetail.data.cnp ? 'Yes' : null],
+                    ['Added', new Date(quickDetail.data.createdAt).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})],
+                  ] : [
+                    ['Status', quickDetail.data.status?.replace(/_/g,' ')],
+                    ['Email', quickDetail.data.email],
+                    ['Source', quickDetail.data.source],
+                    ['Type', quickDetail.data.type],
+                    ['Assigned To', quickDetail.data.assignedTo?.name],
+                    ['Problem', quickDetail.data.problem],
+                    ['Address', [quickDetail.data.houseNo, quickDetail.data.cityVillage, quickDetail.data.district, quickDetail.data.state, quickDetail.data.pincode].filter(Boolean).join(', ')],
+                    ['Revenue', quickDetail.data.revenue > 0 ? `₹${quickDetail.data.revenue.toLocaleString()}` : null],
+                    ['Added', new Date(quickDetail.data.createdAt).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})],
+                  ]).filter(([,v])=>v).map(([label,value])=>(
+                    <div key={label} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-24 shrink-0 mt-0.5">{label}</span>
+                      <span className="text-sm text-gray-800 font-medium capitalize flex-1 break-words">{value}</span>
+                    </div>
+                  ))}
+                  {showFullDetail && quickDetail.data.notes?.length > 0 && (
+                    <div className="pt-3">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-2">All Notes</p>
+                      {[...quickDetail.data.notes].reverse().map((n,i)=>(
+                        <div key={i} className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-100/30 mb-2">
+                          <p className="text-xs text-gray-700">{n.text}</p>
+                          <p className="text-[9px] text-gray-400 mt-1 font-bold uppercase">{new Date(n.createdAt).toLocaleString()}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!showFullDetail && quickDetail.data.notes?.length > 0 && (
+                    <div className="pt-3">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-2">Recent Notes</p>
+                      {[...quickDetail.data.notes].reverse().slice(0,2).map((n,i)=>(
+                        <div key={i} className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-100/30 mb-2">
+                          <p className="text-xs text-gray-700">{n.text}</p>
+                          <p className="text-[9px] text-gray-400 mt-1 font-bold uppercase">{new Date(n.createdAt).toLocaleString()}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="px-6 py-4 border-t border-gray-50 shrink-0">
+                  <button onClick={() => setShowFullDetail(f => !f)}
+                    className="w-full py-3 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2"
+                    style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)' }}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    {showFullDetail ? 'Less' : 'View'}
+                  </button>
+                </div>
+              </>
+            ) : quickDetail?.type === 'order' ? (
+              <>
+                <div className="h-1.5 bg-blue-500 shrink-0" />
+                <div className="px-6 py-4 flex items-center justify-between border-b border-gray-50 shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-blue-500 flex items-center justify-center text-white text-lg">📦</div>
+                    <div>
+                      <p className="text-sm font-bold text-gray-800">{quickDetail.data.title}</p>
+                      <p className="text-xs text-blue-600 font-medium">{quickDetail.data.subtitle}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setQuickDetail(null)} className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 text-xl">×</button>
+                </div>
+                <div className="overflow-y-auto flex-1 px-6 py-4">
+                  {[['Status', quickDetail.data.meta],['Order ID', quickDetail.data.orderId],['AWB', quickDetail.data.awb],['Phone', quickDetail.data.subtitle]].filter(([,v])=>v).map(([label,value])=>(
+                    <div key={label} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-24 shrink-0 mt-0.5">{label}</span>
+                      <span className="text-sm text-gray-800 font-medium flex-1">{value}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="px-6 py-4 border-t border-gray-50 shrink-0">
+                  <button onClick={() => { setQuickDetail(null); navigate(`/shiprocket/orders?openId=${quickDetail.data._id}`); }}
+                    className="w-full py-3 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2"
+                    style={{ background: 'linear-gradient(135deg,#3b82f6,#2563eb)' }}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+                    View in Orders List
+                  </button>
+                </div>
+              </>
+            ) : quickDetail?.type === 'task' ? (
+              <>
+                <div className="h-1.5 bg-amber-500 shrink-0" />
+                <div className="px-6 py-4 flex items-center justify-between border-b border-gray-50 shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-amber-500 flex items-center justify-center text-white text-lg">✅</div>
+                    <div>
+                      <p className="text-sm font-bold text-gray-800">{quickDetail.data.title}</p>
+                      <p className="text-xs text-amber-600 font-medium">{quickDetail.data.subtitle}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setQuickDetail(null)} className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 text-xl">×</button>
+                </div>
+                <div className="overflow-y-auto flex-1 px-6 py-4">
+                  {[['Status', quickDetail.data.meta],['Phone', quickDetail.data.subtitle],['Assigned To', quickDetail.data.assignedTo]].filter(([,v])=>v).map(([label,value])=>(
+                    <div key={label} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-24 shrink-0 mt-0.5">{label}</span>
+                      <span className="text-sm text-gray-800 font-medium capitalize flex-1">{value}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="px-6 py-4 border-t border-gray-50 shrink-0">
+                  <button onClick={() => { setQuickDetail(null); navigate(`/tasks?openId=${quickDetail.data._id}`); }}
+                    className="w-full py-3 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2"
+                    style={{ background: 'linear-gradient(135deg,#f59e0b,#d97706)' }}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+                    View in Tasks List
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
