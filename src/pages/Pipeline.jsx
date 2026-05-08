@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getLeads, getLead, updateLead, getCallAgains, updateCallAgain, markCNP, createCallAgain } from '../services/lead.service';
+import { getLeads, getLead, updateLead, getCallAgains, updateCallAgain, markCNP, createCallAgain, deleteLead } from '../services/lead.service';
 import { createTask, getCnpRecords, deleteCnpRecord, getTaskByLead } from '../services/task.service';
 import API from '../api';
 import Modal from '../components/ui/Modal';
@@ -38,7 +38,7 @@ const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2 text-sm bg-
 const STAGES = [
   { key: 'interested',     label: 'Interested',     bar: 'bg-purple-500' },
   { key: 'closed_lost',    label: 'Not Interested', bar: 'bg-red-400' },
-  { key: 'on_hold',        label: 'On Hold',        bar: 'bg-gray-400' },
+  { key: 'on_hold',        label: 'Pending (On Hold)', bar: 'bg-gray-400' },
 ];
 
 export default function Pipeline() {
@@ -122,7 +122,7 @@ export default function Pipeline() {
   const handleMove = async (lead, newStage) => {
     setUpdating(lead._id);
     try {
-      await updateLead(lead._id, { status: newStage, cnp: false });
+      await updateLead(lead._id, { status: newStage === 'verification' ? 'new' : newStage, cnp: false, forceVerification: newStage === 'verification' });
       if (filter === 'cnp' && selected?._id) {
         try { await deleteCnpRecord(selected._id); } catch { }
       }
@@ -145,6 +145,20 @@ export default function Pipeline() {
       load();
       setSelected(null);
     } catch { /* ignore */ } finally { setUpdating(null); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Are you sure you want to delete this lead?')) return;
+    setUpdating(id);
+    try {
+      await deleteLead(id);
+      await load();
+      setSelected(null);
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Delete failed');
+    } finally {
+      setUpdating(null);
+    }
   };
 
   const handleFollowUpNote = async () => {
@@ -324,12 +338,16 @@ export default function Pipeline() {
                     const leadId = item.lead?._id || item._id;
                     // For CNP, use the record itself as task data (it has address fields synced)
                     if (filter === 'cnp') {
-                      setLeadTask(item);
+                      setLeadTask(null);
                       const leadId = item.lead?._id || item.lead;
                       if (leadId) {
                         try {
-                          const fullLead = await getLead(leadId);
-                          setSelected(prev => ({ ...prev, lead: fullLead }));
+                          const [fullLead, task] = await Promise.all([
+                            getLead(leadId),
+                            getTaskByLead(leadId).catch(() => null),
+                          ]);
+                          if (fullLead) setSelected(prev => ({ ...prev, lead: fullLead }));
+                          if (task) setLeadTask(task);
                         } catch { }
                       }
                     } else if (filter === 'call_again') {
@@ -343,7 +361,16 @@ export default function Pipeline() {
                         if (fullLead) setSelected(prev => ({ ...prev, lead: fullLead }));
                       } catch { }
                     } else {
-                      try { const task = await getTaskByLead(leadId); setLeadTask(task); } catch { }
+                      try {
+                        const [task, fullLead] = await Promise.all([
+                          getTaskByLead(leadId).catch(() => null),
+                          getLead(leadId).catch(() => null),
+                        ]);
+                        // Use task if it has address data, otherwise use lead
+                        const hasAddress = task && (task.houseNo || task.cityVillage || task.district || task.pincode);
+                        setLeadTask(hasAddress ? task : (fullLead || task));
+                        if (fullLead) setSelected(prev => ({ ...prev, lead: fullLead }));
+                      } catch { }
                     }
                   }}
                     className={`relative flex items-center gap-4 px-4 py-4 rounded-2xl cursor-pointer transition-all duration-200 border
@@ -456,11 +483,24 @@ export default function Pipeline() {
                         </div>
                       )}
                       <DetailRow label="Source" value={lead.source} />
-                      <DetailRow label="Problem" value={lead.problem} />
+                      <DetailRow label="Problem" value={leadTask?.problem || lead.problem} />
+                      {(leadTask?.age || leadTask?.weight || leadTask?.height) && (
+                        <>
+                          <SectionHead label="Health Info" />
+                          <DetailRow label="Age" value={leadTask?.age ? `${leadTask.age} yrs` : null} />
+                          <DetailRow label="Weight" value={leadTask?.weight ? `${leadTask.weight} kg` : null} />
+                          <DetailRow label="Height" value={leadTask?.height ? `${leadTask.height} ft` : null} />
+                          <DetailRow label="Other Problems" value={leadTask?.otherProblems} />
+                          <DetailRow label="Duration" value={leadTask?.problemDuration} />
+                          <DetailRow label="Price" value={leadTask?.price ? `₹${leadTask.price}` : null} />
+                        </>
+                      )}
                       
                       <SectionHead label="Contact Details" />
                       <DetailRow label="Email" value={lead.email} />
                       <DetailRow label="Phone" value={leadTask?.phone || lead.phone} />
+
+                      <SectionHead label="Address" />
                       <DetailRow label="House No" value={leadTask?.houseNo || lead.houseNo} />
                       <DetailRow label="City/Village" value={leadTask?.cityVillage || lead.cityVillage} />
                       <DetailRow label="Post Office" value={leadTask?.postOffice || lead.postOffice} />
@@ -524,6 +564,7 @@ export default function Pipeline() {
                           On Hold
                         </button>
                       </div>
+                      {/* Verification button removed as requested */}
                       <div className="grid grid-cols-2 gap-2">
                          <button onClick={async () => {
                            if (filter === 'closed_lost') await updateLead(lead._id, { status: 'on_hold' }).catch(() => {});
@@ -561,6 +602,14 @@ export default function Pipeline() {
                           }} className="py-3 rounded-2xl text-xs font-bold text-amber-600 bg-amber-50 border border-amber-100 hover:bg-amber-100 transition-all">Call Again</button>
                         </div>
                       )}
+
+                      <button disabled={updating} onClick={() => handleDelete(lead._id)}
+                        className="w-full py-3 mt-4 rounded-2xl text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-100 transition-all hover:bg-rose-100 active:scale-[0.98] flex items-center justify-center gap-2">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                        </svg>
+                        DELETE LEAD
+                      </button>
 
                     </>
                   )}

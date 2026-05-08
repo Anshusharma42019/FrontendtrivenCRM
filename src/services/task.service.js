@@ -12,6 +12,7 @@ export const getCnpRecords = (filter) => API.get('/cnp', { params: filter ? { fi
 export const incrementCnpCount = (id) => API.patch(`/cnp/${id}/increment`).then(r => r.data.data);
 export const deleteCnpRecord = (id) => API.delete(`/cnp/${id}`);
 export const getVerificationRecords = () => API.get('/verification').then(r => r.data.data);
+export const getOnHoldVerificationRecords = () => API.get('/verification/on-hold').then(r => r.data.data);
 export const syncVerificationRecords = () => API.post('/verification/sync').then(r => r.data);
 export const updateVerificationStatus = (id, status, onHoldUntil, onHoldReason) => API.patch(`/verification/${id}`, { status, ...(onHoldUntil && { onHoldUntil }), ...(onHoldReason && { onHoldReason }) }).then(r => r.data.data);
 export const updateVerificationRecord = (id, data) => API.patch(`/verification/${id}`, data).then(r => r.data.data);
