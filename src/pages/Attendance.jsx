@@ -4,12 +4,41 @@ import * as svc from '../services/attendance.service';
 import { fetchAllStaffCommissions } from '../services/dashboard.service';
 import { getUsers } from '../services/user.service';
 import Modal from '../components/ui/Modal';
+import { useToast } from '../context/ToastContext';
 
-const STATUS_COLORS = {
-  present: { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0', label: 'Present' },
-  absent: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca', label: 'Absent' },
-  half_day: { bg: '#fefce8', text: '#ca8a04', border: '#fef08a', label: 'Half Day' },
-  late: { bg: '#fff7ed', text: '#ea580c', border: '#fed7aa', label: 'Late' },
+const STATUS_THEMES = {
+  present: { 
+    bg: 'bg-green-50/50', 
+    text: 'text-green-600', 
+    border: 'border-green-100', 
+    dot: 'bg-green-500',
+    label: 'Present',
+    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+  },
+  absent: { 
+    bg: 'bg-red-50/50', 
+    text: 'text-red-600', 
+    border: 'border-red-100', 
+    dot: 'bg-red-500',
+    label: 'Absent',
+    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+  },
+  half_day: { 
+    bg: 'bg-amber-50/50', 
+    text: 'text-amber-600', 
+    border: 'border-amber-100', 
+    dot: 'bg-amber-500',
+    label: 'Half Day',
+    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M20 12l-8 8-8-8"/></svg>
+  },
+  late: { 
+    bg: 'bg-indigo-50/60', 
+    text: 'text-indigo-600', 
+    border: 'border-indigo-100', 
+    dot: 'bg-indigo-500',
+    label: 'Late',
+    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+  },
 };
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -45,52 +74,69 @@ function AttendanceCalendar({ records, year, month, onChangeMonth }) {
   records.forEach(r => { if (counts[r.status] !== undefined) counts[r.status]++; });
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
+    <div className="bg-white rounded-[2rem] shadow-xl overflow-hidden border border-gray-100 transition-all hover:shadow-2xl max-w-2xl mx-auto">
       {/* Month nav */}
-      <div className="relative flex items-center justify-center px-4 py-3" style={{ background: 'linear-gradient(135deg, #0d1f0d, #1a3a1a)' }}>
-        <button onClick={() => onChangeMonth(-1)} className="absolute left-3 w-8 h-8 flex items-center justify-center rounded-lg text-green-300 hover:bg-white/10 transition">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
-        </button>
-        <span className="text-white font-bold text-sm sm:text-base tracking-tight">{MONTHS[month]} {year}</span>
-        <button onClick={() => onChangeMonth(1)} className="absolute right-3 w-8 h-8 flex items-center justify-center rounded-lg text-green-300 hover:bg-white/10 transition">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
-        </button>
+      <div className="relative flex items-center justify-between px-5 py-4 bg-gray-900 text-white">
+        <div className="flex flex-col">
+          <span className="text-[9px] font-black text-green-400 uppercase tracking-[0.2em] mb-0.5">Attendance History</span>
+          <h3 className="text-base font-black tracking-tight">{MONTHS[month]} {year}</h3>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => onChangeMonth(-1)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white transition active:scale-95">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <button onClick={() => onChangeMonth(1)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white transition active:scale-95">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
       </div>
  
-      {/* Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-3 py-3 border-b border-gray-50">
-        {Object.entries(STATUS_COLORS).map(([key, c]) => (
-          <div key={key} className="flex flex-col items-center justify-center text-center rounded-xl py-3 border shadow-sm" 
-            style={{ background: c.bg, borderColor: c.border + '40' }}>
-            <p className="text-base sm:text-lg font-extrabold leading-tight" style={{ color: c.text }}>{counts[key]}</p>
-            <p className="text-[9px] sm:text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">{c.label}</p>
+      {/* Summary Chips */}
+      <div className="flex flex-wrap gap-1.5 p-3 bg-gray-50/50 border-b border-gray-100">
+        {Object.entries(STATUS_THEMES).map(([key, theme]) => (
+          <div key={key} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${theme.bg} ${theme.border} transition-all`}>
+            <span className={`${theme.text} scale-75`}>{theme.icon}</span>
+            <span className={`text-[10px] font-black uppercase tracking-wider ${theme.text}`}>{counts[key]}</span>
+            <span className="text-[8px] text-gray-400 font-bold uppercase">{theme.label}</span>
           </div>
         ))}
       </div>
- 
-      {/* Day headers */}
-      <div className="grid grid-cols-7 px-3 pt-2">
-        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
-          <div key={d} className="text-center text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase pb-1">{d}</div>
-        ))}
-      </div>
- 
-      {/* Days */}
-      <div className="grid grid-cols-7 gap-1 px-2.5 pb-4">
-        {days.map((day, i) => {
-          if (!day) return <div key={`e${i}`} className="aspect-square" />;
-          const key = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-          const rec = map[key];
-          const isToday = key === todayKey;
-          const sc = rec ? STATUS_COLORS[rec.status] : null;
-          return (
-            <div key={i} className={`relative aspect-square flex items-center justify-center rounded-xl text-[11px] sm:text-xs font-bold transition shadow-sm ${isToday ? 'ring-2 ring-green-400 ring-offset-1' : ''}`}
-              style={sc ? { background: sc.bg, color: sc.text, border: `1px solid ${sc.border}40` } : { background: '#f9fafb', color: '#9ca3af', border: '1px solid rgba(0,0,0,0.02)' }}>
-              {day}
-              {rec && <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full" style={{ background: sc?.text }} />}
-            </div>
-          );
-        })}
+  
+      <div className="p-3">
+        {/* Day headers */}
+        <div className="grid grid-cols-7 mb-1">
+          {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, idx) => (
+            <div key={d} className={`text-center text-[9px] font-black uppercase tracking-widest pb-2 ${idx === 0 || idx === 6 ? 'text-red-300' : 'text-gray-400'}`}>{d}</div>
+          ))}
+        </div>
+  
+        {/* Days Grid */}
+        <div className="grid grid-cols-7 gap-1.5">
+          {days.map((day, i) => {
+            if (!day) return <div key={`e${i}`} className="h-10 opacity-20" />;
+            const key = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+            const rec = map[key];
+            const isToday = key === todayKey;
+            const theme = rec ? STATUS_THEMES[rec.status] : null;
+            
+            return (
+              <div key={i} className={`group relative h-10 flex flex-col items-center justify-center rounded-xl transition-all duration-300 ${isToday ? 'ring-2 ring-green-500 ring-offset-1' : ''} ${theme ? `shadow-sm ${theme.bg} ${theme.border} border` : 'bg-gray-50/50 hover:bg-gray-100 border border-transparent'}`}>
+                <span className={`text-xs font-black ${theme ? theme.text : isToday ? 'text-green-600' : 'text-gray-400'}`}>
+                  {day}
+                </span>
+                {theme && (
+                   <div className={`mt-0.5 w-1 h-1 rounded-full ${theme.dot} opacity-60 transition-transform`} />
+                )}
+                
+                {theme && (
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center bg-white/90 rounded-xl z-10">
+                    <span className={`text-[8px] font-black uppercase tracking-tighter ${theme.text}`}>{theme.label}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -98,6 +144,7 @@ function AttendanceCalendar({ records, year, month, onChangeMonth }) {
 
 /* ─── Staff View ─── */
 function StaffAttendance() {
+  const { success, error: toastError, info } = useToast();
   const [todayRec, setTodayRec] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -122,17 +169,44 @@ function StaffAttendance() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Reset at midnight
+  useEffect(() => {
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    const t = setTimeout(() => { setTodayRec(null); load(); }, midnight - now);
+    return () => clearTimeout(t);
+  }, [load]);
+
   const handleCheckIn = async () => {
     setActionLoading(true); setError('');
-    try { await svc.checkIn({ notes }); setNotes(''); load(); }
-    catch (e) { setError(e.response?.data?.message || 'Check-in failed'); }
+    try { 
+      await svc.checkIn({ notes }); 
+      setNotes(''); 
+      success('Good morning! Check-in successful.', 'Clock In');
+      load(); 
+    }
+    catch (e) { 
+      const msg = e.response?.data?.message || 'Check-in failed';
+      setError(msg);
+      toastError(msg);
+    }
     setActionLoading(false);
   };
 
   const handleCheckOut = async () => {
     setActionLoading(true); setError('');
-    try { await svc.checkOut({ notes }); setNotes(''); load(); }
-    catch (e) { setError(e.response?.data?.message || 'Check-out failed'); }
+    try { 
+      await svc.checkOut({ notes }); 
+      setNotes(''); 
+      info('Work day finished. Take care!', 'Clock Out');
+      load(); 
+    }
+    catch (e) { 
+      const msg = e.response?.data?.message || 'Check-out failed';
+      setError(msg);
+      toastError(msg);
+    }
     setActionLoading(false);
   };
 
@@ -149,68 +223,92 @@ function StaffAttendance() {
     <div className="flex items-center justify-center h-64">
       <div className="flex items-center gap-3 text-gray-400">
         <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-        Loading attendance...
+        Loading...
       </div>
     </div>
   );
 
   return (
-    <div className="space-y-5">
-      {/* Clock Card */}
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.05)' }}>
-        <div className="px-6 py-5" style={{ background: 'linear-gradient(135deg, #0d1f0d, #1a3a1a)' }}>
-          <div className="flex items-center gap-3 mb-1">
-            <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <h2 className="text-white font-bold text-lg">Today's Attendance</h2>
+    <div className="max-w-[1600px] mx-auto space-y-6 pb-10">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+        {/* Clock-in Section - Takes 2 columns */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="relative group overflow-hidden rounded-[2rem] bg-gray-900 shadow-2xl p-6 sm:p-8 border border-white/5 h-full">
+            {/* Background blobs */}
+            <div className="absolute top-0 -right-20 w-60 h-60 bg-green-500/10 blur-[80px] rounded-full group-hover:bg-green-500/15 transition-colors" />
+            <div className="absolute -bottom-20 -left-20 w-60 h-60 bg-blue-500/10 blur-[80px] rounded-full group-hover:bg-blue-500/15 transition-colors" />
+            
+            <div className="relative h-full flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
+                  <span className={`w-1.5 h-1.5 rounded-full ${checkedIn && !checkedOut ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
+                  <span className="text-[8px] font-black text-white uppercase tracking-[0.2em]">
+                    {checkedIn && !checkedOut ? 'System Online' : 'System Offline'}
+                  </span>
+                </div>
+                <div>
+                  <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tighter leading-none mb-1">My Time</h2>
+                  <p className="text-gray-400 text-xs font-medium">{new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                </div>
+                
+                <div className="flex flex-wrap gap-4 pt-4">
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-0.5">Check In</span>
+                    <span className={`text-xl font-black ${checkedIn ? 'text-green-400' : 'text-white/10'}`}>
+                      {checkedIn ? formatTime(todayRec.checkIn) : '--:--'}
+                    </span>
+                  </div>
+                  <div className="w-px h-10 bg-white/10 self-center" />
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Check Out</span>
+                    <span className={`text-xl font-black ${checkedOut ? 'text-green-400' : 'text-white/10'}`}>
+                      {checkedOut ? formatTime(todayRec.checkOut) : '--:--'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8">
+                {checkedIn && checkedOut ? (
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-6 text-center backdrop-blur-xl">
+                     <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center mx-auto mb-3">
+                       <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/></svg>
+                     </div>
+                     <p className="text-white font-black text-base tracking-tight">Shift Ended</p>
+                     <p className="text-green-400/60 text-[9px] font-bold uppercase tracking-wider mt-0.5">See you tomorrow!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="relative group/input">
+                      <input type="text" placeholder="Note (optional)" value={notes} onChange={e => setNotes(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-white text-xs focus:outline-none focus:ring-2 focus:ring-green-500 transition-all placeholder:text-gray-600" />
+                    </div>
+                    {!checkedIn ? (
+                      <button onClick={handleCheckIn} disabled={actionLoading}
+                        className="w-full py-5 rounded-xl text-sm font-black text-white shadow-2xl hover:-translate-y-1 active:scale-95 transition-all disabled:opacity-60"
+                        style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)' }}>
+                        {actionLoading ? 'SYCING...' : '🕐 CLOCK IN'}
+                      </button>
+                    ) : (
+                      <button onClick={handleCheckOut} disabled={actionLoading}
+                        className="w-full py-5 rounded-xl text-sm font-black text-white shadow-2xl hover:-translate-y-1 active:scale-95 transition-all disabled:opacity-60"
+                        style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}>
+                        {actionLoading ? 'SYCING...' : '🌙 CLOCK OUT'}
+                      </button>
+                    )}
+                    {error && <p className="text-center text-red-400 text-[8px] font-bold uppercase tracking-widest">{error}</p>}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-          <p className="text-green-300/60 text-xs">{new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </div>
-        <div className="p-6">
-          {/* Status pills */}
-          <div className="flex flex-row gap-3 sm:gap-4 mb-5">
-            <div className="flex-1 rounded-2xl p-4 text-center bg-white shadow-sm border border-gray-100" style={checkedIn ? { background: '#f0fdf4', borderColor: '#bbf7d0' } : {}}>
-              <p className={`text-xl sm:text-2xl font-black ${checkedIn ? 'text-green-600' : 'text-gray-300'}`}>{checkedIn ? formatTime(todayRec.checkIn) : '--:--'}</p>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Check In</p>
-            </div>
-            <div className="flex-1 rounded-2xl p-4 text-center bg-white shadow-sm border border-gray-100" style={checkedOut ? { background: '#f0fdf4', borderColor: '#bbf7d0' } : {}}>
-              <p className={`text-xl sm:text-2xl font-black ${checkedOut ? 'text-green-600' : 'text-gray-300'}`}>{checkedOut ? formatTime(todayRec.checkOut) : '--:--'}</p>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Check Out</p>
-            </div>
-          </div>
 
-          {error && <div className="bg-red-50 border border-red-100 text-red-600 text-sm p-3 rounded-xl mb-4">{error}</div>}
-
-          {!checkedOut && (
-            <div className="space-y-3">
-              <input type="text" placeholder="Add a note (optional)" value={notes} onChange={e => setNotes(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition" />
-              {!checkedIn ? (
-                <button onClick={handleCheckIn} disabled={actionLoading}
-                  className="w-full py-3 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60"
-                  style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
-                  {actionLoading ? 'Checking In...' : <><svg className="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> Clock In</>}
-                </button>
-              ) : (
-                <button onClick={handleCheckOut} disabled={actionLoading}
-                  className="w-full py-3 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60"
-                  style={{ background: 'linear-gradient(135deg, #ea580c, #c2410c)' }}>
-                  {actionLoading ? 'Checking Out...' : <><svg className="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> Clock Out</>}
-                </button>
-              )}
-            </div>
-          )}
-
-          {checkedIn && checkedOut && (
-            <div className="flex items-center gap-2 justify-center py-2 rounded-xl bg-green-50 border border-green-100">
-              <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-              <span className="text-sm font-semibold text-green-700">Attendance complete for today!</span>
-            </div>
-          )}
+        {/* Calendar Section - Takes 3 columns */}
+        <div className="lg:col-span-3">
+          <AttendanceCalendar records={records} year={year} month={month} onChangeMonth={changeMonth} />
         </div>
       </div>
-
-      {/* Calendar */}
-      <AttendanceCalendar records={records} year={year} month={month} onChangeMonth={changeMonth} />
     </div>
   );
 }
@@ -291,241 +389,193 @@ function AdminAttendance() {
     <div className="flex items-center justify-center h-64">
       <div className="flex items-center gap-3 text-gray-400">
         <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-        Loading attendance...
+        Loading...
       </div>
     </div>
   );
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Staff Attendance</h2>
-        <p className="text-sm text-gray-400 mt-0.5">{new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+    <div className="space-y-8 pb-10">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <h2 className="text-4xl font-black text-gray-900 tracking-tighter">Attendance</h2>
+          <p className="text-sm font-bold text-gray-400 uppercase tracking-widest mt-1">Management Hub</p>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-gray-50 border border-gray-100">
+          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+          <span className="text-xs font-black text-gray-600 uppercase tracking-widest">
+            {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' })}
+          </span>
+        </div>
       </div>
 
       {/* Quick stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Staff Total', val: users.length, color: '#3b82f6', bg: '#eff6ff', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2' },
-          { label: 'Present', val: records.filter(r => r.checkIn).length, color: '#16a34a', bg: '#f0fdf4', icon: 'M22 11.08V12a10 10 0 1 1-5.93-9.14' },
-          { label: 'Done Today', val: records.filter(r => r.checkOut).length, color: '#ea580c', bg: '#fff7ed', icon: 'M9 11l3 3L22 4' },
-          { label: 'Absent', val: users.length - records.filter(r => r.checkIn).length, color: '#dc2626', bg: '#fef2f2', icon: 'M18 6L6 18M6 6l12 12' },
+          { label: 'Total Staff', val: users.length, color: '#3b82f6', bg: 'bg-blue-50', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2' },
+          { label: 'Clocked In', val: records.filter(r => r.checkIn).length, color: '#16a34a', bg: 'bg-green-50', icon: 'M22 11.08V12a10 10 0 1 1-5.93-9.14' },
+          { label: 'Shift Over', val: records.filter(r => r.checkOut).length, color: '#ea580c', bg: 'bg-orange-50', icon: 'M9 11l3 3L22 4' },
+          { label: 'Absent', val: users.length - records.filter(r => r.checkIn).length, color: '#dc2626', bg: 'bg-red-50', icon: 'M18 6L6 18M6 6l12 12' },
         ].map(s => (
-          <div key={s.label} className="relative overflow-hidden rounded-2xl p-4 bg-white border border-gray-100 shadow-sm">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: s.bg, color: s.color }}>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d={s.icon}/></svg>
+          <div key={s.label} className="group relative overflow-hidden rounded-3xl p-5 bg-white border border-gray-100 shadow-sm hover:shadow-xl transition-all hover:-translate-y-1">
+            <div className="flex items-center gap-3 mb-4">
+              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${s.bg}`} style={{ color: s.color }}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path d={s.icon}/></svg>
               </div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-tight">{s.label}</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] leading-tight">{s.label}</p>
             </div>
-            <p className="text-2xl font-black text-gray-800 tracking-tight">{s.val}</p>
-            <div className="absolute top-0 right-0 w-16 h-16 -mr-6 -mt-6 rounded-full opacity-[0.03]" style={{ background: s.color }} />
+            <p className="text-3xl font-black text-gray-900 tracking-tight">{s.val}</p>
+            <div className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full opacity-[0.03] group-hover:scale-110 transition-transform" style={{ background: s.color }} />
           </div>
         ))}
       </div>
 
       {/* Salary Sheet */}
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.05)' }}>
-        <button className="w-full flex items-center justify-between px-5 py-4" onClick={() => setShowCommission(!showCommission)}>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #10b98122, #05966922)' }}>
-              <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-100">
+        <button className="w-full flex items-center justify-between px-8 py-6 hover:bg-gray-50/50 transition-colors" onClick={() => setShowCommission(!showCommission)}>
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-emerald-50 text-emerald-600">
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             </div>
             <div className="text-left">
-              <h3 className="text-sm font-semibold text-gray-700">Monthly Salary Sheet</h3>
-              <p className="text-xs text-gray-400">Attendance-based Base Pay + 5% Commission</p>
+              <h3 className="text-xl font-black text-gray-900 tracking-tight">Salary Hub</h3>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Attendance-based Base Pay + 5% Commission</p>
             </div>
           </div>
-          <span className="text-gray-400 text-sm">{showCommission ? '▲' : '▼'}</span>
+          <div className={`w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400 transition-transform ${showCommission ? 'rotate-180' : ''}`}>
+             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+          </div>
         </button>
 
         {showCommission && (
-          <div className="px-5 pb-5">
-            {/* Month navigation */}
-            <div className="flex items-center justify-center gap-2 mb-4">
+          <div className="px-8 pb-8">
+            <div className="flex items-center justify-center gap-4 mb-8">
               <button onClick={() => setCommMonth(p => {
                 const m = p.month - 1;
                 return m < 0 ? { month: 11, year: p.year - 1 } : { month: m, year: p.year };
-              })} className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+              })} className="w-12 h-12 rounded-2xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition active:scale-90">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
-              <span className="text-sm font-semibold text-gray-700 min-w-[120px] text-center">
+              <div className="bg-gray-900 text-white px-6 py-3 rounded-2xl text-sm font-black tracking-tight min-w-[160px] text-center shadow-lg">
                 {new Date(commMonth.year, commMonth.month).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
-              </span>
+              </div>
               <button onClick={() => setCommMonth(p => {
                 const m = p.month + 1;
                 return m > 11 ? { month: 0, year: p.year + 1 } : { month: m, year: p.year };
-              })} className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+              })} className="w-12 h-12 rounded-2xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition active:scale-90">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
               </button>
             </div>
 
             {commLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+              <div className="flex items-center justify-center py-12">
+                <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
               </div>
             ) : commData ? (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                  <div className="rounded-2xl p-4 bg-white border border-gray-100 shadow-sm">
-                    <p className="text-2xl font-black text-blue-600">{commData.grandTotalDeliveries}</p>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Deliveries</p>
-                  </div>
-                  <div className="rounded-2xl p-4 bg-white border border-gray-100 shadow-sm">
-                    <p className="text-2xl font-black text-green-600">₹{(commData.grandTotalRevenue || 0).toLocaleString('en-IN')}</p>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Revenue</p>
-                  </div>
-                  <div className="rounded-2xl p-4 bg-white border border-gray-100 shadow-sm">
-                    <p className="text-2xl font-black text-amber-600">₹{(commData.grandTotalCommission || 0).toLocaleString('en-IN')}</p>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Comm.</p>
-                  </div>
-                  <div className="rounded-2xl p-4 bg-gray-900 text-white shadow-xl shadow-green-900/10">
-                    <p className="text-2xl font-black text-green-400">₹{(commData.grandTotalPay || 0).toLocaleString('en-IN')}</p>
-                    <p className="text-[10px] text-green-300/50 font-bold uppercase tracking-widest mt-1">Payout</p>
-                  </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                  {[
+                    { label: 'Deliveries', val: commData.grandTotalDeliveries, text: 'text-blue-600', bg: 'bg-blue-50' },
+                    { label: 'Revenue', val: `₹${(commData.grandTotalRevenue || 0).toLocaleString('en-IN')}`, text: 'text-green-600', bg: 'bg-green-50' },
+                    { label: 'Commission', val: `₹${(commData.grandTotalCommission || 0).toLocaleString('en-IN')}`, text: 'text-amber-600', bg: 'bg-amber-50' },
+                    { label: 'Total Payout', val: `₹${(commData.grandTotalPay || 0).toLocaleString('en-IN')}`, text: 'text-emerald-400', bg: 'bg-gray-900', dark: true },
+                  ].map(x => (
+                    <div key={x.label} className={`rounded-3xl p-5 ${x.bg} shadow-sm border border-black/5`}>
+                      <p className={`text-2xl font-black ${x.text} tracking-tight`}>{x.val}</p>
+                      <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${x.dark ? 'text-white/40' : 'text-gray-400'}`}>{x.label}</p>
+                    </div>
+                  ))}
                 </div>
 
-                {/* Desktop Table View */}
-                <div className="hidden sm:block overflow-x-auto rounded-xl border border-gray-100">
-                  <table className="w-full text-[11px] sm:text-xs">
+                <div className="overflow-hidden rounded-[2rem] border border-gray-100 shadow-sm bg-gray-50/30">
+                  <table className="w-full text-xs">
                     <thead>
-                      <tr className="bg-gray-50 text-gray-500 text-left">
-                        <th className="py-3 px-4 font-semibold uppercase tracking-wider">Staff</th>
-                        <th className="text-center py-3 px-2 font-semibold uppercase tracking-wider">Attendance</th>
-                        <th className="text-center py-3 px-2 font-semibold uppercase tracking-wider">Verified</th>
-                        <th className="text-right py-3 px-2 font-semibold uppercase tracking-wider">Base Pay</th>
-                        <th className="text-right py-3 px-2 font-semibold uppercase tracking-wider">Comm.</th>
-                        <th className="text-right py-3 px-4 font-semibold uppercase tracking-wider">Total</th>
+                      <tr className="bg-white text-gray-400 text-left">
+                        <th className="py-5 px-6 font-black uppercase tracking-widest">Member</th>
+                        <th className="text-center py-5 px-4 font-black uppercase tracking-widest">History</th>
+                        <th className="text-center py-5 px-4 font-black uppercase tracking-widest">Activity</th>
+                        <th className="text-right py-5 px-4 font-black uppercase tracking-widest">Base</th>
+                        <th className="text-right py-5 px-6 font-black uppercase tracking-widest text-emerald-600">Final</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-gray-100">
                       {commData.staff.map(s => (
-                        <tr key={s.user._id} className="hover:bg-gray-50/50 transition-colors">
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2">
-                              <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${ROLE_GRADIENT[s.user.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-[10px] font-bold uppercase`}>
+                        <tr key={s.user._id} className="hover:bg-white transition-colors group">
+                          <td className="py-5 px-6">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${ROLE_GRADIENT[s.user.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-sm font-black uppercase shadow-lg group-hover:scale-110 transition-transform`}>
                                 {s.user.name?.charAt(0)}
                               </div>
                               <div>
-                                <p className="font-semibold text-gray-800">{s.user.name}</p>
-                                {s.user.role !== 'admin' && (
-                                  <p className="text-[9px] text-gray-400">₹{s.user.baseSalary?.toLocaleString()}</p>
-                                )}
+                                <p className="font-black text-gray-900 text-sm">{s.user.name}</p>
+                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{s.user.role}</p>
                               </div>
                             </div>
                           </td>
-                          <td className="text-center py-3 px-2">
-                            <div className="flex items-center justify-center gap-1 font-bold">
-                              <span title="Present" className="text-green-600">{s.attendance.present + s.attendance.late}</span>
-                              <span className="text-gray-300">/</span>
-                              <span title="Half Day" className="text-amber-500">{s.attendance.half_day}</span>
+                          <td className="text-center py-5 px-4">
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-[10px] font-black">
+                              <span className="text-green-600">{s.attendance.present + s.attendance.late}P</span>
+                              <span className="w-1 h-1 rounded-full bg-gray-300" />
+                              <span className="text-amber-500">{s.attendance.half_day}H</span>
                             </div>
                           </td>
-                          <td className="text-center py-3 px-2">
-                            <p className="font-bold text-blue-600">{s.verifications.verified}</p>
-                            <p className="text-[9px] text-gray-400">{s.verifications.assigned} assigned</p>
+                          <td className="text-center py-5 px-4">
+                            <div className="flex flex-col">
+                               <span className="font-black text-blue-600 text-sm">{s.totalDeliveries || 0}</span>
+                               <span className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">delivered</span>
+                            </div>
                           </td>
-                          <td className="text-right py-3 px-2 text-gray-600">₹{(s.basePay || 0).toLocaleString()}</td>
-                          <td className="text-right py-3 px-2">
-                            <p className="font-bold text-amber-600">₹{s.totalCommission?.toLocaleString()}</p>
-                            <p className="text-[9px] text-green-500">{s.totalDeliveries} del.</p>
-                          </td>
-                          <td className="text-right py-3 px-4">
-                            <span className="text-sm font-bold text-gray-900">₹{(s.totalPay || 0).toLocaleString()}</span>
+                          <td className="text-right py-5 px-4 text-gray-400 font-bold">₹{s.basePay?.toLocaleString()}</td>
+                          <td className="text-right py-5 px-6">
+                            <span className="text-base font-black text-gray-900 tracking-tight">₹{s.totalPay?.toLocaleString()}</span>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-
-                {/* Mobile Card View */}
-                <div className="sm:hidden space-y-3">
-                  {commData.staff.map(s => (
-                    <div key={s.user._id} className="rounded-xl border border-gray-100 p-3 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${ROLE_GRADIENT[s.user.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-xs font-bold uppercase`}>
-                            {s.user.name?.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-bold text-gray-800 text-sm">{s.user.name}</p>
-                            <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">{s.user.role}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs font-bold text-gray-900">₹{(s.totalPay || 0).toLocaleString()}</p>
-                          <p className="text-[9px] text-gray-400 font-bold uppercase">Total Payout</p>
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="bg-gray-50 rounded-lg p-2">
-                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Attendance</p>
-                          <p className="text-xs font-bold mt-0.5">
-                            <span className="text-green-600">{s.attendance.present + s.attendance.late}P</span>
-                            <span className="mx-1 text-gray-300">|</span>
-                            <span className="text-amber-500">{s.attendance.half_day}H</span>
-                          </p>
-                        </div>
-                        <div className="bg-gray-50 rounded-lg p-2">
-                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Verified</p>
-                          <p className="text-xs font-bold text-blue-600 mt-0.5">{s.verifications.verified} <span className="text-[9px] text-gray-400 font-normal">/ {s.verifications.assigned}</span></p>
-                        </div>
-                        <div className="bg-gray-50 rounded-lg p-2">
-                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Base Pay</p>
-                          <p className="text-xs font-bold text-gray-700 mt-0.5">₹{(s.basePay || 0).toLocaleString()}</p>
-                        </div>
-                        <div className="bg-gray-50 rounded-lg p-2">
-                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Commission</p>
-                          <p className="text-xs font-bold text-amber-600 mt-0.5">₹{s.totalCommission?.toLocaleString()}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {commData.staff?.length === 0 && (
-                  <p className="text-sm text-gray-400 text-center py-4">No staff data available</p>
-                )}
               </>
             ) : (
-              <p className="text-sm text-gray-400 text-center py-6">Unable to load salary data</p>
+              <p className="text-sm text-gray-400 text-center py-10 italic">No salary data available for this month</p>
             )}
           </div>
         )}
       </div>
 
-      {/* Staff cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+      {/* Staff Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
         {users.map(u => {
           const att = getAttendanceForUser(u._id);
-          const statusInfo = att?.checkIn
+          const status = att?.checkIn
             ? att.checkOut
-              ? { label: 'Done', bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' }
-              : { label: 'Working', bg: '#eff6ff', text: '#3b82f6', border: '#bfdbfe' }
-            : { label: 'Absent', bg: '#fef2f2', text: '#dc2626', border: '#fecaca' };
+              ? { label: 'SHIFT OVER', bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-100', icon: <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg> }
+              : { label: 'WORKING', bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100', icon: <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 2"/></svg> }
+            : { label: 'ABSENT', bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-100', icon: <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg> };
+          
           return (
-            <div key={u._id} className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 overflow-hidden cursor-pointer"
-              style={{ border: '1px solid rgba(0,0,0,0.05)' }} onClick={() => openUser(u)}>
-              <div className={`h-1.5 bg-gradient-to-r ${ROLE_GRADIENT[u.role] || 'from-gray-300 to-gray-400'}`} />
-              <div className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${ROLE_GRADIENT[u.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-sm font-bold uppercase`}>
-                    {u.name?.charAt(0)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-800 text-sm truncate">{u.name}</p>
-                    <p className="text-xs text-gray-400">{u.role}</p>
-                  </div>
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: statusInfo.bg, color: statusInfo.text, border: `1px solid ${statusInfo.border}` }}>
-                    {statusInfo.label}
-                  </span>
+            <div key={u._id} className="group relative bg-white rounded-[2rem] p-6 shadow-sm hover:shadow-2xl transition-all hover:-translate-y-1 cursor-pointer border border-gray-100"
+              onClick={() => openUser(u)}>
+              <div className="flex items-center gap-4">
+                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${ROLE_GRADIENT[u.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-lg font-black uppercase shadow-lg shadow-black/10 group-hover:scale-110 transition-transform`}>
+                  {u.name?.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-lg font-black text-gray-900 truncate tracking-tight">{u.name}</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{u.role}</p>
+                </div>
+              </div>
+              
+              <div className="mt-6 flex items-center justify-between">
+                <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${status.bg} ${status.text} ${status.border}`}>
+                  {status.icon}
+                  <span className="text-[10px] font-black tracking-widest uppercase">{status.label}</span>
                 </div>
                 {att?.checkIn && (
-                  <div className="flex gap-4 mt-3 pt-3 border-t border-gray-50 text-xs text-gray-500">
-                    <span>In: <strong className="text-gray-700">{formatTime(att.checkIn)}</strong></span>
-                    <span>Out: <strong className="text-gray-700">{formatTime(att.checkOut)}</strong></span>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">In Time</p>
+                      <p className="text-xs font-black text-gray-900">{formatTime(att.checkIn)}</p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -537,13 +587,15 @@ function AdminAttendance() {
       {/* User detail modal */}
       {selectedUser && (
         <Modal title={`${selectedUser.name}'s Attendance`} onClose={() => setSelectedUser(null)}>
-          {modalLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : (
-            <AttendanceCalendar records={userRecords} year={year} month={month} onChangeMonth={changeMonth} />
-          )}
+          <div className="p-2">
+            {modalLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <AttendanceCalendar records={userRecords} year={year} month={month} onChangeMonth={changeMonth} />
+            )}
+          </div>
         </Modal>
       )}
     </div>
@@ -554,5 +606,9 @@ function AdminAttendance() {
 export default function Attendance() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'manager';
-  return isAdmin ? <AdminAttendance /> : <StaffAttendance />;
+  return (
+    <div className="container mx-auto px-4 py-8">
+      {isAdmin ? <AdminAttendance /> : <StaffAttendance />}
+    </div>
+  );
 }

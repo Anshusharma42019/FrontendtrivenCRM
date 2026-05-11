@@ -358,6 +358,10 @@ export default function OrderStatusBoard({
                       <p className="font-semibold text-gray-700 truncate">{order.billing_customer_name || '-'}</p>
                     </div>
                     <div>
+                      <p className="text-gray-400 font-semibold">Staff</p>
+                      <p className="font-semibold text-gray-700 truncate">{order.staff_name || '-'}</p>
+                    </div>
+                    <div>
                       <p className="text-gray-400 font-semibold">Phone</p>
                       <p className="font-semibold text-gray-700 truncate">{order.billing_phone || '-'}</p>
                     </div>

@@ -29,6 +29,12 @@ API.interceptors.response.use(
         window.location.href = '/login';
       }
     }
+    if (error.response?.status === 403 && error.response?.data?.message?.toLowerCase().includes('check in')) {
+      // Dispatch a custom event that ToastContext can listen to
+      window.dispatchEvent(new CustomEvent('api-error', { 
+        detail: { message: error.response.data.message, title: 'Action Blocked' } 
+      }));
+    }
     return Promise.reject(error);
   }
 );

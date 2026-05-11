@@ -291,7 +291,7 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
               <div className="overflow-x-auto">
                 <table className="hidden sm:table w-full text-sm">
                   <thead className="bg-gray-50 text-[10px] text-gray-500 uppercase tracking-[0.1em] sticky top-0 z-10">
-                    <tr>{['Order ID','AWB','Customer','Status','Amount','Date'].map(h => <th key={h} className="px-4 py-3 text-left font-bold">{h}</th>)}</tr>
+                    <tr>{['Order ID','AWB','Customer','Staff','Status','Amount','Date'].map(h => <th key={h} className="px-4 py-3 text-left font-bold">{h}</th>)}</tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {returns.map((r, i) => (
@@ -299,6 +299,7 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
                         <td className="px-4 py-3 font-mono text-[11px] text-gray-600">{r.order_id}</td>
                         <td className="px-4 py-3 font-mono text-[11px] text-blue-600 font-bold">{r.awb_code || '—'}</td>
                         <td className="px-4 py-3 font-bold text-gray-800 text-[13px]">{r.billing_customer_name || '—'}</td>
+                        <td className="px-4 py-3 text-gray-600 text-[11px] font-bold">{r.staff_name || '-'}</td>
                         <td className="px-4 py-3">
                           <span className="text-[10px] font-bold bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full border border-orange-100">{r.status || '—'}</span>
                         </td>
@@ -315,6 +316,7 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
                         <div className="min-w-0">
                           <p className="font-bold text-gray-900 text-sm truncate">{r.billing_customer_name || 'Unknown'}</p>
                           <p className="text-[10px] font-mono text-gray-400 uppercase mt-0.5">ID: {r.order_id}</p>
+                          <p className="text-[10px] font-bold text-gray-500 uppercase mt-1">Staff: {r.staff_name || '-'}</p>
                         </div>
                         <span className="text-[10px] font-bold bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full border border-orange-100">{r.status || '—'}</span>
                       </div>

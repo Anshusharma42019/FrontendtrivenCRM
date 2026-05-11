@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getAppointments } from '../services/appointment.service';
 import * as attendanceSvc from '../services/attendance.service';
+import { useToast } from '../context/ToastContext';
 
 const cardStyle = { border: '1px solid rgba(0,0,0,0.05)' };
 
@@ -77,6 +78,7 @@ const AppointmentList = ({ title, list, icon, color, bg, open, onToggle }) => (
 
 export default function DoctorDashboard() {
   const { user } = useAuth();
+  const { success, error, info } = useToast();
   const [all, setAll] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openSection, setOpenSection] = useState('today');
@@ -116,15 +118,23 @@ export default function DoctorDashboard() {
 
   const handleCheckIn = async () => {
     setAttLoading(true);
-    try { const res = await attendanceSvc.checkIn(); setAttStatus(res); }
-    catch (e) { alert(e.response?.data?.message || 'Check-in failed'); }
+    try { 
+      const res = await attendanceSvc.checkIn(); 
+      setAttStatus(res); 
+      success('Good morning, Doctor! You have checked in successfully.', 'Clock In');
+    }
+    catch (e) { error(e.response?.data?.message || 'Check-in failed'); }
     finally { setAttLoading(false); }
   };
 
   const handleCheckOut = async () => {
     setAttLoading(true);
-    try { const res = await attendanceSvc.checkOut(); setAttStatus(res); }
-    catch (e) { alert(e.response?.data?.message || 'Check-out failed'); }
+    try { 
+      const res = await attendanceSvc.checkOut(); 
+      setAttStatus(res); 
+      info('Work day finished. Have a great evening!', 'Clock Out');
+    }
+    catch (e) { error(e.response?.data?.message || 'Check-out failed'); }
     finally { setAttLoading(false); }
   };
 

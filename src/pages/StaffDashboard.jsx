@@ -10,6 +10,7 @@ import {
   fetchStaffCommission 
 } from '../services/dashboard.service';
 import * as attendanceSvc from '../services/attendance.service';
+import { useToast } from '../context/ToastContext';
 
 const cardCls = "bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow";
 const cardStyle = { border: '1px solid rgba(0,0,0,0.05)' };
@@ -27,6 +28,7 @@ const icons = {
 
 export default function StaffDashboard() {
   const { user } = useAuth();
+  const { success, error, info } = useToast();
   const [stats, setStats] = useState(null);
   const [verifications, setVerifications] = useState([]);
   const [todayLists, setTodayLists] = useState({ cnpList: [], callAgainList: [], interestedList: [], notInterestedList: [] });
@@ -67,6 +69,21 @@ export default function StaffDashboard() {
     return () => clearInterval(t);
   }, [load]);
 
+  // Reset check-in gate at midnight (day change)
+  useEffect(() => {
+    const msUntilMidnight = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 0, 0);
+      return midnight - now;
+    };
+    const t = setTimeout(() => {
+      setAttStatus(null);
+      load();
+    }, msUntilMidnight());
+    return () => clearTimeout(t);
+  }, [load]);
+
   useEffect(() => {
     let cancelled = false;
     setCommLoading(true);
@@ -86,9 +103,10 @@ export default function StaffDashboard() {
       setStats(prev => ({ ...prev, todayTarget: data.todayTarget }));
       setEditing(false);
       setTargetInput('');
+      success(`Today's target set to ${data.todayTarget} verifications.`, 'Target Set');
       load();
     } catch (err) {
-      alert(err.response?.data?.message || 'Save failed');
+      error(err.response?.data?.message || 'Save failed');
     } finally { setSaving(false); }
   };
 
@@ -104,14 +122,22 @@ export default function StaffDashboard() {
 
   const handleCheckIn = async () => {
     setAttLoading(true);
-    try { const res = await attendanceSvc.checkIn(); setAttStatus(res); }
-    catch (e) { alert(e.response?.data?.message || 'Check-in failed'); }
+    try { 
+      const res = await attendanceSvc.checkIn(); 
+      setAttStatus(res); 
+      success('Good morning! You have checked in successfully.', 'Clock In');
+    }
+    catch (e) { error(e.response?.data?.message || 'Check-in failed'); }
     setAttLoading(false);
   };
   const handleCheckOut = async () => {
     setAttLoading(true);
-    try { const res = await attendanceSvc.checkOut(); setAttStatus(res); }
-    catch (e) { alert(e.response?.data?.message || 'Check-out failed'); }
+    try { 
+      const res = await attendanceSvc.checkOut(); 
+      setAttStatus(res); 
+      info('Work day finished. Take care!', 'Clock Out');
+    }
+    catch (e) { error(e.response?.data?.message || 'Check-out failed'); }
     setAttLoading(false);
   };
 
@@ -121,6 +147,23 @@ export default function StaffDashboard() {
         <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
         Loading your dashboard...
       </div>
+    </div>
+  );
+
+  if (!checkedIn) return (
+    <div className="flex flex-col items-center justify-center h-64 gap-5">
+      <div className="w-16 h-16 rounded-2xl bg-orange-100 flex items-center justify-center">
+        <svg className="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      </div>
+      <div className="text-center">
+        <p className="text-lg font-bold text-gray-800">You haven't checked in yet</p>
+        <p className="text-sm text-gray-400 mt-1">Please clock in to access your dashboard and perform actions</p>
+      </div>
+      <button onClick={handleCheckIn} disabled={attLoading}
+        className="px-6 py-3 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60"
+        style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
+        {attLoading ? 'Processing...' : '🕐 Clock In Now'}
+      </button>
     </div>
   );
 
@@ -298,19 +341,57 @@ export default function StaffDashboard() {
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Monthly Trend</span>
           </div>
           {monthlyChart.length > 0 && (
-            <div className="h-40 relative flex items-end gap-1">
+            <div className="h-48 relative group px-2">
               {(() => {
-                const max = Math.max(...monthlyChart.map(d => d.count), 1);
-                return monthlyChart.map((d, i) => (
-                  <div key={i} className="flex-1 group relative flex flex-col items-center justify-end h-full">
-                    <div className="absolute bottom-full mb-2 bg-gray-900 text-white text-[9px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10">{d.count}</div>
-                    <div className="w-full bg-green-500/20 rounded-t-sm group-hover:bg-green-500/40 transition-all" style={{ height: `${(d.count/max)*100}%` }} />
-                    <div className={`w-full h-1 mt-1 rounded-full ${d.count > 0 ? 'bg-green-500' : 'bg-gray-100'}`} />
-                  </div>
-                ));
+                const max = Math.max(...monthlyChart.map(d => d.count), 5);
+                const points = monthlyChart.map((d, i) => {
+                  const x = (i / (monthlyChart.length - 1)) * 100;
+                  const y = 92 - (d.count / max) * 84;
+                  return `${x},${y}`;
+                }).join(' L ');
+                
+                return (
+                  <>
+                    <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+                      <defs>
+                        <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#22c55e" stopOpacity="0.2" />
+                          <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
+                        </linearGradient>
+                      </defs>
+                      {[0, 25, 50, 75, 100].map(v => (
+                        <line key={v} x1="0" y1={v} x2="100" y2={v} stroke="#f3f4f6" strokeWidth="0.5" />
+                      ))}
+                      <path d={`M 0 100 L ${points} L 100 100 Z`} fill="url(#chartGrad)" />
+                      <path d={`M ${points}`} fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <div className="absolute inset-0 flex">
+                      {monthlyChart.map((d, i) => (
+                        <div key={i} className="flex-1 group/dot relative h-full">
+                          <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[9px] px-2 py-1.5 rounded opacity-0 group-hover/dot:opacity-100 transition-opacity z-20 whitespace-nowrap pointer-events-none shadow-xl">
+                            {new Date().toLocaleString('default', { month: 'short' })} {d.day}: <span className="font-bold">{d.count}</span>
+                          </div>
+                          <div 
+                            className="absolute w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white shadow-sm opacity-0 group-hover/dot:opacity-100 transition-all scale-0 group-hover/dot:scale-110"
+                            style={{ 
+                              left: '50%', 
+                              bottom: `${8 + (d.count / max) * 84}%`,
+                              transform: 'translate(-50%, 50%)'
+                            }}
+                          />
+                          <div className="absolute inset-y-0 left-0 w-full cursor-crosshair" />
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
               })()}
             </div>
           )}
+          <div className="mt-4 flex items-center justify-between px-1">
+            <span className="text-[9px] font-bold text-gray-400">01 {new Date().toLocaleString('default', { month: 'short' })}</span>
+            <span className="text-[9px] font-bold text-gray-400">{monthlyChart.length} {new Date().toLocaleString('default', { month: 'short' })}</span>
+          </div>
         </div>
       </div>
 

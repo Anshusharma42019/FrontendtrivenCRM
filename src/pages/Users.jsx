@@ -1,10 +1,21 @@
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, Fragment } from 'react';
 import { getUsers, createUser, updateUser, deleteUser, getStaffShipmentCounts } from '../services/user.service';
-import { fetchAllStaffStats } from '../services/dashboard.service';
+import { fetchAllStaffStats, fetchStaffTodayLists, fetchStats } from '../services/dashboard.service';
+import * as attendanceSvc from '../services/attendance.service';
 import API from '../api';
 import Modal from '../components/ui/Modal';
 import Badge from '../components/ui/Badge';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+
+const icons = {
+  cnp: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M16.5 1.5a4.5 4.5 0 0 1 4.5 4.5v12a4.5 4.5 0 0 1-4.5 4.5h-9A4.5 4.5 0 0 1 3 18V6a4.5 4.5 0 0 1 4.5-4.5h9z"/><line x1="4" y1="4" x2="20" y2="20"/></svg>,
+  callAgain: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 11.61 19a19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 3.09 4.18 2 2 0 0 1 5.07 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L9.91 9.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>,
+  interested: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>,
+  notInterested: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>,
+  user: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  phone: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 11.61 19a19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 3.09 4.18 2 2 0 0 1 5.07 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L9.91 9.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>,
+};
 
 const ROLES = ['manager', 'sales', 'doctor', 'staff'];
 const EMPTY = { name: '', phone: '', password: '', role: 'manager', baseSalary: 0, specialization: '' };
@@ -26,21 +37,33 @@ export default function Users() {
   const [viewUser, setViewUser] = useState(null);
   const [viewTasks, setViewTasks] = useState([]);
   const [viewLoading, setViewLoading] = useState(false);
+  const [todayLists, setTodayLists] = useState({ cnpList: [], callAgainList: [], interestedList: [], notInterestedList: [], onHoldList: [] });
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [stats, setStats] = useState(null);
+  const [attStatus, setAttStatus] = useState(null);
+  const [attLoading, setAttLoading] = useState(false);
+  const { success, error: toastError, info } = useToast();
 
   const load = useCallback(async () => {
     getUsers().then(res => setData(res)).catch(() => {}).finally(() => setPageLoading(false));
-    fetchAllStaffStats().then(stats => {
+    
+    // Fetch global stats for attendance summary
+    fetchStats(selectedDate).then(setStats).catch(() => {});
+    // Fetch personal attendance status
+    attendanceSvc.getTodayStatus().then(setAttStatus).catch(() => {});
+
+    fetchAllStaffStats(selectedDate).then(stats => {
       const map = {};
       stats.forEach(s => { map[s.user._id] = s; });
       setStaffStats(map);
     }).catch(() => {});
-    // Load shipment counts by fetching all ready_to_shipment tasks and grouping by assignedTo
+    // Load shipment counts
     API.get('/tasks', { params: { status: 'ready_to_shipment' } })
       .then(res => {
         const tasks = Array.isArray(res.data.data) ? res.data.data : [];
@@ -53,25 +76,52 @@ export default function Users() {
       }).catch(() => {
         getStaffShipmentCounts().then(counts => setShipmentCounts(counts || {})).catch(() => {});
       });
-  }, []);
+  }, [selectedDate]);
 
   useEffect(() => { load(); }, [load]);
 
+  const handleCheckIn = async () => {
+    setAttLoading(true);
+    try { 
+      const res = await attendanceSvc.checkIn(); 
+      setAttStatus(res); 
+      success('Good morning! You have checked in successfully.', 'Clock In');
+      load(); 
+    }
+    catch (e) { toastError(e.response?.data?.message || 'Check-in failed'); }
+    setAttLoading(false);
+  };
+
+  const handleCheckOut = async () => {
+    setAttLoading(true);
+    try { 
+      const res = await attendanceSvc.checkOut(); 
+      setAttStatus(res); 
+      info('Work day finished. Take care!', 'Clock Out');
+      load(); 
+    }
+    catch (e) { toastError(e.response?.data?.message || 'Check-out failed'); }
+    setAttLoading(false);
+  };
+
+  const checkedIn = !!attStatus?.checkIn;
+  const checkedOut = !!attStatus?.checkOut;
+  const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : null;
+
   const openView = async (u) => {
     setViewUser(u); setViewTasks([]); setViewLoading(true); setModal('view');
+    setTodayLists({ cnpList: [], callAgainList: [], interestedList: [], notInterestedList: [], onHoldList: [] });
     try {
-      // Try dedicated endpoint first, fallback to tasks endpoint
-      let tasks = [];
-      try {
-        const res = await API.get(`/ready-to-shipment/by-user/${u._id}`);
-        tasks = res.data.data || [];
-      } catch {
-        const res = await API.get('/tasks', { params: { status: 'ready_to_shipment', assignedTo: u._id } });
-        tasks = Array.isArray(res.data.data) ? res.data.data : [];
-      }
+      const [shipmentsRes, lists] = await Promise.all([
+        API.get('/ready-to-shipment/by-user/' + u._id).catch(() => API.get('/tasks', { params: { status: 'ready_to_shipment', assignedTo: u._id } })),
+        fetchStaffTodayLists(selectedDate, u._id)
+      ]);
+      
+      const tasks = Array.isArray(shipmentsRes.data?.data) ? shipmentsRes.data.data : Array.isArray(shipmentsRes.data) ? shipmentsRes.data : [];
       setViewTasks(tasks);
+      setTodayLists(lists || { cnpList: [], callAgainList: [], interestedList: [], notInterestedList: [], onHoldList: [] });
     } catch (e) {
-      console.error('shipment fetch error:', e.response?.data || e.message);
+      console.error('view fetch error:', e);
     } finally {
       setViewLoading(false);
     }
@@ -115,92 +165,240 @@ export default function Users() {
   );
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800 tracking-tight uppercase">Staff Directory</h2>
-          <p className="text-[11px] font-bold text-gray-400 mt-1 uppercase tracking-widest">{data.totalResults} TEAM MEMBERS TOTAL</p>
-        </div>
-        <button onClick={openCreate}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-[11px] font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all uppercase tracking-widest"
-          style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
-          <span className="text-base leading-none">+</span> Add New User
-        </button>
-      </div>
-
-      {/* Cards */}
-      {data.results?.length === 0 ? (
-        <div className="bg-white rounded-2xl p-16 text-center shadow-sm" style={{ border: '1px solid rgba(0,0,0,0.05)' }}>
-          <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-3 text-gray-400">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </div>
-          <p className="text-gray-400 text-sm">No staff members yet</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {data.results?.map(u => (
-            <div key={u._id} className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden border border-gray-100">
-              <div className="flex flex-col md:flex-row md:items-center p-4 gap-4">
-                {/* Left side: Avatar & Name */}
-                <div className="flex items-center gap-4 flex-1 min-w-0">
-                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${ROLE_GRADIENT[u.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-lg font-black shadow-lg uppercase shrink-0`}>
-                    {u.name?.charAt(0)}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-black text-gray-900 text-base leading-tight truncate uppercase tracking-tight">{u.name}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge value={u.role} />
-                      <span className="w-1 h-1 rounded-full bg-gray-300" />
-                      <p className="text-[10px] font-bold text-gray-400 truncate uppercase tracking-widest">{u.phone || u.email}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Center: Info/Stats */}
-                <div className="flex flex-wrap items-center gap-4 md:px-6 md:border-x border-gray-50">
-                  {u.role !== 'admin' && (
-                    <div className="bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
-                      <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Base Salary</p>
-                      <p className="text-xs font-black text-gray-700 mt-0.5">₹{(u.baseSalary || 0).toLocaleString()}</p>
-                    </div>
-                  )}
-                  {shipmentCounts[u._id] > 0 && (
-                    <div className="bg-green-50 px-3 py-1.5 rounded-xl border border-green-100">
-                      <p className="text-[8px] font-black text-green-600 uppercase tracking-widest">Shipments</p>
-                      <p className="text-xs font-black text-green-700 mt-0.5">{shipmentCounts[u._id]} READY</p>
-                    </div>
-                  )}
-                  <div className="bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-100">
-                    <p className="text-[8px] font-black text-blue-600 uppercase tracking-widest">Joined</p>
-                    <p className="text-xs font-black text-blue-700 mt-0.5">{new Date(u.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</p>
-                  </div>
-                </div>
-
-                {/* Right: Actions */}
-                <div className="flex gap-2">
-                  <button onClick={() => openView(u)}
-                    className="flex-1 md:flex-none text-[10px] font-black px-5 py-2.5 rounded-xl bg-gray-900 text-white hover:bg-black transition shadow-md active:scale-95 uppercase tracking-widest">
-                    VIEW
-                  </button>
-                  {canManage && (
-                    <>
-                      <button onClick={() => openEdit(u)}
-                        className="flex-1 md:flex-none text-[10px] font-black px-5 py-2.5 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 transition active:scale-95 uppercase tracking-widest">
-                        EDIT
-                      </button>
-                      <button onClick={() => handleDelete(u._id)}
-                        className="flex-1 md:flex-none text-[10px] font-black px-5 py-2.5 rounded-xl bg-red-50 text-red-500 border border-red-100 hover:bg-red-100 transition active:scale-95 uppercase tracking-widest">
-                        DEL
-                      </button>
-                    </>
-                  )}
+    <div className="space-y-8 bg-glow pb-10">
+      {/* Attendance Stats Row - Unique Glass Design */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up">
+        {[
+          { label: 'Present Today', val: stats?.attendance?.present || 0, color: 'from-emerald-400 to-teal-500', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', bg: 'bg-emerald-50/50' },
+          { label: 'Checked Out', val: stats?.attendance?.checkedOut || 0, color: 'from-orange-400 to-red-400', icon: 'M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1', bg: 'bg-orange-50/50' },
+          { label: 'Absent Staff', val: stats?.attendance?.absent || 0, color: 'from-rose-500 to-red-600', icon: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z', bg: 'bg-rose-50/50' },
+          { label: 'Total Team', val: stats?.attendance?.totalStaff || 0, color: 'from-blue-500 to-indigo-600', icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2', bg: 'bg-blue-50/50' }
+        ].map((item, i) => (
+          <div key={i} className="relative overflow-hidden group bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100/50 hover:shadow-2xl hover:-translate-y-1 transition-all duration-500" style={{ animationDelay: `${i * 100}ms` }}>
+            <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${item.color} opacity-[0.04] rounded-bl-full group-hover:scale-150 transition-transform duration-700`} />
+            <div className="flex items-center gap-5 relative z-10">
+              <div className={`w-14 h-14 rounded-[1.25rem] bg-gradient-to-br ${item.color} flex items-center justify-center text-white shadow-xl shadow-${item.color.split(' ')[1]}/20 transform group-hover:rotate-6 transition-transform duration-500`}>
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d={item.icon}/></svg>
+              </div>
+              <div>
+                <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.25em] mb-1">{item.label}</p>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-4xl font-black text-gray-900 tracking-tight">{item.val}</span>
+                  <span className="text-[11px] font-bold text-gray-300">ACTIVE</span>
                 </div>
               </div>
             </div>
-          ))}
+            {/* Animated Glow Overlay */}
+            <div className={`absolute -inset-1 bg-gradient-to-r ${item.color} opacity-0 group-hover:opacity-[0.03] blur-xl transition-opacity duration-500`} />
+          </div>
+        ))}
+      </div>
+
+      {/* Header Section - Modern & Spaced */}
+      <div className="flex flex-col lg:flex-row items-start lg:items-end justify-between gap-6 px-2">
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 bg-green-100 text-green-600 text-[10px] font-black uppercase tracking-widest rounded-full">Management Console</span>
+            <div className="h-px w-12 bg-gray-200" />
+          </div>
+          <h2 className="text-4xl font-black text-gray-900 tracking-tighter uppercase leading-none">Staff Directory</h2>
+          <p className="text-sm font-medium text-gray-400">Manage your high-performance team and monitor real-time audit logs.</p>
         </div>
-      )}
+
+        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+          <div className="relative group flex-1 lg:flex-none">
+            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-green-500 transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            </div>
+            <input 
+              type="date" 
+              value={selectedDate} 
+              onChange={(e) => setSelectedDate(e.target.value)}
+              max={new Date().toISOString().split('T')[0]}
+              className="w-full bg-white border border-gray-100 rounded-2xl pl-11 pr-6 py-4 text-sm font-black text-gray-700 focus:ring-4 focus:ring-green-500/10 transition-all cursor-pointer shadow-sm hover:shadow-md"
+            />
+          </div>
+          
+          <button onClick={openCreate}
+            className="flex-1 lg:flex-none flex items-center justify-center gap-3 px-8 py-4 rounded-2xl text-[11px] font-black text-white shadow-2xl hover:shadow-green-500/30 hover:-translate-y-1 transition-all uppercase tracking-widest active:scale-95"
+            style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
+            <span className="text-lg leading-none">+</span> Add Team Member
+          </button>
+        </div>
+      </div>
+
+      {/* Main Table Container */}
+      <div className="premium-card overflow-hidden">
+        {data.results?.length === 0 ? (
+          <div className="p-20 text-center">
+            <div className="w-20 h-20 rounded-[2.5rem] bg-gray-50 flex items-center justify-center mx-auto mb-6 text-gray-300 animate-float">
+              <svg className="w-10 h-10" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <p className="text-xl font-bold text-gray-400">No staff members found</p>
+            <p className="text-sm text-gray-300 mt-2">Start by adding your first team member above.</p>
+          </div>
+        ) : (
+          <div className="table-responsive no-scrollbar">
+            <table className="w-full text-xs min-w-[1080px]">
+              <thead>
+                <tr className="text-gray-400 border-b border-gray-100 text-left bg-white">
+                  <th className="py-5 px-6 font-black uppercase tracking-[0.15em] text-[10px]">Staff Identity</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Leads</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Calls</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Assigned</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Verified</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Hold</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Target</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Ready</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Delivered</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">RTO</th>
+                  <th className="py-5 px-6 font-black uppercase tracking-[0.15em] text-[10px] text-right">Controls</th>
+                </tr>
+              </thead>
+                {(() => {
+                  const grouped = {};
+                  (data.results || []).forEach(u => {
+                    const role = u.role || 'unassigned';
+                    if (!grouped[role]) grouped[role] = [];
+                    grouped[role].push(u);
+                  });
+                  
+                  // Preferred order
+                  const order = ['sales', 'manager', 'doctor', 'admin'];
+                  const sortedRoles = Object.keys(grouped).sort((a, b) => {
+                    const iA = order.indexOf(a);
+                    const iB = order.indexOf(b);
+                    if (iA !== -1 && iB !== -1) return iA - iB;
+                    if (iA !== -1) return -1;
+                    if (iB !== -1) return 1;
+                    return a.localeCompare(b);
+                  });
+
+                  return sortedRoles.map(role => (
+                    <tbody key={role} className="divide-y divide-gray-50/50">
+                      <tr className="bg-gray-50/30">
+                        <td colSpan={11} className="py-2 px-6 border-b border-gray-100">
+                          <div className="flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">{role} DIVISION</span>
+                          </div>
+                        </td>
+                      </tr>
+                      {grouped[role].map(u => {
+                        const s = staffStats[u._id] || {};
+                        const readyCount = s.readyToShipmentCount !== undefined ? s.readyToShipmentCount : (shipmentCounts[u._id] || 0);
+                        return (
+                          <tr key={u._id} className="hover:bg-gradient-to-r hover:from-white hover:to-gray-50/50 transition-all duration-300 group relative">
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${ROLE_GRADIENT[u.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-base font-black shadow-lg shadow-black/5 group-hover:scale-110 transition-transform duration-300`}>
+                            {u.name?.charAt(0)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-gray-800 text-sm">{u.name}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 py-0.5 px-1.5 bg-gray-50 rounded-lg">{u.role}</span>
+                              {readyCount > 0 && (
+                                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-lg border border-emerald-100">
+                                  <span className="w-1 h-1 rounded-full bg-emerald-500 animate-ping" /> SHIP READY
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      {u.role === 'doctor' ? (
+                        <td className="py-4 px-2 text-center" colSpan={9}>
+                          <div className="flex items-center justify-center gap-10 bg-gray-50/50 rounded-2xl py-2 px-6 w-max mx-auto border border-gray-100/50">
+                            <div className="flex flex-col items-center">
+                              <span className="text-xl font-black text-blue-500 leading-none">{s.totalAppointments || 0}</span>
+                              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-1.5">Total</span>
+                            </div>
+                            <div className="w-px h-8 bg-gray-200" />
+                            <div className="flex flex-col items-center">
+                              <span className="text-xl font-black text-emerald-500 leading-none">{s.completedAppointments || 0}</span>
+                              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-1.5">Completed</span>
+                            </div>
+                            <div className="w-px h-8 bg-gray-200" />
+                            <div className="flex flex-col items-center">
+                              <span className="text-xl font-black text-rose-500 leading-none">{s.cancelledAppointments || 0}</span>
+                              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-1.5">Cancelled</span>
+                            </div>
+                          </div>
+                        </td>
+                      ) : (
+                        <>
+                          <td className="py-4 px-2 text-center">
+                            <div className="flex flex-col gap-1 items-center">
+                              <span className="text-[11px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">
+                                {s.leadsAdded || 0} LEADS
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-2 text-center">
+                            <div className="flex flex-col gap-1 items-center">
+                              <span className="text-[11px] font-black text-red-500 bg-red-50 px-2 py-0.5 rounded-full">{s.todayCnp || 0} CNP</span>
+                              <span className="text-[9px] font-bold text-yellow-600 opacity-80">{s.todayCallAgain || 0} CALL</span>
+                              <span className="text-[9px] font-bold text-gray-500 opacity-80">{s.todayClosedLost || 0} LOST</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-2 text-center">
+                            <span className="text-sm font-black text-gray-500 bg-gray-50 px-2 py-1 rounded-xl">{s.assignedVerifications || 0}</span>
+                          </td>
+                          <td className="py-4 px-2 text-center">
+                             <div className="inline-flex flex-col items-center justify-center w-12 h-12 rounded-2xl bg-emerald-50/50 border border-emerald-100">
+                               <span className="text-sm font-black text-emerald-600 leading-none">{s.verifiedCount || 0}</span>
+                               <span className="text-[8px] font-black text-emerald-400 uppercase mt-0.5">OK</span>
+                             </div>
+                          </td>
+                          <td className="py-4 px-2 text-center">
+                             <span className={`text-sm font-black ${s.onHoldCount > 0 ? 'text-amber-500' : 'text-gray-300'}`}>{s.onHoldCount || 0}</span>
+                          </td>
+                          <td className="py-4 px-2 text-center">
+                             <div className="inline-flex flex-col items-center">
+                               <span className="text-xs font-black text-blue-600">{s.verifiedCount || 0}</span>
+                               <div className="w-6 h-0.5 bg-gray-100 my-1" />
+                               <span className="text-[10px] font-bold text-gray-400">{s.todayTarget || '—'}</span>
+                             </div>
+                          </td>
+                          <td className="py-4 px-2 text-center">
+                            <div className={`inline-flex items-center justify-center w-8 h-8 rounded-xl ${readyCount > 0 ? 'bg-purple-100 text-purple-600' : 'bg-gray-50 text-gray-300'} font-black text-sm transition-all group-hover:rotate-12`}>
+                              {readyCount}
+                            </div>
+                          </td>
+                          <td className="py-4 px-2 text-center">
+                            <div className={`inline-flex items-center justify-center w-8 h-8 rounded-xl ${s.deliveredCount > 0 ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-50 text-gray-300'} font-black text-sm transition-all group-hover:-rotate-12`}>
+                              {s.deliveredCount || 0}
+                            </div>
+                          </td>
+                          <td className="py-4 px-2 text-center">
+                            <div className={`inline-flex items-center justify-center w-8 h-8 rounded-xl ${s.rtoCount > 0 ? 'bg-orange-100 text-orange-600' : 'bg-gray-50 text-gray-300'} font-black text-sm transition-all group-hover:rotate-12`}>
+                              {s.rtoCount || 0}
+                            </div>
+                          </td>
+                        </>
+                      )}
+                      <td className="py-4 px-6 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => openView(u)} title="Deep Analysis" className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 text-gray-500 hover:bg-gray-900 hover:text-white transition-all shadow-sm hover:shadow-lg"><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
+                          {canManage && (
+                            <>
+                              <button onClick={() => openEdit(u)} title="Modify Staff" className="w-9 h-9 flex items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm hover:shadow-lg"><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>
+                              <button onClick={() => handleDelete(u._id)} title="Remove Access" className="w-9 h-9 flex items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-600 hover:text-white transition-all shadow-sm hover:shadow-lg"><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            ));
+          })()}
+            </table>
+          </div>
+        )}
+      </div>
 
       {/* View Shipment Tasks Modal */}
       {modal === 'view' && viewUser && (
@@ -230,7 +428,7 @@ export default function Users() {
               {/* Staff stats if sales role */}
               {viewUser.role === 'sales' && staffStats[viewUser._id] && (() => {
                 const s = staffStats[viewUser._id];
-                const done = s.todayVerifications || 0;
+                const done = s.verifiedCount || 0;
                 const target = s.todayTarget || 0;
                 const remaining = target > 0 ? Math.max(target - done, 0) : 0;
                 return (
@@ -251,7 +449,10 @@ export default function Users() {
                       {[['CNP', s.todayCnp, 'text-red-500', 'bg-red-50'],
                         ['CALL AGAIN', s.todayCallAgain, 'text-yellow-600', 'bg-yellow-50'],
                         ['INTERESTED', s.todayInterested, 'text-green-600', 'bg-green-50'],
-                        ['NOT INT.', s.todayNotInterested, 'text-gray-500', 'bg-gray-50']
+                        ['ON HOLD', s.onHoldCount, 'text-amber-600', 'bg-amber-50'],
+                        ['NOT INT.', s.todayNotInterested, 'text-gray-500', 'bg-gray-50'],
+                        ['READY', s.readyToShipmentCount, 'text-purple-600', 'bg-purple-50'],
+                        ['DELIVERED', s.deliveredCount, 'text-emerald-600', 'bg-emerald-50']
                       ].map(([label, val, tc, bg]) => (
                         <div key={label} className={`${bg} rounded-xl p-3 text-center border border-black/0.03 shadow-sm`}>
                           <p className={`text-xl font-black ${tc}`}>{val}</p>
@@ -264,7 +465,62 @@ export default function Users() {
                       <span>Pending tasks: <span className="font-semibold text-gray-600">{s.pendingTasks}</span></span>
                     </div>
                     <div className="border-t border-gray-100 pt-3">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Activity Detail Lists</p>
+                      <div className="space-y-4">
+                        {[
+                          { label: 'CNP List', list: todayLists.cnpList, color: 'text-red-500', bg: 'bg-red-50' },
+                          { label: 'Call Again List', list: todayLists.callAgainList, color: 'text-yellow-600', bg: 'bg-yellow-50' },
+                          { label: 'Interested List', list: todayLists.interestedList, color: 'text-green-600', bg: 'bg-green-50' },
+                          { label: 'On Hold List', list: todayLists.onHoldList, color: 'text-amber-600', bg: 'bg-amber-50' },
+                          { label: 'Not Interested List', list: todayLists.notInterestedList, color: 'text-gray-500', bg: 'bg-gray-50' },
+                        ].map(({ label, list, color, bg }) => (
+                          <div key={label}>
+                            <div className="flex items-center justify-between mb-2 px-1">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${bg} ${color}`}>{list.length}</span>
+                            </div>
+                            <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                              {list.length === 0 ? (
+                                <p className="text-[10px] text-gray-300 italic text-center py-2">No records found</p>
+                              ) : list.map((item, idx) => (
+                                <div key={item._id} className="p-2 rounded-xl bg-gray-50/50 flex items-center gap-3 border border-transparent hover:border-gray-100 transition-all">
+                                  <div className={`w-5 h-5 rounded-lg ${bg} flex items-center justify-center text-[8px] font-bold ${color} shrink-0`}>{idx + 1}</div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[10px] font-semibold text-gray-800 truncate">{item.title || item.lead?.name || '—'}</p>
+                                    {item.lead?.phone && <span className="text-[9px] text-gray-400 flex items-center gap-1">{icons.phone}{item.lead.phone}</span>}
+                                  </div>
+                                  <span className="text-[8px] text-gray-400 shrink-0">
+                                    {new Date(item.createdAt || item.updatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="border-t border-gray-100 mt-5 pt-3">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Ready to Shipment Tasks</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {viewUser.role === 'doctor' && staffStats[viewUser._id] && (() => {
+                const s = staffStats[viewUser._id];
+                return (
+                  <div className="mb-5 space-y-3">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Today's Appointments</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {[['Total', s.totalAppointments || 0, 'text-blue-600', '#eff6ff', 'rgba(59,130,246,0.15)'],
+                        ['Completed', s.completedAppointments || 0, 'text-emerald-600', '#f0fdf4', 'rgba(22,163,74,0.15)'],
+                        ['Cancelled', s.cancelledAppointments || 0, 'text-rose-600', '#fff1f2', 'rgba(225,29,72,0.15)']
+                      ].map(([label, val, tc, bg, border]) => (
+                        <div key={label} className="rounded-2xl p-4 text-center bg-white shadow-sm" style={{ background: bg, border: `1px solid ${border}` }}>
+                          <p className={`text-3xl font-black ${tc}`}>{val}</p>
+                          <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest mt-1">{label}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 );

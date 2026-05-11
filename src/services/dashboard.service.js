@@ -1,11 +1,11 @@
 import API from '../api';
-export const fetchStats = () => API.get('/dashboard/stats').then(r => r.data.data);
+export const fetchStats = (date) => API.get(`/dashboard/stats${date ? `?date=${date}` : ''}`).then(r => r.data.data);
 export const fetchRevenueChart = (period = 'monthly') => API.get(`/dashboard/revenue-chart?period=${period}`).then(r => r.data.data);
-export const fetchStaffStats = () => API.get('/dashboard/staff-stats').then(r => r.data.data);
+export const fetchStaffStats = (date, staffId) => API.get(`/dashboard/staff-stats?${date ? `date=${date}` : ''}${staffId ? `&staffId=${staffId}` : ''}`).then(r => r.data.data);
 export const saveStaffTarget = (target) => API.post('/dashboard/staff-target', { target }).then(r => r.data.data);
 export const fetchStaffVerifications = () => API.get('/dashboard/staff-verifications').then(r => r.data.data);
-export const fetchStaffTodayLists = () => API.get('/dashboard/staff-today-lists').then(r => r.data.data);
+export const fetchStaffTodayLists = (date, staffId) => API.get(`/dashboard/staff-today-lists?${date ? `date=${date}` : ''}${staffId ? `&staffId=${staffId}` : ''}`).then(r => r.data.data);
 export const fetchStaffMonthlyChart = () => API.get('/dashboard/staff-monthly-chart').then(r => r.data.data);
-export const fetchAllStaffStats = () => API.get('/dashboard/all-staff-stats').then(r => r.data.data);
+export const fetchAllStaffStats = (date) => API.get(`/dashboard/all-staff-stats${date ? `?date=${date}` : ''}`).then(r => r.data.data);
 export const fetchStaffCommission = (month, year) => API.get(`/dashboard/staff-commission?month=${month}&year=${year}`).then(r => r.data.data);
 export const fetchAllStaffCommissions = (month, year) => API.get(`/dashboard/all-staff-commissions?month=${month}&year=${year}`).then(r => r.data.data);
