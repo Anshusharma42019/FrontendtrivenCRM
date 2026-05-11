@@ -272,8 +272,8 @@ export default function Verification() {
 
   const handleReadyToShipment = async () => {
     try {
-      const taskId = selected.task?._id || (typeof selected.task === 'string' ? selected.task : null);
-      if (taskId) await updateTask(taskId, { status: 'ready_to_shipment' });
+      await updateVerificationStatus(selected._id, 'verified');
+      setRecords(prev => prev.filter(r => r._id !== selected._id));
       setSelected(null);
       navigate('/ready-to-shipment');
     } catch { }

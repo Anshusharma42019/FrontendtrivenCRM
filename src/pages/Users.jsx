@@ -356,9 +356,9 @@ export default function Users() {
                           </td>
                           <td className="py-4 px-2 text-center">
                              <div className="inline-flex flex-col items-center">
-                               <span className="text-xs font-black text-blue-600">{s.verifiedCount || 0}</span>
+                               <span className={`text-xs font-black ${s.assignedVerifications > 0 ? 'text-blue-600' : 'text-gray-500'}`}>{s.assignedVerifications || 0}</span>
                                <div className="w-6 h-0.5 bg-gray-100 my-1" />
-                               <span className="text-[10px] font-bold text-gray-400">{s.todayTarget || '—'}</span>
+                               <span className={`text-[10px] font-bold ${s.todayTarget > 0 ? 'text-blue-500' : 'text-gray-400'}`}>{s.todayTarget || 0}</span>
                              </div>
                           </td>
                           <td className="py-4 px-2 text-center">
