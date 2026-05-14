@@ -42,6 +42,9 @@ const STATUSES = [
   { value: 'verification', label: 'Verification', color: 'bg-blue-600 border-blue-600' },
 ];
 
+const HIDDEN_TASK_STATUSES = new Set(['cnp', 'verification', 'interested', 'cancel_call', 'cancelled', 'on_hold', 'closed_lost']);
+const HIDDEN_TASK_LEAD_STATUSES = new Set(['closed_lost', 'on_hold', 'follow_up']);
+
 const EMPTY = { title: '', description: '', problem: '', type: 'task', lead: '', assignedTo: '', dueDate: '', priority: 'medium', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending', age: '', weight: '', height: '', otherProblems: '', problemDuration: '', price: '', phone: '' };
 
 const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition";
@@ -248,7 +251,10 @@ export default function Tasks() {
   };
 
   const filteredItems = useMemo(() => {
-    const items = (tab === 'daily' ? daily : tasks).filter(t => !['cnp', 'verification', 'interested', 'cancel_call', 'cancelled'].includes(t.status));
+    const items = (tab === 'daily' ? daily : tasks).filter(t =>
+      !HIDDEN_TASK_STATUSES.has(t.status) &&
+      !HIDDEN_TASK_LEAD_STATUSES.has(t.lead?.status)
+    );
     if (!search) return items;
     const q = search.toLowerCase();
     return items.filter(task => 

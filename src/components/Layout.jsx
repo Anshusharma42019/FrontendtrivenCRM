@@ -22,6 +22,7 @@ const PAGE_TITLES = {
   '/shiprocket/ndr/detail': 'NDR Details',
   '/notifications': 'Notifications',
   '/users': 'Staff',
+  '/commission-settings': 'Commission Settings',
 };
 
 export default function Layout() {

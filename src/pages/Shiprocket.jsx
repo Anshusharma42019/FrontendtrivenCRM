@@ -154,13 +154,21 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
 
   // Load pickup locations on mount
   useEffect(() => {
-      api.get('/shiprocket/next-order-id')
-      .then(res => setOrder(p => ({ ...p, order_id: res.data.data.order_id })))
-      .catch(() => {});
+    console.log('[Shiprocket Page] Component mounted. Loading initial data...');
+    
+    api.get('/shiprocket/next-order-id')
+      .then(res => {
+        console.log('[Shiprocket Page] Next Order ID fetched:', res.data.data.order_id);
+        setOrder(p => ({ ...p, order_id: res.data.data.order_id }));
+      })
+      .catch(err => {
+        console.error('[Shiprocket Page] Failed to fetch Next Order ID:', err.response?.status, err.response?.data?.message || err.message);
+      });
 
     api.get('/shiprocket/pickup-locations')
       .then(res => {
         const locs = res.data?.data?.data?.shipping_address || [];
+        console.log('[Shiprocket Page] Pickup locations fetched:', locs.length);
         setPickupLocations(locs);
         if (locs.length > 0) {
           // Prefer 'Home-1', fallback to first location
@@ -176,6 +184,7 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
             const state = location.state;
             if (state?.delivery_postcode) {
               const deliveryPostcode = state.delivery_postcode;
+              console.log('[Shiprocket Page] Found delivery postcode in state, triggering serviceability check...');
               setSvc(p => ({ ...p, delivery_postcode: deliveryPostcode }));
               setStep(1);
               setLoading(true); setError(''); setResult(null);
@@ -187,12 +196,17 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
                   if (recommended) { setCourierId(String(recommended)); setRecommendedCourierId(recommended); }
                   setResult(svcRes.data);
                 })
-                .catch(e => setError(e?.response?.data?.message || e.message))
+                .catch(e => {
+                  console.error('[Shiprocket Page] Serviceability check failed:', e.response?.status, e.response?.data?.message || e.message);
+                  setError(e?.response?.data?.message || e.message);
+                })
                 .finally(() => setLoading(false));
             }
           }
         }
-      }).catch(() => {});
+      }).catch(err => {
+        console.error('[Shiprocket Page] Failed to fetch Pickup Locations:', err.response?.status, err.response?.data?.message || err.message);
+      });
   }, []);
 
   // Pre-fill from ReadyToShipment navigation
@@ -440,7 +454,11 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
                       setO('billing_pincode', r.pincode || '');
                       setO('billing_state', r.state || '');
                       setO('lead_id', r.lead?._id || '');
-                      const productName = r.title || r.task?.title || 'Migraine Medicines';
+                      let productName = r.title || r.task?.title || 'Migraine Medicines';
+                      const customerName = (r.lead?.name || '').trim();
+                      if (productName.toLowerCase().startsWith('call ') || productName.trim() === customerName) {
+                         productName = 'Migraine Medicines'; // Default to valid medicine if task name is just customer name or starts with 'Call'
+                      }
                       const price = r.price || '';
                       setOrder(p => ({
                         ...p,

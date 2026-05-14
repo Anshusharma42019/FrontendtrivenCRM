@@ -6,3 +6,5 @@ export const getTodayStatus = () => API.get('/attendance/today').then(r => r.dat
 export const getMyAttendance = (params) => API.get('/attendance/me', { params }).then(r => r.data.data);
 export const getAllAttendance = (params) => API.get('/attendance', { params }).then(r => r.data.data);
 export const updateAttendance = (id, data) => API.patch(`/attendance/${id}`, data).then(r => r.data.data);
+export const fetchAllStaffCommissions = (month, year) => API.get(`/dashboard/all-staff-commissions?month=${month}&year=${year}`).then(r => r.data.data);
+export const saveCommissionOverride = (data) => API.post('/dashboard/save-commission-override', data).then(r => r.data.data);

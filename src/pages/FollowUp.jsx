@@ -1,30 +1,74 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Fragment } from 'react';
 import api from '../api';
-import Modal from '../components/ui/Modal';
 
 const PER_PAGE = 20;
-const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition";
-const ordinal = n => ['1st', '2nd', '3rd', '4th', '5th'][n] || `${n + 1}th`;
+const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition";
+const ordinal = n => {
+  const value = Number(n) + 1;
+  const suffix = value % 10 === 1 && value % 100 !== 11 ? 'st' : value % 10 === 2 && value % 100 !== 12 ? 'nd' : value % 10 === 3 && value % 100 !== 13 ? 'rd' : 'th';
+  return `${value}${suffix}`;
+};
 
 const PIN_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
   'bg-rose-500', 'bg-amber-500', 'bg-cyan-500', 'bg-pink-500',
 ];
 
-const initials = (name = '') =>
-  name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+const ROLE_GRADIENT = [
+  'from-purple-500 to-violet-600',
+  'from-blue-500 to-cyan-500',
+  'from-emerald-500 to-teal-500',
+  'from-orange-500 to-amber-500',
+  'from-rose-500 to-red-500'
+];
+
+const initials = (name) =>
+  (name || '').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+
+const formatDate = (value, options) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleDateString('en-IN', options);
+};
+
+const toDateInputValue = (value = new Date()) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return offsetDate.toISOString().slice(0, 10);
+};
+
+const getFollowup = (order, followupNumber) =>
+  (order.followups || []).find(f => f.followup_number === Number(followupNumber));
+
+const previousFollowupsDone = (order, followupNumber) =>
+  (order.followups || [])
+    .filter(f => f.followup_number < Number(followupNumber))
+    .every(f => f.completed);
+
+const isDue = (value, inputDate) => {
+  if (!value) return false;
+  const date = new Date(value);
+  if (!inputDate) {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    return date <= today;
+  }
+  return toDateInputValue(value) === inputDate;
+};
 
 const DetailRow = ({ label, value }) =>
   value ? (
     <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
       <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">{label}</span>
-      <span className="text-sm text-gray-800 font-medium capitalize flex-1">{value}</span>
+      <span className="text-sm text-gray-800 font-medium flex-1">{value}</span>
     </div>
   ) : null;
 
 const SectionHead = ({ label }) => (
-  <div className="flex items-center gap-2 mt-4 mb-1">
-    <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-500">{label}</span>
+  <div className="flex items-center gap-2 mt-5 mb-2">
+    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">{label}</span>
     <div className="flex-1 h-px bg-emerald-100" />
   </div>
 );
@@ -36,13 +80,22 @@ export default function FollowUp() {
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
   const [filterDelivered, setFilterDelivered] = useState('');
-  const [filterFollowupNum, setFilterFollowupNum] = useState('');
+  const [filterFollowupNum, setFilterFollowupNum] = useState('1');
   const [selected, setSelected] = useState(null);
   const [noteText, setNoteText] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
   const [completedMap, setCompletedMap] = useState({});
   const [doneLoading, setDoneLoading] = useState(null);
   const [search, setSearch] = useState('');
+  const [completedList, setCompletedList] = useState([]);
+  const [completedTotal, setCompletedTotal] = useState(0);
+  const [completedPage, setCompletedPage] = useState(1);
+  const [completedLoading, setCompletedLoading] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [settings, setSettings] = useState({ total_followups: 5, followup_gap_days: 6 });
+  const [activity, setActivity] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const followupNumbers = Array.from({ length: Number(settings.total_followups) || 5 }, (_, i) => i + 1);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -57,6 +110,23 @@ export default function FollowUp() {
     } finally { setLoading(false); }
   }, []);
 
+  const loadSettings = useCallback(async () => {
+    try {
+      const res = await api.get('/shiprocket/settings/followups-commission');
+      if (res.data?.data) setSettings(res.data.data);
+    } catch { /* keep defaults */ }
+  }, []);
+
+  const loadCompleted = useCallback(async (pg = 1, q = '') => {
+    setCompletedLoading(true);
+    try {
+      const res = await api.get('/shiprocket/orders/completed-followups', { params: { page: pg, per_page: PER_PAGE, search: q || undefined } });
+      setCompletedList(Array.isArray(res.data?.data?.data) ? res.data.data.data : []);
+      setCompletedTotal(res.data?.data?.total || 0);
+    } catch (e) { setError(e?.response?.data?.message || e.message); }
+    finally { setCompletedLoading(false); }
+  }, []);
+
   const syncAndLoad = async () => {
     setSyncing(true); setError('');
     try { await api.post('/shiprocket/orders/sync'); } catch { }
@@ -65,8 +135,12 @@ export default function FollowUp() {
   };
 
   useEffect(() => {
-    load().then(count => { if (count === 0) syncAndLoad(); });
-  }, [load]);
+    loadSettings();
+    load().then(count => {
+      if (count === 0) syncAndLoad();
+      loadCompleted(1);
+    });
+  }, [load, loadCompleted, loadSettings]);
 
   const handleFollowUpDone = async (orderId) => {
     const oid = String(orderId);
@@ -75,44 +149,92 @@ export default function FollowUp() {
       const res = await api.post(`/shiprocket/orders/${oid}/complete-followup`);
       const { completedCount, next_follow_up } = res.data.data;
       setCompletedMap(prev => ({ ...prev, [oid]: completedCount }));
+      if (completedCount >= (Number(settings.total_followups) || 5)) {
+         setAll(prev => prev.filter(o => String(o._id) !== oid));
+         setSelected(null);
+         return;
+      }
       setAll(prev => prev.map(o => {
         if (String(o._id) !== oid) return o;
-        const updatedFUs = (o.followups || []).map(f =>
-          f.followup_number === completedCount ? { ...f, completed: true } : f
-        );
+        
+        let baseDate = new Date();
+        const updatedFUs = (o.followups || []).map(f => {
+          if (f.followup_number === completedCount) {
+             return { ...f, completed: true, completed_at: new Date().toISOString() };
+          }
+          if (f.followup_number > completedCount) {
+             baseDate.setDate(baseDate.getDate() + (Number(settings.followup_gap_days) || 6));
+             return { ...f, scheduled_date: new Date(baseDate).toISOString() };
+          }
+          return f;
+        });
+
         return { ...o, next_follow_up, followups: updatedFUs };
       }));
       if (selected?._id === orderId) {
           const updatedSelected = { ...selected, next_follow_up };
-          updatedSelected.followups = (selected.followups || []).map(f =>
-              f.followup_number === completedCount ? { ...f, completed: true } : f
-          );
+          let baseSel = new Date();
+          updatedSelected.followups = (selected.followups || []).map(f => {
+              if (f.followup_number === completedCount) return { ...f, completed: true, completed_at: new Date().toISOString() };
+              if (f.followup_number > completedCount) {
+                  baseSel.setDate(baseSel.getDate() + (Number(settings.followup_gap_days) || 6));
+                  return { ...f, scheduled_date: new Date(baseSel).toISOString() };
+              }
+              return f;
+          });
           setSelected(updatedSelected);
+          api.get(`/shiprocket/orders/${oid}/activity`)
+            .then(r => setActivity(Array.isArray(r.data?.data) ? r.data.data : []))
+            .catch(() => {});
       }
     } catch (e) {
       setError(e?.response?.data?.message || e.message);
     } finally { setDoneLoading(null); }
   };
 
+  const handleSendToVerification = async (oid) => {
+    if (!window.confirm('Are you sure you want to send this customer back to Verification for a new cycle?')) return;
+    setDoneLoading(String(oid));
+    try {
+      await api.post(`/shiprocket/orders/${oid}/send-to-verification`);
+      alert('Successfully sent to Verification!');
+      setAll(prev => prev.filter(o => String(o._id) !== String(oid)));
+      setCompletedList(prev => prev.filter(o => String(o._id) !== String(oid)));
+      setCompletedTotal(prev => Math.max(0, prev - 1));
+      setSelected(null);
+    } catch (e) {
+      alert(e.response?.data?.message || e.message);
+    } finally {
+      setDoneLoading(null);
+    }
+  };
+
   const saveNote = async () => {
-    if (!selected) return;
+    if (!selected || !noteText.trim()) return;
     setNoteSaving(true);
     try {
-      await api.patch(`/shiprocket/orders/${selected._id}/notes`, { notes: noteText });
-      setAll(prev => prev.map(o => String(o._id) === String(selected._id) ? { ...o, notes: noteText } : o));
-      setSelected(prev => ({ ...prev, notes: noteText }));
+      const res = await api.patch(`/shiprocket/orders/${selected._id}/notes`, { text: noteText, type: 'followup' });
+      const newComments = res.data.data;
+      setAll(prev => prev.map(o => String(o._id) === String(selected._id) ? { ...o, comments: newComments } : o));
+      setSelected(prev => ({ ...prev, comments: newComments }));
+      setNoteText('');
+    } catch (e) {
+      alert('Failed to save note: ' + (e?.response?.data?.message || e.message));
     } finally { setNoteSaving(false); }
   };
 
+  const dueCounts = followupNumbers.reduce((acc, n) => {
+    acc[n] = all.filter(o => {
+      const fu = getFollowup(o, n);
+      return fu && !fu.completed && previousFollowupsDone(o, n) && isDue(fu.scheduled_date, filterDelivered);
+    }).length;
+    return acc;
+  }, {});
+
   const filtered = all.filter(o => {
-    if (filterDelivered && o.delivered_at) {
-      const d = new Date(o.delivered_at).toISOString().split('T')[0];
-      if (d !== filterDelivered) return false;
-    }
     if (filterFollowupNum) {
-      const num = Number(filterFollowupNum);
-      const completed = (o.followups || []).filter(f => f.completed).length;
-      if (completed !== num - 1) return false;
+      const fu = getFollowup(o, filterFollowupNum);
+      if (!fu || fu.completed || !previousFollowupsDone(o, filterFollowupNum) || !isDue(fu.scheduled_date, filterDelivered)) return false;
     }
     if (search) {
       const q = search.toLowerCase();
@@ -121,7 +243,8 @@ export default function FollowUp() {
         o.billing_phone?.includes(q) ||
         o.billing_city?.toLowerCase().includes(q) ||
         o.order_id?.toString().includes(q) ||
-        o.awb_code?.toLowerCase().includes(q)
+        o.awb_code?.toLowerCase().includes(q) ||
+        (o.order_items || []).some(item => item.name?.toLowerCase().includes(q))
       );
     }
     return true;
@@ -131,335 +254,548 @@ export default function FollowUp() {
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   const handleSelect = (order) => {
-    if (selected?._id === order._id) {
-      setSelected(null);
-    } else {
-      setSelected(order);
-      setNoteText(order.notes || '');
-    }
+    setSelected(order);
+    setNoteText('');
+    setActivity([]);
+    setActivityLoading(true);
+    api.get(`/shiprocket/orders/${order._id}/activity`)
+      .then(res => setActivity(Array.isArray(res.data?.data) ? res.data.data : []))
+      .catch(() => setActivity([]))
+      .finally(() => setActivityLoading(false));
   };
 
   return (
-    <div className="flex gap-4 scroll-container-h overflow-hidden animate-slide-up mobile-p-safe">
-      {/* ── LEFT PANEL ── */}
-      <div className={`flex flex-col gap-4 transition-all duration-300 ${selected ? 'w-full lg:w-[55%]' : 'w-full'} h-full overflow-hidden`}>
-        
-        {/* Header & Filters (Fixed) */}
-        <div className="flex items-center gap-3 shrink-0 glass px-4 py-3 rounded-2xl border border-white/50 shadow-sm">
-          {/* Date filter */}
-          <div className="flex items-center bg-white rounded-xl border border-gray-100 px-3 py-2 shadow-sm gap-2 shrink-0">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date</span>
-            <input type="date" value={filterDelivered} onChange={e => { setFilterDelivered(e.target.value); setPage(1); }}
-              className="text-xs font-bold text-gray-700 bg-transparent outline-none w-28" />
+    <div className="space-y-8 bg-glow pb-10">
+      {/* Stats Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4 animate-slide-up">
+        {followupNumbers.map((n, i) => {
+          const colors = ['from-emerald-400 to-teal-500', 'from-blue-400 to-indigo-500', 'from-amber-400 to-orange-500', 'from-rose-400 to-red-500', 'from-purple-400 to-violet-500'];
+          const icons = ['M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', 'M16 3h5m0 0v5m0-5l-6 6M5 3l6 6m-6-6v5m0-5h5', 'M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129', 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2', 'M5 13l4 4L19 7'];
+          const item = { label: `${ordinal(n - 1)} Follow Up`, val: dueCounts[n] || 0, color: colors[i % colors.length], icon: icons[i % icons.length] };
+          return (
+          <div key={i} className="relative overflow-hidden group bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100/50 hover:shadow-2xl hover:-translate-y-1 transition-all duration-500" style={{ animationDelay: `${i * 100}ms` }}>
+            <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${item.color} opacity-[0.04] rounded-bl-full group-hover:scale-150 transition-transform duration-700`} />
+            <div className="flex items-center gap-5 relative z-10">
+              <div className={`w-14 h-14 rounded-[1.25rem] bg-gradient-to-br ${item.color} flex items-center justify-center text-white shadow-xl shadow-${item.color.split(' ')[1]}/20 transform group-hover:rotate-6 transition-transform duration-500`}>
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d={item.icon}/></svg>
+              </div>
+              <div>
+                <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.25em] mb-1">{item.label}</p>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-4xl font-black text-gray-900 tracking-tight">{item.val}</span>
+                  <span className="text-[11px] font-bold text-gray-300">READY</span>
+                </div>
+              </div>
+            </div>
+            <div className={`absolute -inset-1 bg-gradient-to-r ${item.color} opacity-0 group-hover:opacity-[0.03] blur-xl transition-opacity duration-500`} />
           </div>
-          {/* Call filter */}
-          <div className="flex items-center bg-white rounded-xl border border-gray-100 px-3 py-2 shadow-sm gap-2 shrink-0">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Call</span>
-            <select value={filterFollowupNum} onChange={e => { setFilterFollowupNum(e.target.value); setPage(1); }}
-              className="text-xs font-bold text-gray-700 bg-transparent outline-none">
-              <option value="">All</option>
-              {[1,2,3,4,5].map(n => <option key={n} value={n}>{ordinal(n-1)}</option>)}
-            </select>
+        )})}
+      </div>
+
+      {/* Header Section */}
+      <div className="flex flex-col lg:flex-row items-start lg:items-end justify-between gap-6 px-2">
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 bg-emerald-100 text-emerald-600 text-[10px] font-black uppercase tracking-widest rounded-full">Customer Retention</span>
+            <div className="h-px w-12 bg-gray-200" />
           </div>
-          {(filterDelivered || filterFollowupNum) && (
-            <button onClick={() => { setFilterDelivered(''); setFilterFollowupNum(''); setPage(1); }}
-              className="px-3 py-2 rounded-xl text-[10px] font-extrabold text-rose-500 bg-rose-50 hover:bg-rose-100 transition shrink-0">RESET</button>
-          )}
-          {/* Search */}
-          <div className="relative flex-1">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-            </svg>
-            <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Search customer, phone, AWB..."
-              className="w-full pl-9 pr-16 py-2.5 rounded-xl border border-gray-100 bg-white text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/20 focus:border-emerald-400 transition shadow-sm" />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-300">{filtered.length}</span>
-          </div>
-          {/* Buttons */}
-          <button onClick={syncAndLoad} disabled={syncing || loading}
-            className="px-4 py-2.5 rounded-xl text-white text-xs font-bold shadow-md flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 shrink-0"
-            style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.1} viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            {syncing ? 'Syncing...' : 'Sync'}
-          </button>
-          <button onClick={load} disabled={loading}
-            className="px-4 py-2.5 rounded-xl text-white text-xs font-bold shadow-md flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 shrink-0"
-            style={{ background: 'linear-gradient(135deg, #374151, #1f2937)' }}>
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.1} viewBox="0 0 24 24"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
-            {loading ? 'Loading...' : 'Refresh'}
-          </button>
+          <h2 className="text-4xl font-black text-gray-900 tracking-tighter uppercase leading-none">Follow Ups</h2>
+          <p className="text-sm font-medium text-gray-400">Track and manage customer calls after delivery.</p>
         </div>
 
-        {error && <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-red-600 text-xs font-medium shrink-0">{error}</div>}
+        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+          {/* Tabs */}
+          <div className="flex items-center bg-white rounded-2xl border border-gray-100 p-1 shadow-sm shrink-0 overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => { setShowCompleted(false); setFilterFollowupNum(''); setPage(1); }}
+              className={`px-5 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition whitespace-nowrap ${
+                !showCompleted && !filterFollowupNum ? 'bg-emerald-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              All Orders ({all.length})
+            </button>
+            {followupNumbers.map(n => {
+              const active = !showCompleted && filterFollowupNum === String(n);
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => { setShowCompleted(false); setFilterFollowupNum(String(n)); setPage(1); }}
+                  className={`px-5 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition whitespace-nowrap ${
+                    active ? 'bg-emerald-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'
+                  }`}
+                >
+                  {ordinal(n - 1)} Call ({dueCounts[n] || 0})
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => { setShowCompleted(true); setCompletedPage(1); loadCompleted(1, search); }}
+              className={`px-5 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition whitespace-nowrap ${
+                showCompleted ? 'bg-gray-800 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              ✅ Completed ({completedTotal})
+            </button>
+          </div>
 
-        {/* List (Scrollable) */}
-        <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
-          {loading && all.length === 0 ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <div className="relative group flex-1 lg:flex-none">
+            <input 
+              type="date" 
+              value={filterDelivered} 
+              onChange={(e) => { setFilterDelivered(e.target.value); setPage(1); }}
+              className="w-full bg-white border border-gray-100 rounded-2xl px-5 py-3 text-sm font-black text-gray-700 focus:ring-4 focus:ring-emerald-500/10 transition-all cursor-pointer shadow-sm hover:shadow-md"
+            />
+          </div>
+
+          <div className="relative flex-1 lg:w-64">
+             <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+               <circle cx="11" cy="11" r="8" /><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35" />
+             </svg>
+             <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+               placeholder="Search name, phone..."
+               className="w-full pl-11 pr-5 py-3 rounded-2xl border border-gray-100 bg-white text-sm font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-emerald-400/20 transition shadow-sm" />
+          </div>
+          
+          <button onClick={syncAndLoad} disabled={syncing || loading}
+            className="flex-1 lg:flex-none flex items-center justify-center gap-3 px-6 py-3 rounded-2xl text-[11px] font-black text-white shadow-xl hover:-translate-y-1 transition-all uppercase tracking-widest active:scale-95 disabled:opacity-50"
+            style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+            <svg className={`w-4 h-4 ${syncing || loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+            {syncing ? 'Syncing...' : loading ? 'Loading...' : 'Sync'}
+          </button>
+        </div>
+      </div>
+
+      {error && <div className="bg-red-50 border border-red-100 rounded-2xl px-6 py-4 text-red-600 text-sm font-bold shadow-sm">{error}</div>}
+
+      {/* Completed Follow-ups Table */}
+      {showCompleted ? (
+      <div className="premium-card overflow-hidden">
+        {completedLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="flex items-center gap-3 text-gray-400">
+              <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+              Loading completed follow ups...
             </div>
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-dashed border-gray-200">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center mb-3 text-emerald-300">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              </div>
-              <p className="text-gray-500 text-sm font-medium">No follow-ups found</p>
-              <p className="text-gray-400 text-xs mt-1">{search ? 'Try a different search' : 'Nothing here yet'}</p>
+          </div>
+        ) : completedList.length === 0 ? (
+          <div className="p-20 text-center">
+            <div className="w-20 h-20 rounded-[2.5rem] bg-gray-100 flex items-center justify-center mx-auto mb-6 text-gray-300">
+              <svg className="w-10 h-10" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
             </div>
-          ) : (
-            <div className="space-y-2 pb-4">
-              {paged.map((o, i) => {
-                const color = PIN_COLORS[i % PIN_COLORS.length];
-                const isActive = selected?._id === o._id;
-                const allFUs = (o.followups || []).sort((a, b) => a.followup_number - b.followup_number);
-                const completedCount = completedMap[o._id] ?? allFUs.filter(f => f.completed).length;
-                const allDone = completedCount >= 5;
-                const activeFU = allFUs[completedCount];
-
-                return (
-                  <div
-                    key={o._id}
-                    onClick={() => handleSelect(o)}
-                    className={`relative flex flex-col gap-3 px-4 py-3.5 rounded-2xl cursor-pointer transition-all duration-200 border
-                      ${isActive
-                        ? 'bg-emerald-50 border-emerald-200 shadow-sm'
-                        : 'bg-white border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/30 hover:shadow-sm'}`}>
-
-                    <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${color}`} />
-                    
-                    <div className="flex items-center gap-4">
-                      <span className="text-[11px] font-bold text-gray-300 w-5 text-center shrink-0 ml-2">{((page - 1) * PER_PAGE) + i + 1}</span>
-
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0 ${color}`}>
-                        {initials(o.billing_customer_name)}
+            <p className="text-xl font-bold text-gray-400">No completed follow-ups yet</p>
+          </div>
+        ) : (
+          <div className="table-responsive no-scrollbar">
+            <table className="w-full text-xs min-w-[900px]">
+              <thead>
+                <tr className="text-gray-400 border-b border-gray-100 text-left bg-white">
+                  <th className="py-5 px-6 font-black uppercase tracking-[0.15em] text-[10px]">Customer</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px]">Contact</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px]">Medicine</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Delivered</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Status</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Amount</th>
+                  <th className="py-5 px-6 font-black uppercase tracking-[0.15em] text-[10px] text-right">View</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50/50">
+                {completedList.map((o, i) => (
+                  <tr key={o._id} className="hover:bg-gradient-to-r hover:from-white hover:to-gray-50/50 transition-all duration-300 group">
+                    <td className="py-4 px-6">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br from-gray-500 to-gray-600 flex items-center justify-center text-white text-base font-black shadow-lg shadow-black/5 shrink-0`}>{initials(o.billing_customer_name)}</div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-800 text-sm truncate">{o.billing_customer_name || '—'}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 py-0.5 px-1.5 bg-gray-50 rounded-lg border border-gray-100">{o.awb_code}</span>
+                            <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded uppercase">✓ All Done</span>
+                          </div>
+                        </div>
                       </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold text-gray-800 truncate">{o.billing_customer_name || '—'}</p>
-                          {allDone ? (
-                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200 uppercase">Done</span>
-                          ) : (
-                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 border border-orange-100 uppercase">{ordinal(completedCount)} Due</span>
+                    </td>
+                    <td className="py-4 px-2">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-bold text-gray-700">{o.billing_phone}</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase">{o.billing_city}{o.billing_state ? `, ${o.billing_state}` : ''}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-2">
+                      <span className="text-xs font-bold text-gray-700 truncate max-w-[140px]" title={o.order_items?.[0]?.name}>{o.order_items?.[0]?.name || '—'}</span>
+                    </td>
+                    <td className="py-4 px-2 text-center">
+                      <span className="text-sm font-bold text-gray-600 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">{formatDate(o.delivered_at || o.createdAt, { day: '2-digit', month: 'short' })}</span>
+                    </td>
+                    <td className="py-4 px-2 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        {Array.from({ length: Number(settings.total_followups) || 5 }, (_, idx) => (
+                          <div key={idx} className="text-[10px] font-black w-7 h-7 flex items-center justify-center rounded-lg border bg-emerald-100 text-emerald-600 border-emerald-200">{idx + 1}</div>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="py-4 px-2 text-center"><span className="text-sm font-black text-gray-700">₹{o.sub_total}</span></td>
+                    <td className="py-4 px-6 text-right">
+                      <button onClick={() => handleSelect(o)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-50 text-gray-500 hover:bg-gray-900 hover:text-white transition-all shadow-sm hover:shadow-lg">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {(() => { const tp = Math.ceil(completedTotal / PER_PAGE); return tp > 1 ? (
+          <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+            <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Page {completedPage} of {tp}</span>
+            <div className="flex items-center gap-2">
+              <button onClick={() => { const p = Math.max(1, completedPage - 1); setCompletedPage(p); loadCompleted(p, search); }} disabled={completedPage === 1} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-white hover:shadow-sm disabled:opacity-30 transition-all">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="m15 18-6-6 6-6"/></svg>
+              </button>
+              <button onClick={() => { const p = Math.min(tp, completedPage + 1); setCompletedPage(p); loadCompleted(p, search); }} disabled={completedPage === tp} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-white hover:shadow-sm disabled:opacity-30 transition-all">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6"/></svg>
+              </button>
+            </div>
+          </div>
+        ) : null; })()}
+      </div>
+      ) : (
+      /* Main Table Container */
+      <div className="premium-card overflow-hidden">
+        {loading && all.length === 0 ? (
+           <div className="flex items-center justify-center h-64">
+             <div className="flex items-center gap-3 text-gray-400">
+               <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+               Loading follow ups...
+             </div>
+           </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-20 text-center">
+            <div className="w-20 h-20 rounded-[2.5rem] bg-emerald-50 flex items-center justify-center mx-auto mb-6 text-emerald-300 animate-float">
+              <svg className="w-10 h-10" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <p className="text-xl font-bold text-gray-400">No {ordinal(Number(filterFollowupNum) - 1)} follow-ups found</p>
+            <p className="text-sm text-gray-300 mt-2">{search ? 'Try a different search' : `Nothing due on ${formatDate(filterDelivered)}`}</p>
+          </div>
+        ) : (
+          <div className="table-responsive no-scrollbar">
+            <table className="w-full text-xs min-w-[1080px]">
+              <thead>
+                <tr className="text-gray-400 border-b border-gray-100 text-left bg-white">
+                  <th className="py-5 px-6 font-black uppercase tracking-[0.15em] text-[10px]">Customer Order</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px]">Location & Contact</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px]">Medicine</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Delivered</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Progress</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Next Call</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Amount</th>
+                  <th className="py-5 px-6 font-black uppercase tracking-[0.15em] text-[10px] text-right">Controls</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50/50">
+                {paged.map((o, i) => {
+                  const gradient = ROLE_GRADIENT[i % ROLE_GRADIENT.length];
+                  const allFUs = (o.followups || []).sort((a, b) => a.followup_number - b.followup_number);
+                  const completedCount = completedMap[o._id] ?? allFUs.filter(f => f.completed).length;
+                  const allDone = completedCount >= (Number(settings.total_followups) || 5);
+                  const activeFU = getFollowup(o, filterFollowupNum) || allFUs[completedCount];
+                  
+                  return (
+                    <tr key={o._id} className="hover:bg-gradient-to-r hover:from-white hover:to-emerald-50/30 transition-all duration-300 group">
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-base font-black shadow-lg shadow-black/5 group-hover:scale-110 transition-transform duration-300 shrink-0`}>
+                            {initials(o.billing_customer_name)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-gray-800 text-sm truncate">{o.billing_customer_name || '—'}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 py-0.5 px-1.5 bg-gray-50 rounded-lg border border-gray-100">{o.awb_code}</span>
+                              {allDone && (
+                                <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase">Done</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-4 px-2">
+                         <div className="flex flex-col gap-1">
+                           <span className="text-sm font-bold text-gray-700">{o.billing_phone}</span>
+                           <span className="text-[10px] font-bold text-gray-400 uppercase">{o.billing_city} {o.billing_state ? `, ${o.billing_state}` : ''}</span>
+                         </div>
+                      </td>
+                      <td className="py-4 px-2">
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-xs font-bold text-gray-700 truncate max-w-[140px]" title={o.order_items?.[0]?.name}>
+                            {o.order_items?.[0]?.name || '—'}
+                          </span>
+                          {o.order_items?.length > 1 && (
+                            <span className="text-[9px] font-black text-emerald-500 uppercase tracking-tighter">+{o.order_items.length - 1} more items</span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          <span className="text-xs text-gray-500">{o.billing_city}</span>
-                          <span className="text-xs text-gray-400">₹{o.sub_total}</span>
-                          <span className="text-[10px] text-gray-400 border-l border-gray-200 pl-2">Delivered: {new Date(o.shiprocket_delivered_date).toLocaleDateString()}</span>
+                      </td>
+                      <td className="py-4 px-2 text-center">
+                         <span className="text-sm font-bold text-gray-600 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
+                           {formatDate(o.delivered_at || o.shiprocket_delivered_date || o.createdAt, { day: '2-digit', month: 'short' })}
+                         </span>
+                      </td>
+                      <td className="py-4 px-2">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {Array.from({ length: Number(settings.total_followups) || 5 }, (_, idx) => {
+                            const isDone = idx < completedCount;
+                            const isCurrent = idx === completedCount && !allDone;
+                            return (
+                              <div key={idx} 
+                                className={`text-[10px] font-black w-7 h-7 flex items-center justify-center rounded-lg border transition-all ${
+                                  isDone ? 'bg-gray-100 text-gray-400 border-gray-200' :
+                                  isCurrent ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-500/20 scale-110 z-10' :
+                                  'bg-gray-50 text-gray-300 border-gray-100'
+                                }`}>
+                                {idx + 1}
+                              </div>
+                            );
+                          })}
                         </div>
-                      </div>
+                      </td>
+                      <td className="py-4 px-2 text-center">
+                         <div className="flex flex-col items-center gap-1">
+                            <span className={`text-[11px] font-black uppercase tracking-widest ${allDone ? 'text-gray-400' : 'text-orange-500'}`}>
+                              {allDone ? 'COMPLETED' : formatDate(activeFU?.scheduled_date, { day: '2-digit', month: 'short' })}
+                            </span>
+                            {!allDone && <span className="text-[9px] font-bold text-gray-400 uppercase">Scheduled</span>}
+                         </div>
+                      </td>
+                      <td className="py-4 px-2 text-center">
+                        <span className="text-sm font-black text-gray-700">₹{o.sub_total}</span>
+                      </td>
+                      <td className="py-4 px-6 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {!activeFU?.completed && !allDone && (
+                            <button 
+                              onClick={() => handleFollowUpDone(o._id)}
+                              disabled={doneLoading === String(o._id)}
+                              className="w-10 h-10 flex items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-sm hover:shadow-lg disabled:opacity-50 group/btn"
+                              title="Mark Follow Up Done">
+                              {doneLoading === String(o._id) ? (
+                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                              )}
+                            </button>
+                          )}
+                          <button onClick={() => handleSelect(o)} title="Open Details" 
+                            className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-50 text-gray-500 hover:bg-gray-900 hover:text-white transition-all shadow-sm hover:shadow-lg">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-                      <div className="hidden sm:flex flex-col items-end gap-1 shrink-0">
-                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Next Call</p>
-                         <p className={`text-[10px] font-bold ${allDone ? 'text-gray-300' : 'text-orange-600'}`}>
-                           {allDone ? 'Completed' : new Date(activeFU?.scheduled_date).toLocaleDateString()}
-                         </p>
-                      </div>
-
-                      <svg className={`w-4 h-4 text-gray-300 shrink-0 transition-transform duration-200 ${isActive ? 'rotate-90 text-emerald-400' : ''}`}
-                        fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path d="m9 18 6-6-6-6" />
-                      </svg>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 mt-1 ml-11">
-                      {Array.from({ length: 5 }, (_, idx) => {
-                        const isDone = idx < completedCount;
-                        const isCurrent = idx === completedCount && !allDone;
-                        return (
-                          <div key={idx} 
-                            className={`text-[9px] font-bold px-2 py-1 rounded-lg border transition-all ${
-                              isDone ? 'bg-gray-100 text-gray-400 border-gray-200 line-through' :
-                              isCurrent ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' :
-                              'bg-gray-50 text-gray-300 border-gray-100'
-                            }`}>
-                            {ordinal(idx)}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Pagination (Fixed at bottom of left panel) */}
+        {/* Pagination Footer */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-2 py-2 border-t border-gray-50 shrink-0">
-            <span className="text-[10px] font-bold text-gray-400 uppercase">Page {page} of {totalPages}</span>
-            <div className="flex items-center gap-1">
-              <button onClick={(e) => { e.stopPropagation(); setPage(p => Math.max(1, p - 1)); }} disabled={page === 1}
-                className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50 disabled:opacity-30">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+          <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+            <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Page {page} of {totalPages}</span>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-white hover:shadow-sm disabled:opacity-30 transition-all">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="m15 18-6-6 6-6"/></svg>
               </button>
-              <button onClick={(e) => { e.stopPropagation(); setPage(p => Math.min(totalPages, p + 1)); }} disabled={page === totalPages}
-                className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50 disabled:opacity-30">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-white hover:shadow-sm disabled:opacity-30 transition-all">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6"/></svg>
               </button>
             </div>
           </div>
         )}
       </div>
-
-      {/* ── RIGHT DETAIL PANEL ── */}
-      {selected && (
-        <div className="hidden lg:flex flex-col w-[45%] bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden h-full">
-          <div className="h-1.5 shrink-0" style={{ background: 'linear-gradient(90deg,#10b981,#059669,#10b981)' }} />
-          
-          <div className="px-5 py-4 flex items-center justify-between border-b border-gray-50 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold ${PIN_COLORS[filtered.findIndex(r => r._id === selected._id) % PIN_COLORS.length]}`}>
-                {initials(selected.billing_customer_name)}
-              </div>
-              <div>
-                <p className="text-sm font-bold text-gray-800 leading-tight">{selected.billing_customer_name || 'Order Detail'}</p>
-                <p className="text-xs text-gray-400">{selected.billing_phone}</p>
-              </div>
-            </div>
-            <button onClick={() => setSelected(null)}
-              className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition text-lg">×</button>
-          </div>
-
-          <div className="px-5 py-3 overflow-y-auto flex-1 custom-scrollbar">
-            <SectionHead label="Customer & Order" />
-            <DetailRow label="Order ID" value={selected.order_id || selected.shiprocket_order_id} />
-            <DetailRow label="AWB Code" value={selected.awb_code} />
-            <DetailRow label="Courier" value={selected.courier_name} />
-            <DetailRow label="Payment" value={selected.payment_method} />
-            <DetailRow label="Amount" value={`₹${selected.sub_total}`} />
-            
-            <SectionHead label="Address" />
-            <DetailRow label="City" value={selected.billing_city} />
-            <DetailRow label="State" value={selected.billing_state} />
-            <DetailRow label="Pincode" value={selected.billing_pincode} />
-            <DetailRow label="Address" value={selected.billing_address} />
-
-            <SectionHead label="Products" />
-            {(selected.order_items || []).map((p, i) => (
-              <div key={i} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
-                <span className="text-sm text-gray-700 font-medium">{p.name}</span>
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">×{p.units || 1}</span>
-              </div>
-            ))}
-
-            <SectionHead label="Notes" />
-            <div className="mt-2">
-              <textarea
-                value={noteText}
-                onChange={e => setNoteText(e.target.value)}
-                placeholder="Add customer feedback or follow-up notes..."
-                rows={3}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-gray-50 resize-none transition"
-              />
-              <button onClick={saveNote} disabled={noteSaving}
-                className="mt-2 w-full py-2 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90 disabled:opacity-50"
-                style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
-                {noteSaving ? 'Saving...' : 'Save Note'}
-              </button>
-            </div>
-
-            <SectionHead label="Follow-up Timeline" />
-            <div className="space-y-3 mt-3 pb-4">
-              {(selected.followups || []).sort((a, b) => a.followup_number - b.followup_number).map((fu, i) => {
-                const isCurrent = !fu.completed && (i === 0 || selected.followups[i-1]?.completed);
-                return (
-                  <div key={i} className={`flex items-center gap-3 p-2.5 rounded-xl border ${fu.completed ? 'bg-gray-50 border-gray-100 opacity-60' : isCurrent ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-gray-100'}`}>
-                    <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold ${fu.completed ? 'bg-gray-200 text-gray-500' : 'bg-emerald-600 text-white'}`}>
-                      {fu.followup_number}
-                    </div>
-                    <div className="flex-1">
-                      <p className={`text-xs font-bold ${fu.completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>{ordinal(i)} Follow-up</p>
-                      <p className="text-[10px] text-gray-400">{new Date(fu.scheduled_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
-                    </div>
-                    {fu.completed ? (
-                      <span className="text-[10px] font-bold text-emerald-600">DONE</span>
-                    ) : isCurrent ? (
-                      <button 
-                        onClick={() => handleFollowUpDone(selected._id)}
-                        disabled={doneLoading === String(selected._id)}
-                        className="px-3 py-1 bg-emerald-600 text-white text-[10px] font-bold rounded-lg hover:bg-emerald-700 transition disabled:opacity-50">
-                        {doneLoading === String(selected._id) ? '...' : 'MARK DONE'}
-                      </button>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
       )}
 
-      {/* Detail Modal (Mobile) */}
-      {selected && (
-        <div className="lg:hidden">
-          <Modal hideHeader={true} onClose={() => setSelected(null)}>
-            <div className="-mx-4 -mt-4 mb-5 px-6 py-6 rounded-b-3xl relative" style={{ background: 'linear-gradient(135deg, #064e3b, #065f46)' }}>
-              <button onClick={() => setSelected(null)}
-                className="absolute right-4 top-4 w-7 h-7 flex items-center justify-center rounded-full bg-white/10 text-white/80 hover:bg-white/20 transition-all text-xl">
-                ×
-              </button>
-              <div className="flex items-center gap-4 pr-8">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold text-white shadow-xl ${PIN_COLORS[filtered.findIndex(r => r._id === selected._id) % PIN_COLORS.length]}`}>
+      {/* View Modal */}
+      {selected && (() => {
+        const allFUs = (selected.followups || []).sort((a, b) => a.followup_number - b.followup_number);
+        const completedCount = completedMap[selected._id] ?? allFUs.filter(f => f.completed).length;
+        const allDone = completedCount >= (Number(settings.total_followups) || 5);
+
+        return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
+            
+            <div className="px-6 py-5 shrink-0" style={{ background: 'linear-gradient(135deg, #064e3b, #065f46)' }}>
+              <div className="flex items-center gap-4">
+                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-xl font-black shadow-lg`}>
                   {initials(selected.billing_customer_name)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-white font-bold text-lg tracking-tight truncate">{selected.billing_customer_name}</h3>
-                  <p className="text-emerald-300/70 text-sm font-medium">{selected.billing_phone}</p>
+                  <h3 className="text-white font-black text-xl tracking-tight truncate">{selected.billing_customer_name || 'Order Detail'}</h3>
+                  <div className="flex items-center gap-3 mt-1">
+                    <p className="text-emerald-300 font-bold text-sm">{selected.billing_phone}</p>
+                    <span className="w-1 h-1 rounded-full bg-emerald-400/50" />
+                    <p className="text-emerald-300 font-bold text-sm">{selected.awb_code}</p>
+                  </div>
+                </div>
+                <button onClick={() => setSelected(null)}
+                  className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/10 text-emerald-100 hover:bg-white/20 hover:text-white transition-all text-2xl leading-none shadow-sm">
+                  ×
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-5 custom-scrollbar bg-gray-50/30">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                <div>
+                  <SectionHead label="Order Details" />
+                  <DetailRow label="Staff / Agent" value={selected.lead_id?.assignedTo?.name ? `👤 ${selected.lead_id.assignedTo.name}` : (selected.lead_id?.createdBy?.name ? `👤 ${selected.lead_id.createdBy.name}` : 'Unknown / System')} />
+                  <DetailRow label="Order ID" value={selected.order_id || selected.shiprocket_order_id} />
+                  <DetailRow label="Courier" value={selected.courier_name} />
+                  <DetailRow label="Payment" value={selected.payment_method} />
+                  <DetailRow label="Amount" value={`₹${selected.sub_total}`} />
+                  
+                  <SectionHead label="Address" />
+                  <DetailRow label="City" value={selected.billing_city} />
+                  <DetailRow label="State" value={selected.billing_state} />
+                  <DetailRow label="Pincode" value={selected.billing_pincode} />
+                  <DetailRow label="Address" value={selected.billing_address} />
+                </div>
+                
+                <div>
+                  <SectionHead label="Medicines" />
+                  <div className="space-y-2 mt-2">
+                    {(selected.order_items || []).map((p, i) => (
+                      <div key={i} className="flex justify-between items-center p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
+                        <span className="text-sm text-gray-700 font-bold truncate pr-2">{p.name}</span>
+                        <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100 shrink-0">×{p.units || 1}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <SectionHead label="Feedback Notes" />
+                  
+                  {/* Comments List */}
+                  <div className="mt-2 space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                    {(selected.comments || []).filter(c => c.type === 'followup').map((c, i) => (
+                      <div key={i} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm relative group/comment">
+                        <p className="text-xs text-gray-700 font-medium whitespace-pre-wrap">{c.text}</p>
+                        <p className="text-[9px] text-gray-400 font-bold mt-1 uppercase tracking-wider">{formatDate(c.createdAt, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
+                    ))}
+                    {!(selected.comments?.length > 0) && (
+                      <p className="text-xs text-gray-400 italic py-2 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">No notes yet</p>
+                    )}
+                  </div>
+
+                  <div className="mt-3 relative">
+                    <textarea
+                      value={noteText}
+                      onChange={e => setNoteText(e.target.value)}
+                      placeholder="Type a new note..."
+                      rows={2}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none transition shadow-sm"
+                    />
+                    <button onClick={saveNote} disabled={noteSaving || !noteText.trim()}
+                      className="absolute bottom-3 right-3 px-4 py-1.5 rounded-lg text-[10px] font-black text-white shadow-md transition-all active:scale-95 disabled:opacity-50 tracking-widest"
+                      style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+                      {noteSaving ? 'SAVING...' : 'ADD NOTE'}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="space-y-0 px-2">
-              <SectionHead label="Order Details" />
-              <DetailRow label="Phone" value={selected.billing_phone} />
-              <DetailRow label="AWB" value={selected.awb_code} />
-              <DetailRow label="City" value={selected.billing_city} />
-              <DetailRow label="Amount" value={`₹${selected.sub_total}`} />
-              
-              <SectionHead label="Feedback Notes" />
-              <textarea
-                value={noteText}
-                onChange={e => setNoteText(e.target.value)}
-                placeholder="Type customer notes here..."
-                rows={2}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50 mb-3 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-              />
-              <button onClick={saveNote} className="w-full py-3.5 rounded-xl text-xs font-bold text-white shadow-md transition-all active:scale-[0.98]"
-                style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
-                {noteSaving ? 'Saving...' : 'Save Notes'}
-              </button>
-
-              <SectionHead label="Follow-up Progress" />
-              <div className="space-y-2.5 mt-3 pb-4">
-                {(selected.followups || []).sort((a,b) => a.followup_number - b.followup_number).map((fu, i) => {
-                  const isCurrent = !fu.completed && (i === 0 || selected.followups[i-1]?.completed);
-                  return (
-                    <div key={i} className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${fu.completed ? 'bg-gray-50 border-gray-100 opacity-60' : isCurrent ? 'bg-emerald-50 border-emerald-100 shadow-sm' : 'bg-white border-gray-100'}`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${fu.completed ? 'bg-gray-200 text-gray-500' : 'bg-emerald-600 text-white shadow-sm'}`}>{fu.followup_number}</div>
-                        <div className="flex flex-col">
-                          <span className={`text-xs font-bold ${fu.completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>{ordinal(i)} Call</span>
-                          <span className="text-[10px] text-gray-400">{new Date(fu.scheduled_date).toLocaleDateString()}</span>
+              <div className="mt-8">
+                <SectionHead label="Follow-up Timeline" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-3">
+                  {allFUs.map((fu, i) => {
+                    const isCurrent = !fu.completed && (i === 0 || allFUs[i-1]?.completed);
+                    const staffName = fu.staff?.name || (fu.status === 'missed' ? 'System' : '');
+                    return (
+                      <div key={i} className={`flex flex-col p-4 rounded-2xl border transition-all ${
+                        fu.completed ? 'bg-gray-50 border-gray-100 opacity-70' : 
+                        isCurrent ? 'bg-emerald-50 border-emerald-200 shadow-sm ring-2 ring-emerald-500/10' : 
+                        'bg-white border-gray-100'
+                      }`}>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${
+                            fu.completed ? 'bg-gray-200 text-gray-500' : 
+                            isCurrent ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-900/20' : 
+                            'bg-gray-100 text-gray-400'
+                          }`}>
+                            {fu.followup_number}
+                          </div>
+                          {fu.completed && (
+                            <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px] font-bold">✓</span>
+                          )}
                         </div>
+                        <p className={`text-[11px] font-black uppercase tracking-widest ${fu.completed ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+                          {ordinal(i)} Call
+                        </p>
+                        <p className="text-[10px] font-bold text-gray-400 mt-0.5">{formatDate(fu.scheduled_date, { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                        <p className="text-[10px] font-bold text-gray-500 mt-2 capitalize">{fu.status || (fu.completed ? 'completed' : 'scheduled')}</p>
+                        {staffName && <p className="text-[10px] font-bold text-emerald-600 mt-1 truncate">By {staffName}</p>}
+                        {(fu.notes || fu.note) && <p className="text-[10px] text-gray-500 mt-2 line-clamp-2">{fu.notes || fu.note}</p>}
+                        
+                        {isCurrent && (
+                          <div className="flex flex-col gap-1.5 mt-3">
+                            <button 
+                              onClick={() => handleFollowUpDone(selected._id)}
+                              disabled={doneLoading === String(selected._id)}
+                              className="w-full py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-[10px] font-black rounded-xl shadow-md hover:shadow-lg active:scale-95 transition-all disabled:opacity-50 tracking-widest">
+                              {doneLoading === String(selected._id) ? 'WAIT...' : 'MARK DONE'}
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      {isCurrent ? (
-                        <button onClick={() => handleFollowUpDone(selected._id)} className="px-4 py-1.5 bg-emerald-600 text-white text-[10px] font-bold rounded-xl shadow-sm active:scale-95 transition-all">MARK DONE</button>
-                      ) : fu.completed ? (
-                        <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center">
-                          <span className="text-emerald-600 font-bold text-[10px]">✓</span>
-                        </div>
-                      ) : null}
-                    </div>
-                  )
-                })}
+                    );
+                  })}
+                </div>
               </div>
+
+              <div className="mt-8">
+                <SectionHead label="Order Activity" />
+                <div className="mt-3 space-y-2">
+                  {activityLoading ? (
+                    <div className="bg-white rounded-xl border border-gray-100 px-4 py-3 text-xs font-bold text-gray-400">Loading activity...</div>
+                  ) : activity.length === 0 ? (
+                    <div className="bg-white rounded-xl border border-dashed border-gray-200 px-4 py-3 text-xs font-bold text-gray-400">No activity recorded yet</div>
+                  ) : activity.map((item) => (
+                    <div key={item._id} className="bg-white rounded-xl border border-gray-100 px-4 py-3 shadow-sm">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                        <p className="text-xs font-black text-gray-800 uppercase tracking-wider">{item.title}</p>
+                        <span className="text-[10px] font-bold text-gray-400">{formatDate(item.occurred_at, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <p className="text-[11px] font-bold text-emerald-600 mt-1">{item.actor?.name ? `By ${item.actor.name}` : 'System'}</p>
+                      {item.description && <p className="text-xs text-gray-500 mt-1">{item.description}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {allDone && (
+                <div className="mt-6">
+                  <button 
+                    onClick={() => handleSendToVerification(selected._id)}
+                    disabled={doneLoading === String(selected._id)}
+                    className="w-full py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xs font-black rounded-xl shadow-lg hover:shadow-xl active:scale-[0.98] transition-all disabled:opacity-50 uppercase tracking-widest flex items-center justify-center gap-2">
+                    {doneLoading === String(selected._id) ? (
+                      <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> SENDING...</>
+                    ) : (
+                      <><svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> SEND TO VERIFICATION</>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
-          </Modal>
+          </div>
         </div>
-      )}
+      )})()}
     </div>
   );
 }

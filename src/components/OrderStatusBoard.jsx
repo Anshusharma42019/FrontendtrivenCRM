@@ -105,14 +105,16 @@ const getDateParams = (preset, customFrom, customTo) => {
 export default function OrderStatusBoard({
   title = 'Order Status',
   subtitle,
-  defaultPreset = 'month',
+  defaultPreset = 'today',
+  defaultStatus = 'DELIVERED',
   onStatsChange,
+  filterParams,
 }) {
   const [deliveredStats, setDeliveredStats] = useState({ count: 0, revenue: 0, statusBreakdown: [] });
   const [datePreset, setDatePreset] = useState(defaultPreset);
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState(defaultStatus);
   const [statusOrders, setStatusOrders] = useState([]);
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusError, setStatusError] = useState('');
@@ -123,6 +125,51 @@ export default function OrderStatusBoard({
   const [savingNote, setSavingNote] = useState(null);
   const [noteError, setNoteError] = useState({});
   const navigate = useNavigate();
+
+  const loadDelivered = useCallback((params = {}) => {
+    srSvc.getDeliveredStats(params).then(res => {
+      const { count, revenue, statusBreakdown } = res.data?.data || {};
+      const stats = { count: count || 0, revenue: revenue || 0, statusBreakdown: statusBreakdown || [] };
+      setDeliveredStats(stats);
+      onStatsChange?.(stats);
+    }).catch((err) => {
+      console.error('[OrderStatusBoard] Error loading delivered stats:', err.response?.data?.message || err.message);
+    });
+  }, [onStatsChange]);
+
+  const loadStatusOrders = useCallback((status, params = {}) => {
+    setStatusLoading(true);
+    setStatusError('');
+    setStatusOrders([]);
+    srSvc.getStatusOrders({ ...params, status, limit: 100 }).then(res => {
+      const list = res.data?.data?.data || [];
+      setStatusOrders(list);
+      const c = {};
+      list.forEach(o => { if (o.comments?.length) c[o._id] = o.comments; });
+      setComments(prev => ({ ...prev, ...c }));
+    }).catch(e => {
+      setStatusOrders([]);
+      setStatusError(e?.response?.data?.message || e.message || 'Unable to load orders');
+    }).finally(() => setStatusLoading(false));
+  }, []);
+
+  // Effective parameters: either passed from prop or generated from local state
+  const getParams = useCallback(() => {
+    return filterParams || getDateParams(datePreset, filterFrom, filterTo);
+  }, [filterParams, datePreset, filterFrom, filterTo]);
+
+  // Load delivered stats and status orders whenever params or selected status change
+  useEffect(() => {
+    const params = getParams();
+    
+    // For local custom filter, only auto-load if dates are provided
+    if (!filterParams && datePreset === 'custom' && (!filterFrom || !filterTo)) return;
+
+    loadDelivered(params);
+    if (selectedStatus) {
+      loadStatusOrders(selectedStatus, params);
+    }
+  }, [getParams, selectedStatus, filterParams, datePreset, loadDelivered, loadStatusOrders]);
 
   const handleSaveNote = async (e, mongoId) => {
     e.stopPropagation();
@@ -140,30 +187,6 @@ export default function OrderStatusBoard({
       setSavingNote(null);
     }
   };
-
-  const loadDelivered = useCallback((params = {}) => {
-    srSvc.getDeliveredStats(params).then(res => {
-      const { count, revenue, statusBreakdown } = res.data?.data || {};
-      const stats = { count: count || 0, revenue: revenue || 0, statusBreakdown: statusBreakdown || [] };
-      setDeliveredStats(stats);
-      onStatsChange?.(stats);
-    }).catch(() => {});
-  }, [onStatsChange]);
-
-  const loadStatusOrders = useCallback((status, params = {}) => {
-    setStatusLoading(true);
-    setStatusError('');
-    srSvc.getStatusOrders({ ...params, status, limit: 100 }).then(res => {
-      const list = res.data?.data?.data || [];
-      setStatusOrders(list);
-      const c = {};
-      list.forEach(o => { if (o.comments?.length) c[o._id] = o.comments; });
-      setComments(prev => ({ ...prev, ...c }));
-    }).catch(e => {
-      setStatusOrders([]);
-      setStatusError(e?.response?.data?.message || e.message || 'Unable to load orders');
-    }).finally(() => setStatusLoading(false));
-  }, []);
 
   const applyDateFilter = useCallback((preset = datePreset, from = filterFrom, to = filterTo) => {
     if (preset === 'custom' && (!from || !to)) return;
@@ -204,7 +227,6 @@ export default function OrderStatusBoard({
 
   const openStatusDetails = (status) => {
     setSelectedStatus(status);
-    loadStatusOrders(status, getDateParams(datePreset, filterFrom, filterTo));
   };
 
   const statusCounts = deliveredStats.statusBreakdown.reduce((acc, item) => {
@@ -225,8 +247,7 @@ export default function OrderStatusBoard({
 
   useEffect(() => {
     setDatePreset(defaultPreset);
-    loadDelivered(getDateParams(defaultPreset, '', ''));
-  }, [defaultPreset, loadDelivered]);
+  }, [defaultPreset]);
 
   return (
     <div className={cardCls} style={cardStyle}>
@@ -236,32 +257,36 @@ export default function OrderStatusBoard({
           <p className="text-[11px] font-bold text-gray-400 mt-1 uppercase">{subtitle || `${orderTotal} ORDERS TOTAL`}</p>
         </div>
         <div className="w-full sm:w-auto flex flex-col gap-3">
-          <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
-            <div className="inline-flex items-center gap-1 rounded-xl bg-gray-100 p-1 shrink-0">
-              {DATE_FILTERS.map(filter => (
-                <button key={filter.id} onClick={() => selectDatePreset(filter.id)}
-                  className={`h-8 px-3 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap ${
-                    datePreset === filter.id ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}>
-                  {filter.label.toUpperCase()}
-                </button>
-              ))}
+          {!filterParams && (
+            <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
+              <div className="inline-flex items-center gap-1 rounded-xl bg-gray-100 p-1 shrink-0">
+                {DATE_FILTERS.map(filter => (
+                  <button key={filter.id} onClick={() => selectDatePreset(filter.id)}
+                    className={`h-8 px-3 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap ${
+                      datePreset === filter.id ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    }`}>
+                    {filter.label.toUpperCase()}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           <div className="flex items-center gap-2">
-            {datePreset === 'custom' && (
+            {!filterParams && datePreset === 'custom' && (
               <div className="flex-1 grid grid-cols-2 gap-2">
                 <input type="date" className={`${inp} w-full py-2`} value={filterFrom} onChange={e => setFilterFrom(e.target.value)} />
                 <input type="date" className={`${inp} w-full py-2`} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
               </div>
             )}
-            <button onClick={() => applyDateFilter()}
-              className="h-9 text-[11px] bg-green-600 text-white px-5 rounded-xl hover:bg-green-700 font-bold shadow-md transition active:scale-95 inline-flex items-center justify-center gap-2">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
-                <path d="M3 4h18M6 12h12M10 20h4"/>
-              </svg>
-              APPLY
-            </button>
+            {!filterParams && (
+              <button onClick={() => applyDateFilter()}
+                className="h-9 text-[11px] bg-green-600 text-white px-5 rounded-xl hover:bg-green-700 font-bold shadow-md transition active:scale-95 inline-flex items-center justify-center gap-2">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
+                  <path d="M3 4h18M6 12h12M10 20h4"/>
+                </svg>
+                APPLY
+              </button>
+            )}
             <button onClick={handleSync} disabled={syncing}
               title="Sync from Shiprocket"
               className={`h-9 px-4 rounded-xl text-[11px] font-bold inline-flex items-center gap-1.5 transition active:scale-95 disabled:opacity-60 ${
@@ -341,12 +366,12 @@ export default function OrderStatusBoard({
           {!statusLoading && !statusError && statusOrders.length > 0 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {statusOrders.map(order => (
-                <div key={order._id} onClick={() => navigate(`/orders/${order.order_id || order.shiprocket_order_id}`)}
-                  className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all">
+                <div key={order._id}
+                  className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow-md transition-all">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-xs text-gray-400 font-semibold">Order</p>
-                      <p className="text-sm font-bold text-gray-800 truncate">{order.order_id || order.shiprocket_order_id || '-'}</p>
+                    <div className="min-w-0 cursor-pointer group" onClick={() => navigate(`/orders/${order.order_id || order.shiprocket_order_id}`)}>
+                      <p className="text-xs text-gray-400 font-semibold group-hover:text-green-600 transition-colors">Order</p>
+                      <p className="text-sm font-bold text-gray-800 truncate group-hover:text-green-600 transition-colors underline decoration-dotted underline-offset-2">{order.order_id || order.shiprocket_order_id || '-'}</p>
                     </div>
                     <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${STATUS_STYLES[normalizeStatus(order.status)] || 'border-gray-200 bg-gray-50 text-gray-600'}`}>
                       {formatStatusLabel(order.status || selectedStatus)}
@@ -375,11 +400,11 @@ export default function OrderStatusBoard({
                       <p className="text-gray-400 font-semibold">Date</p>
                       <p className="font-semibold text-gray-700">{formatDateTime(order.createdAt)}</p>
                     </div>
-                    <div>
+                    <div onClick={e => e.stopPropagation()}>
                       <p className="text-gray-400 font-semibold">AWB</p>
                       {order.awb_code
-                        ? <span className="font-mono font-semibold text-blue-600 truncate">{order.awb_code}</span>
-                        : <p className="font-mono font-semibold text-blue-600 truncate">-</p>
+                        ? <span className="font-mono font-bold text-blue-600 truncate select-all cursor-text">{order.awb_code}</span>
+                        : <p className="font-mono font-semibold text-gray-400 truncate">-</p>
                       }
                     </div>
                     <div>
@@ -409,7 +434,7 @@ export default function OrderStatusBoard({
                     {/* Existing comments list */}
                     {(comments[order._id] || order.comments || []).length > 0 && (
                       <div className="mb-2 space-y-1.5 max-h-32 overflow-y-auto">
-                        {(comments[order._id] || order.comments || []).map((c, i) => (
+                        {(comments[order._id] || order.comments || []).filter(c => c.type !== 'followup').map((c, i) => (
                           <div key={i} className="bg-gray-50 rounded-lg px-3 py-2">
                             <div className="flex items-center justify-between gap-2 mb-0.5">
                               <span className="text-[10px] font-bold text-green-700">

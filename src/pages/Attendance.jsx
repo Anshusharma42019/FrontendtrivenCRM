@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import * as svc from '../services/attendance.service';
-import { fetchAllStaffCommissions } from '../services/dashboard.service';
+import { fetchAllStaffCommissions, saveCommissionOverride as dashboardSaveOverride } from '../services/dashboard.service';
 import { getUsers } from '../services/user.service';
 import Modal from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
@@ -328,6 +328,10 @@ function AdminAttendance() {
   const [commMonth, setCommMonth] = useState({ month: now.getMonth(), year: now.getFullYear() });
   const [commLoading, setCommLoading] = useState(false);
   const [showCommission, setShowCommission] = useState(true);
+  const [editingComm, setEditingComm] = useState(null); // { userId, field: 'commission' | 'base' }
+  const [editVal, setEditVal] = useState('');
+  const { success, error: toastError, info } = useToast();
+
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -357,6 +361,27 @@ function AdminAttendance() {
       .finally(() => { if (!cancelled) setCommLoading(false); });
     return () => { cancelled = true; };
   }, [commMonth]);
+
+  const handleSaveOverride = async () => {
+    if (!editingComm) return;
+    try {
+      await dashboardSaveOverride({
+        userId: editingComm.userId,
+        month: commMonth.month,
+        year: commMonth.year,
+        [editingComm.field === 'commission' ? 'manualCommission' : 'manualBasePay']: Number(editVal)
+      });
+      success('Override saved successfully');
+      setEditingComm(null);
+      setCommLoading(true);
+      const d = await fetchAllStaffCommissions(commMonth.month, commMonth.year);
+      setCommData(d);
+      setCommLoading(false);
+    } catch (e) {
+      toastError(e.response?.data?.message || 'Failed to save override');
+    }
+  };
+
 
   const openUser = async (u) => {
     setSelectedUser(u); setModalLoading(true);
@@ -439,7 +464,7 @@ function AdminAttendance() {
             </div>
             <div className="text-left">
               <h3 className="text-xl font-black text-gray-900 tracking-tight">Salary Hub</h3>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Attendance-based Base Pay + 5% Commission</p>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Attendance-based Base Pay + Performance Commission</p>
             </div>
           </div>
           <div className={`w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400 transition-transform ${showCommission ? 'rotate-180' : ''}`}>
@@ -473,16 +498,26 @@ function AdminAttendance() {
               </div>
             ) : commData ? (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                   {[
-                    { label: 'Deliveries', val: commData.grandTotalDeliveries, text: 'text-blue-600', bg: 'bg-blue-50' },
-                    { label: 'Revenue', val: `₹${(commData.grandTotalRevenue || 0).toLocaleString('en-IN')}`, text: 'text-green-600', bg: 'bg-green-50' },
-                    { label: 'Commission', val: `₹${(commData.grandTotalCommission || 0).toLocaleString('en-IN')}`, text: 'text-amber-600', bg: 'bg-amber-50' },
+                    { label: 'Deliveries', val: commData.grandTotalDeliveries, text: 'text-blue-600', bg: 'bg-blue-50/50', sub: commData.unassignedDeliveries > 0 ? `${commData.unassignedDeliveries} U` : null },
+                    { label: 'Revenue', val: `₹${(commData.grandTotalRevenue || 0).toLocaleString('en-IN')}`, text: 'text-green-600', bg: 'bg-green-50/50' },
+                    { label: 'Commission', val: `₹${(commData.grandTotalCommission || 0).toLocaleString('en-IN')}`, text: 'text-amber-600', bg: 'bg-amber-50/50' },
                     { label: 'Total Payout', val: `₹${(commData.grandTotalPay || 0).toLocaleString('en-IN')}`, text: 'text-emerald-400', bg: 'bg-gray-900', dark: true },
                   ].map(x => (
-                    <div key={x.label} className={`rounded-3xl p-5 ${x.bg} shadow-sm border border-black/5`}>
-                      <p className={`text-2xl font-black ${x.text} tracking-tight`}>{x.val}</p>
-                      <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${x.dark ? 'text-white/40' : 'text-gray-400'}`}>{x.label}</p>
+                    <div key={x.label} className={`group relative overflow-hidden rounded-[2rem] p-5 ${x.bg} border border-black/5 transition-all hover:shadow-xl hover:-translate-y-1`}>
+                      <div className="relative z-10">
+                        <div className="flex items-start justify-between mb-1">
+                          <p className={`text-2xl font-black ${x.text} tracking-tight`}>{x.val}</p>
+                          {x.sub && (
+                            <span className="text-[7px] font-black bg-blue-600 text-white px-1.5 py-0.5 rounded-md shadow-lg shadow-blue-500/20 uppercase tracking-widest">
+                              {x.sub}
+                            </span>
+                          )}
+                        </div>
+                        <p className={`text-[10px] font-black uppercase tracking-[0.15em] ${x.dark ? 'text-white/40' : 'text-gray-400'}`}>{x.label}</p>
+                      </div>
+                      <div className={`absolute -right-6 -bottom-6 w-20 h-20 rounded-full opacity-[0.05] group-hover:scale-125 transition-transform ${x.dark ? 'bg-white' : 'bg-current'}`} style={{ color: x.text.includes('blue') ? '#3b82f6' : x.text.includes('green') ? '#22c55e' : x.text.includes('amber') ? '#f59e0b' : '#10b981' }} />
                     </div>
                   ))}
                 </div>
@@ -495,6 +530,7 @@ function AdminAttendance() {
                         <th className="text-center py-5 px-4 font-black uppercase tracking-widest">History</th>
                         <th className="text-center py-5 px-4 font-black uppercase tracking-widest">Activity</th>
                         <th className="text-right py-5 px-4 font-black uppercase tracking-widest">Base</th>
+                        <th className="text-right py-5 px-4 font-black uppercase tracking-widest text-amber-600">Commission</th>
                         <th className="text-right py-5 px-6 font-black uppercase tracking-widest text-emerald-600">Final</th>
                       </tr>
                     </thead>
@@ -525,12 +561,88 @@ function AdminAttendance() {
                                <span className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">delivered</span>
                             </div>
                           </td>
-                          <td className="text-right py-5 px-4 text-gray-400 font-bold">₹{s.basePay?.toLocaleString()}</td>
+                          <td className="text-right py-5 px-4 text-gray-400 font-bold text-[10px]">
+                            {editingComm?.userId === s.user._id && editingComm?.field === 'base' ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <input type="number" className="w-16 px-2 py-1 bg-white border border-gray-200 rounded text-right text-[10px] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                  value={editVal} onChange={e => setEditVal(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && handleSaveOverride()} />
+                                <button onClick={handleSaveOverride} className="text-emerald-500">✓</button>
+                                <button onClick={() => setEditingComm(null)} className="text-red-400">×</button>
+                              </div>
+                            ) : (
+                              <div className="cursor-pointer hover:text-gray-900 group/cell" onClick={() => {
+                                setEditingComm({ userId: s.user._id, field: 'base' });
+                                setEditVal(s.basePay);
+                              }}>
+                                ₹{s.basePay?.toLocaleString()}
+                                <div className="text-[8px] opacity-0 group-hover/cell:opacity-60 font-black">EDIT BASE</div>
+                                <div className="text-[8px] opacity-60 font-black group-hover/cell:hidden">BASE</div>
+                              </div>
+                            )}
+                          </td>
+                          <td className="text-right py-5 px-4">
+                            <div className="flex flex-col items-end">
+                              {editingComm?.userId === s.user._id && editingComm?.field === 'commission' ? (
+                                <div className="flex items-center justify-end gap-1">
+                                  <input type="number" className="w-20 px-2 py-1 bg-white border border-gray-200 rounded text-right text-xs font-black focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                    value={editVal} onChange={e => setEditVal(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && handleSaveOverride()} />
+                                  <button onClick={handleSaveOverride} className="text-emerald-500">✓</button>
+                                  <button onClick={() => setEditingComm(null)} className="text-red-400">×</button>
+                                </div>
+                              ) : (
+                                <div className="cursor-pointer hover:bg-amber-50 rounded-lg p-1 transition-colors group/comm" onClick={() => {
+                                  setEditingComm({ userId: s.user._id, field: 'commission' });
+                                  setEditVal(s.totalCommission);
+                                }}>
+                                  <span className="font-black text-amber-600 text-sm">₹{(s.totalCommission || 0).toLocaleString()}</span>
+                                  <div className="text-[9px] text-amber-400 font-bold uppercase tracking-tighter">
+                                    @{s.user.commissionRate || 5}% <span className="opacity-0 group-hover/comm:opacity-100">· EDIT</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+
                           <td className="text-right py-5 px-6">
                             <span className="text-base font-black text-gray-900 tracking-tight">₹{s.totalPay?.toLocaleString()}</span>
                           </td>
                         </tr>
                       ))}
+
+                      {commData.unassignedDeliveries > 0 && (
+                        <tr className="bg-gray-50/50 italic border-t-2 border-dashed border-gray-200">
+                          <td className="py-5 px-6">
+                            <div className="flex items-center gap-3 opacity-60">
+                              <div className="w-10 h-10 rounded-2xl bg-gray-200 flex items-center justify-center text-gray-400 text-sm font-black uppercase shadow-sm">U</div>
+                              <div>
+                                <p className="font-black text-gray-500 text-sm">Unassigned Orders</p>
+                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">No Staff Assigned</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="text-center py-5 px-4">
+                            <span className="text-gray-300">—</span>
+                          </td>
+                          <td className="text-center py-5 px-4">
+                            <div className="flex flex-col">
+                               <span className="font-black text-gray-400 text-sm">{commData.unassignedDeliveries}</span>
+                               <span className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">delivered</span>
+                            </div>
+                          </td>
+                          <td className="text-right py-5 px-4">
+                            <div className="flex flex-col items-end opacity-40">
+                               <span className="font-black text-gray-500 text-[10px]">₹{commData.unassignedRevenue?.toLocaleString()}</span>
+                               <span className="text-[8px] font-black uppercase tracking-tighter">revenue</span>
+                             </div>
+                          </td>
+                          <td className="text-right py-5 px-4">
+                            <span className="text-gray-300">—</span>
+                          </td>
+                          <td className="text-right py-5 px-6">
+                            <span className="text-gray-300">—</span>
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -605,10 +717,52 @@ function AdminAttendance() {
 /* ─── Main Export ─── */
 export default function Attendance() {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin' || user?.role === 'manager';
+  const isAdmin = user?.role === 'admin';
+  const isManager = user?.role === 'manager';
+  const [activeTab, setActiveTab] = useState(isAdmin || isManager ? 'team' : 'personal');
+
+  // Admin sees management only, no personal attendance needed
+  if (isAdmin) return <div className="container mx-auto px-4 py-8"><AdminAttendance /></div>;
+  
+  // Sales sees personal only
+  if (!isManager) return <div className="container mx-auto px-4 py-8"><StaffAttendance /></div>;
+
+  // Managers see the toggle
   return (
-    <div className="container mx-auto px-4 py-8">
-      {isAdmin ? <AdminAttendance /> : <StaffAttendance />}
+    <div className="container mx-auto px-4 py-8 space-y-8">
+      {/* Tab Switcher */}
+      <div className="flex items-center gap-1 p-1 bg-gray-200/50 backdrop-blur-md rounded-[1.25rem] w-fit mx-auto shadow-inner border border-black/5">
+        <button 
+          onClick={() => setActiveTab('team')}
+          className={`flex items-center gap-2 px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${
+            activeTab === 'team' 
+              ? 'bg-gray-900 text-white shadow-xl scale-105' 
+              : 'text-gray-400 hover:text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          Team Hub
+        </button>
+        <button 
+          onClick={() => setActiveTab('personal')}
+          className={`flex items-center gap-2 px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${
+            activeTab === 'personal' 
+              ? 'bg-gray-900 text-white shadow-xl scale-105' 
+              : 'text-gray-400 hover:text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          My Attendance
+        </button>
+      </div>
+      
+      <div className="transition-all duration-500">
+        {activeTab === 'team' ? <AdminAttendance /> : <StaffAttendance />}
+      </div>
     </div>
   );
 }

@@ -133,8 +133,8 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
   // NDR
   const [ndrs, setNdrs] = useState([]);
   const [ndrAction, setNdrAction] = useState({ awb: '', action: 'reattempt', comment: '' });
-  const [ndrFrom, setNdrFrom] = useState('');
-  const [ndrTo, setNdrTo] = useState('');
+  const [ndrFrom, setNdrFrom] = useState(() => new Date().toISOString().split('T')[0]);
+  const [ndrTo, setNdrTo] = useState(() => new Date().toISOString().split('T')[0]);
   const [ndrLoading, setNdrLoading] = useState(false);
   const [ndrAttemptFilter, setNdrAttemptFilter] = useState('all');
   const [selectedNdr, setSelectedNdr] = useState(null);
@@ -557,7 +557,7 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
       {/* NDR */}
       {tab === 'ndr' && (
         <div className="space-y-4">
-          <OrderStatusBoard title="Order Status" />
+          <OrderStatusBoard title="Order Status" defaultStatus="UNDELIVERED-1ST_ATTEMPT" />
 
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
             <div className="h-1 bg-red-500" />

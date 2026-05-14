@@ -22,6 +22,7 @@ import Attendance from './pages/Attendance';
 import OrderDetail from './pages/OrderDetail';
 import AppointmentBook from './pages/AppointmentBook';
 import DoctorDashboard from './pages/DoctorDashboard';
+import ReorderCommission from './pages/ReorderCommission';
 
 function AppRoutes() {
   const { user } = useAuth();
@@ -46,6 +47,11 @@ function AppRoutes() {
         <Route path="attendance" element={<Attendance />} />
         <Route path="appointments" element={<AppointmentBook />} />
         <Route path="follow-up" element={<FollowUp />} />
+        <Route path="reorder-commission" element={
+          <ProtectedRoute roles={['admin']}>
+            <ReorderCommission />
+          </ProtectedRoute>
+        } />
         <Route path="verification" element={<Verification />} />
         <Route path="ready-to-shipment" element={<ReadyToShipment />} />
         <Route path="shiprocket" element={<Shiprocket />} />

@@ -18,7 +18,7 @@ const icons = {
 };
 
 const ROLES = ['manager', 'sales', 'doctor', 'staff'];
-const EMPTY = { name: '', phone: '', password: '', role: 'manager', baseSalary: 0, specialization: '' };
+const EMPTY = { name: '', phone: '', password: '', role: 'manager', baseSalary: 0, commissionRate: 5, specialization: '' };
 
 const ROLE_GRADIENT = {
   admin:   'from-purple-500 to-violet-600',
@@ -130,7 +130,15 @@ export default function Users() {
   const openCreate = () => { setForm(EMPTY); setError(''); setModal('create'); };
   const openEdit = (u) => {
     setSelected(u);
-    setForm({ name: u.name, phone: u.phone || '', password: '', role: u.role, baseSalary: u.baseSalary || 0, specialization: u.specialization || '' });
+    setForm({ 
+      name: u.name, 
+      phone: u.phone || '', 
+      password: '', 
+      role: u.role, 
+      baseSalary: u.baseSalary || 0, 
+      commissionRate: u.commissionRate || 5,
+      specialization: u.specialization || '' 
+    });
     setError(''); setModal('edit');
   };
 
@@ -286,7 +294,7 @@ export default function Users() {
                       </tr>
                       {grouped[role].map(u => {
                         const s = staffStats[u._id] || {};
-                        const readyCount = s.readyToShipmentCount !== undefined ? s.readyToShipmentCount : (shipmentCounts[u._id] || 0);
+                        const readyCount = s.readyToShipmentCount || 0;
                         return (
                           <tr key={u._id} className="hover:bg-gradient-to-r hover:from-white hover:to-gray-50/50 transition-all duration-300 group relative">
                       <td className="py-4 px-6">
@@ -612,9 +620,15 @@ export default function Users() {
               </div>
             )}
             {form.role !== 'admin' && form.role !== 'doctor' && (
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Base Salary (Monthly)</label>
-                <input type="number" className={`${inputCls} mt-1.5`} value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: Number(e.target.value) })} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Base Salary (Monthly)</label>
+                  <input type="number" className={`${inputCls} mt-1.5`} value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: Number(e.target.value) })} />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Commission (%)</label>
+                  <input type="number" className={`${inputCls} mt-1.5`} value={form.commissionRate} onChange={(e) => setForm({ ...form, commissionRate: Number(e.target.value) })} />
+                </div>
               </div>
             )}
             <div className="flex flex-col sm:flex-row gap-3 pt-4">

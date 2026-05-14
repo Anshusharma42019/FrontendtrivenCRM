@@ -48,6 +48,10 @@ export const syncShiprocket = () => api.post(`${BASE}/orders/sync`);
 export const backfillDeliveredAt = () => api.post(`${BASE}/orders/backfill-delivered`);
 export const debugOrderFields = () => api.get(`${BASE}/orders/debug-fields`);
 export const getOrder = (id) => api.get(`${BASE}/orders/show/${id}`);
+export const getFollowupCommissionSettings = () => api.get(`${BASE}/settings/followups-commission`);
+export const updateFollowupCommissionSettings = (body) => api.patch(`${BASE}/settings/followups-commission`, body);
+export const getOrderActivity = (id) => api.get(`${BASE}/orders/${id}/activity`);
+export const getStaffCommissions = (params) => api.get(`${BASE}/commissions`, { params });
 
 // ── Courier ───────────────────────────────────────────────────────────────────
 export const checkServiceability = (params) => api.get(`${BASE}/courier/serviceability`, { params });
@@ -90,4 +94,4 @@ export const ndrAction = (body) => api.post(`${BASE}/ndr/action`, body);
 
 // ── Next order ID ─────────────────────────────────────────────────────────────
 export const getNextOrderId = () => api.get(`${BASE}/next-order-id`);
-export const saveOrderNote = (id, text) => api.patch(`${BASE}/orders/${id}/notes`, { text });
+export const saveOrderNote = (id, text, type = 'general') => api.patch(`${BASE}/orders/${id}/notes`, { text, type });

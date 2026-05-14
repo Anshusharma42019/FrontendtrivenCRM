@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import StatCard from '../components/ui/StatCard';
 import { 
   fetchStats, 
@@ -6,7 +6,8 @@ import {
   fetchAllStaffStats, 
   fetchStaffStats, 
   fetchStaffMonthlyChart, 
-  fetchStaffCommission 
+  fetchStaffCommission,
+  fetchAllStaffCommissions 
 } from '../services/dashboard.service';
 import * as attendanceSvc from '../services/attendance.service';
 import { useAuth } from '../context/AuthContext';
@@ -15,6 +16,50 @@ import OrderStatusBoard from '../components/OrderStatusBoard';
 
 const cardCls = "bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow";
 const cardStyle = { border: '1px solid rgba(0,0,0,0.05)' };
+const inp = 'border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-green-500 bg-white';
+
+const DATE_FILTERS = [
+  { id: 'today', label: 'Today' },
+  { id: 'yesterday', label: 'Yesterday' },
+  { id: 'last7', label: 'Last 7 Days' },
+  { id: 'month', label: 'This Month' },
+  { id: 'all', label: 'All Time' },
+  { id: 'custom', label: 'Custom' },
+];
+
+const formatDateInput = (date) => {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const getDateParams = (preset, customFrom, customTo) => {
+  if (preset === 'all') return {};
+  const today = new Date();
+  const to = formatDateInput(today);
+  if (preset === 'today') return { filterType: 'range', from: to, to };
+  if (preset === 'yesterday') {
+    const d = new Date(today);
+    d.setDate(d.getDate() - 1);
+    const day = formatDateInput(d);
+    return { filterType: 'range', from: day, to: day };
+  }
+  if (preset === 'last7') {
+    const d = new Date(today);
+    d.setDate(d.getDate() - 6);
+    return { filterType: 'range', from: formatDateInput(d), to };
+  }
+  if (preset === 'month') {
+    const d = new Date(today.getFullYear(), today.getMonth(), 1);
+    return { filterType: 'range', from: formatDateInput(d), to };
+  }
+  if (preset === 'custom' && customFrom && customTo) {
+    return { filterType: 'range', from: customFrom, to: customTo };
+  }
+  return {};
+};
+
 const icons = {
   cnp: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M16.5 1.5a4.5 4.5 0 0 1 4.5 4.5v12a4.5 4.5 0 0 1-4.5 4.5h-9A4.5 4.5 0 0 1 3 18V6a4.5 4.5 0 0 1 4.5-4.5h9z"/><line x1="4" y1="4" x2="20" y2="20"/></svg>,
   callAgain: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 11.61 19a19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 3.09 4.18 2 2 0 0 1 5.07 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L9.91 9.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>,
@@ -35,27 +80,38 @@ export default function Dashboard() {
   const [todayLists, setTodayLists] = useState({ cnpList: [], callAgainList: [], interestedList: [], notInterestedList: [], onHoldList: [] });
   const [staffStats, setStaffStats] = useState(null);
   const [monthlyChart, setMonthlyChart] = useState([]);
+  const [attStatus, setAttStatus] = useState(null);
+  const [attLoading, setAttLoading] = useState(false);
   const [commission, setCommission] = useState(null);
   const [commMonth, setCommMonth] = useState(() => { const n = new Date(); return { month: n.getMonth(), year: n.getFullYear() }; });
   const [commLoading, setCommLoading] = useState(false);
   const [openSection, setOpenSection] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  
+  const [datePreset, setDatePreset] = useState('today');
+  const [filterFrom, setFilterFrom] = useState('');
+  const [filterTo, setFilterTo] = useState('');
 
   const load = useCallback(async () => {
+    const params = getDateParams(datePreset, filterFrom, filterTo);
+    const { from, to } = params;
+    const selectedDate = (datePreset === 'today' || !from) ? new Date().toISOString().split('T')[0] : from;
+
     try {
-      const [s, lists, personal, chart] = await Promise.allSettled([
-        fetchStats(selectedDate),
-        fetchStaffTodayLists(selectedDate),
-        fetchStaffStats(selectedDate),
-        fetchStaffMonthlyChart()
+      const [s, lists, personal, chart, att] = await Promise.allSettled([
+        fetchStats(selectedDate, from, to),
+        fetchStaffTodayLists(selectedDate, null, from, to),
+        fetchStaffStats(selectedDate, null, from, to),
+        fetchStaffMonthlyChart(),
+        attendanceSvc.getTodayStatus()
       ]);
       if (s.status === 'fulfilled') setStats(s.value);
       if (lists.status === 'fulfilled') setTodayLists(lists.value || { cnpList: [], callAgainList: [], interestedList: [], notInterestedList: [], onHoldList: [] });
       if (personal.status === 'fulfilled') setStaffStats(personal.value || null);
       if (chart.status === 'fulfilled') setMonthlyChart(Array.isArray(chart.value) ? chart.value : []);
+      if (att.status === 'fulfilled') setAttStatus(att.value);
     } catch (e) { console.error('Dashboard load error:', e); }
     finally { setLoading(false); }
-  }, [selectedDate]);
+  }, [datePreset, filterFrom, filterTo]);
 
   useEffect(() => {
     load();
@@ -66,13 +122,67 @@ export default function Dashboard() {
   useEffect(() => {
     let cancelled = false;
     setCommLoading(true);
-    fetchStaffCommission(commMonth.month, commMonth.year)
-      .then(d => { if (!cancelled) setCommission(d); })
+    
+    const isPrivileged = user?.role === 'admin' || user?.role === 'manager';
+    const fetchFunc = isPrivileged ? fetchAllStaffCommissions : fetchStaffCommission;
+
+    fetchFunc(commMonth.month, commMonth.year)
+      .then(d => { 
+        if (!cancelled) {
+          if (isPrivileged) {
+            setCommission({
+              totalPay: d.grandTotalPay,
+              basePay: (d.grandTotalPay || 0) - (d.grandTotalCommission || 0),
+              totalCommission: d.grandTotalCommission,
+              revenue: d.grandTotalRevenue
+            });
+          } else {
+            setCommission(d);
+          }
+        } 
+      })
       .catch(() => {})
       .finally(() => { if (!cancelled) setCommLoading(false); });
     return () => { cancelled = true; };
-  }, [commMonth]);
+  }, [commMonth, user?.role]);
 
+  const checkedIn = !!attStatus?.checkIn;
+  const checkedOut = !!attStatus?.checkOut;
+  const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : null;
+
+  const handleCheckIn = async () => {
+    setAttLoading(true);
+    try { 
+      const res = await attendanceSvc.checkIn(); 
+      setAttStatus(res); 
+      success('Good morning! You have checked in successfully.', 'Clock In');
+    }
+    catch (e) { error(e.response?.data?.message || 'Check-in failed'); }
+    setAttLoading(false);
+  };
+  const handleCheckOut = async () => {
+    setAttLoading(true);
+    try { 
+      const res = await attendanceSvc.checkOut(); 
+      setAttStatus(res); 
+      info('Work day finished. Take care!', 'Clock Out');
+    }
+    catch (e) { error(e.response?.data?.message || 'Check-out failed'); }
+    setAttLoading(false);
+  };
+
+  const selectDatePreset = (preset) => {
+    setDatePreset(preset);
+    if (preset === 'custom') {
+      const today = new Date();
+      const from = formatDateInput(new Date(today.getFullYear(), today.getMonth(), 1));
+      const to = formatDateInput(today);
+      setFilterFrom(from);
+      setFilterTo(to);
+    }
+  };
+
+  const filterParams = useMemo(() => getDateParams(datePreset, filterFrom, filterTo), [datePreset, filterFrom, filterTo]);
 
   if (loading && !stats) return (
     <div className="flex items-center justify-center h-64">
@@ -82,17 +192,101 @@ export default function Dashboard() {
       </div>
     </div>
   );
+  const getPeriodLabel = () => {
+    if (datePreset === 'today') return 'Today';
+    if (datePreset === 'yesterday') return 'Yesterday';
+    if (datePreset === 'last7') return 'Last 7 Days';
+    if (datePreset === 'month') return 'This Month';
+    if (datePreset === 'all') return 'All Time';
+    return `${filterFrom} to ${filterTo}`;
+  };
 
   return (
     <div className="space-y-6">
+      {/* Date Filter Bar */}
+      <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 ${cardCls}`} style={cardStyle}>
+        <div className="flex items-center gap-2">
+           <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
+             <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+           </div>
+           <div>
+             <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wider">Dashboard Overview</h2>
+             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Filtering for: {getPeriodLabel().toUpperCase()}</p>
+           </div>
+        </div>
+        
+        <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-3">
+          <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
+            <div className="inline-flex items-center gap-1 rounded-xl bg-gray-100 p-1 shrink-0">
+              {DATE_FILTERS.map(filter => (
+                <button key={filter.id} onClick={() => selectDatePreset(filter.id)}
+                  className={`h-8 px-3 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap ${
+                    datePreset === filter.id ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  {filter.label.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+          {datePreset === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input type="date" className={`${inp} py-2`} value={filterFrom} onChange={e => setFilterFrom(e.target.value)} />
+              <input type="date" className={`${inp} py-2`} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
+              <button onClick={load} className="h-9 px-4 rounded-xl bg-green-600 text-white text-[10px] font-bold hover:bg-green-700 transition active:scale-95">APPLY</button>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Stat Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
         <StatCard label="Total Leads" value={stats?.totalLeads} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} color="border-green-500" />
-        <StatCard label={selectedDate === new Date().toISOString().split('T')[0] ? "New Leads Today" : `Leads Added on ${selectedDate}`} value={stats?.newLeadsToday} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>} color="border-blue-500" />
+        <StatCard label={datePreset === 'all' ? "New Leads (Total)" : `New Leads (${getPeriodLabel()})`} value={stats?.newLeadsToday} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>} color="border-blue-500" />
         <StatCard label="Ready to Shipment" value={stats?.readyToShipmentCount} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>} color="border-purple-500" />
-        <StatCard label="Delivered Orders" value={deliveredStats.count} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>} color="border-emerald-500" />
-        <StatCard label="Delivered Revenue" value={`₹${deliveredStats.revenue.toLocaleString()}`} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>} color="border-teal-500" />
+        <StatCard label={`Delivered (${getPeriodLabel()})`} value={deliveredStats.count} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>} color="border-emerald-500" />
+        <StatCard label={`Revenue (${getPeriodLabel()})`} value={`₹${deliveredStats.revenue.toLocaleString()}`} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>} color="border-teal-500" />
       </div>
+
+      {/* Attendance Quick Card (Managers Only) */}
+      {user?.role === 'manager' && (
+        <div className={cardCls} style={{ ...cardStyle, background: 'linear-gradient(135deg, #0d1f0d, #1a3a1a)', border: 'none' }}>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+                <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              <div>
+                <p className="text-white font-semibold text-sm">Personal Attendance</p>
+                <p className="text-green-300/60 text-xs mt-0.5">
+                  {checkedIn && checkedOut ? `In: ${fmtTime(attStatus.checkIn)} · Out: ${fmtTime(attStatus.checkOut)}`
+                    : checkedIn ? `Checked in at ${fmtTime(attStatus.checkIn)}`
+                    : 'Not checked in yet'}
+                </p>
+              </div>
+            </div>
+            <div>
+              {!checkedIn ? (
+                <button onClick={handleCheckIn} disabled={attLoading}
+                  className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
+                  {attLoading ? 'Processing...' : <><svg className="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> Clock In</>}
+                </button>
+              ) : !checkedOut ? (
+                <button onClick={handleCheckOut} disabled={attLoading}
+                  className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg, #ea580c, #c2410c)' }}>
+                  {attLoading ? 'Processing...' : <><svg className="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> Clock Out</>}
+                </button>
+              ) : (
+                <span className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-500/20 text-green-300 text-sm font-semibold">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/></svg>
+                  Day Complete
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* My Activity Counts (Staff Only) */}
       {user?.role === 'sales' && (
@@ -123,7 +317,7 @@ export default function Dashboard() {
       )}
 
       {/* Order Status Cards */}
-      <OrderStatusBoard onStatsChange={setDeliveredStats} defaultPreset="today" />
+      <OrderStatusBoard onStatsChange={setDeliveredStats} filterParams={filterParams} />
 
       {/* Earnings & Activity Chart Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -148,6 +342,12 @@ export default function Dashboard() {
              <div className="flex items-center justify-center py-10"><div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
           ) : commission ? (
             <div className="space-y-4">
+              {(user?.role === 'admin' || user?.role === 'manager') && (
+                <div className="bg-emerald-600 rounded-2xl p-5 text-center shadow-lg border border-emerald-500/50">
+                  <p className="text-2xl font-bold text-white">₹{(commission.revenue || 0).toLocaleString('en-IN')}</p>
+                  <p className="text-[10px] text-emerald-100 font-bold uppercase tracking-widest mt-1">Total Revenue</p>
+                </div>
+              )}
               <div className="bg-gray-900 rounded-2xl p-5 text-center shadow-lg">
                 <p className="text-2xl font-bold text-white">₹{(commission.totalPay || 0).toLocaleString('en-IN')}</p>
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Total Payouts</p>
@@ -230,11 +430,11 @@ export default function Dashboard() {
       {user?.role === 'sales' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {[
-            { key: 'cnp', label: selectedDate === new Date().toISOString().split('T')[0] ? 'CNP List (Today)' : `CNP List (${selectedDate})`, icon: icons.cnp, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-100', list: todayLists.cnpList },
-            { key: 'callAgain', label: selectedDate === new Date().toISOString().split('T')[0] ? 'Call Again List (Today)' : `Call Again List (${selectedDate})`, icon: icons.callAgain, color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-100', list: todayLists.callAgainList },
-            { key: 'interested', label: selectedDate === new Date().toISOString().split('T')[0] ? 'Interested List (Today)' : `Interested List (${selectedDate})`, icon: icons.interested, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100', list: todayLists.interestedList },
-            { key: 'onHold', label: selectedDate === new Date().toISOString().split('T')[0] ? 'On Hold List (Today)' : `On Hold List (${selectedDate})`, icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', list: todayLists.onHoldList },
-            { key: 'notInterested', label: selectedDate === new Date().toISOString().split('T')[0] ? 'Not Interested List (Today)' : `Not Interested List (${selectedDate})`, icon: icons.notInterested, color: 'text-gray-500', bg: 'bg-gray-50', border: 'border-gray-100', list: todayLists.notInterestedList },
+            { key: 'cnp', label: `CNP List (${getPeriodLabel()})`, icon: icons.cnp, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-100', list: todayLists.cnpList },
+            { key: 'callAgain', label: `Call Again List (${getPeriodLabel()})`, icon: icons.callAgain, color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-100', list: todayLists.callAgainList },
+            { key: 'interested', label: `Interested List (${getPeriodLabel()})`, icon: icons.interested, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100', list: todayLists.interestedList },
+            { key: 'onHold', label: `On Hold List (${getPeriodLabel()})`, icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', list: todayLists.onHoldList },
+            { key: 'notInterested', label: `Not Interested List (${getPeriodLabel()})`, icon: icons.notInterested, color: 'text-gray-500', bg: 'bg-gray-50', border: 'border-gray-100', list: todayLists.notInterestedList },
           ].map(({ key, label, icon, color, bg, border, list }) => (
             <div key={key} className={cardCls} style={cardStyle}>
               <button className="w-full flex items-center justify-between"
@@ -249,7 +449,7 @@ export default function Dashboard() {
               {openSection === key && (
                 <div className="mt-4 divide-y divide-gray-50 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
                   {list.length === 0 ? (
-                    <p className="text-sm text-gray-400 text-center py-6">No records for {selectedDate === new Date().toISOString().split('T')[0] ? 'today' : selectedDate}</p>
+                    <p className="text-sm text-gray-400 text-center py-6">No records for {getPeriodLabel()}</p>
                   ) : list.map((item, i) => (
                     <div key={item._id} className="py-3 flex items-center gap-3">
                       <div className={`w-7 h-7 rounded-lg ${bg} flex items-center justify-center text-[10px] font-bold ${color} shrink-0`}>{i + 1}</div>

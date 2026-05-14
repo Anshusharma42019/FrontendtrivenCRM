@@ -7,6 +7,7 @@ import Modal from '../components/ui/Modal';
 import Badge from '../components/ui/Badge';
 
 const STATUSES = ['new', 'old'];
+const HIDDEN_LEAD_LIST_STATUSES = new Set(['follow_up', 'on_hold']);
 const SOURCES = ['website', 'referral', 'social_media', 'cold_call', 'email', 'walk_in', 'other'];
 const TYPES = ['general', 'ayurveda', 'panchakarma', 'consultation', 'product', 'other'];
 const EMPTY = { name: '', phone: '', email: '', address: '', houseNo: '', cityVillage: '', cityVillageType: 'city', postOffice: '', landmark: '', district: '', state: '', pincode: '', source: 'other', status: 'new', type: 'general', problem: '', note: '', revenue: '' };
@@ -69,7 +70,11 @@ export default function Leads() {
       if (filters.status) params.status = filters.status;
 
       const res = await getLeads(params);
-      setData(res || { leads: [], total: 0, totalPages: 1 });
+      const nextData = res || { leads: [], total: 0, totalPages: 1 };
+      setData({
+        ...nextData,
+        leads: (nextData.leads || []).filter(lead => !HIDDEN_LEAD_LIST_STATUSES.has(lead.status)),
+      });
     } catch (err) {
       setLoadError(err.response?.data?.message || err.message || 'Failed to load leads');
     } finally { setPageLoading(false); }
