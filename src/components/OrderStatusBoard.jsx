@@ -151,7 +151,7 @@ export default function OrderStatusBoard({
       const list = res.data?.data?.data || [];
       setStatusOrders(list);
       const c = {};
-      list.forEach(o => { if (o.comments?.length) c[o._id] = o.comments; });
+      list.forEach(o => { c[o._id] = o.comments || []; });
       setComments(prev => ({ ...prev, ...c }));
     }).catch(e => {
       setStatusOrders([]);
@@ -184,7 +184,7 @@ export default function OrderStatusBoard({
     setSavingNote(mongoId);
     setNoteError(prev => ({ ...prev, [mongoId]: '' }));
     try {
-      const res = await srSvc.saveOrderNote(mongoId, text);
+      const res = await srSvc.saveOrderNote(mongoId, text, 'general', selectedStatus);
       setComments(prev => ({ ...prev, [mongoId]: res.data?.data || [] }));
       setNoteInput(prev => ({ ...prev, [mongoId]: '' }));
     } catch (err) {
@@ -464,19 +464,24 @@ export default function OrderStatusBoard({
                   <div className="mt-3" onClick={e => e.stopPropagation()}>
                     <p className="text-[11px] text-gray-400 font-semibold mb-2">Comments</p>
                     {/* Existing comments list */}
-                    {(comments[order._id] || order.comments || []).length > 0 && (
-                      <div className="mb-2 space-y-1.5 max-h-32 overflow-y-auto">
-                        {(comments[order._id] || order.comments || []).filter(c => c.type !== 'followup').map((c, i) => (
+                    {(comments[order._id] || []).filter(c => c.type !== 'followup').length > 0 && (
+                      <div className="mb-2 space-y-1.5 max-h-40 overflow-y-auto">
+                        {(comments[order._id] || []).filter(c => c.type !== 'followup').map((c, i) => (
                           <div key={i} className="bg-gray-50 rounded-lg px-3 py-2">
                             <div className="flex items-center justify-between gap-2 mb-0.5">
                               <span className="text-[10px] font-bold text-green-700">
                                 {c.createdBy?.name || 'Unknown'}
                                 <span className="text-gray-400 font-normal ml-1 capitalize">({c.createdBy?.role || 'user'})</span>
                               </span>
-                              <span className="text-[10px] text-gray-400">
-                                {new Date(c.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                              <span className="text-[10px] font-semibold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 whitespace-nowrap">
+                                🕐 {new Date(c.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}
                               </span>
                             </div>
+                            {c.section ? (
+                              <span className="inline-block text-[9px] font-bold uppercase tracking-wide text-purple-600 bg-purple-50 border border-purple-100 px-1.5 py-0.5 rounded mb-1">
+                                📌 {formatStatusLabel(c.section)}
+                              </span>
+                            ) : null}
                             <p className="text-xs text-gray-700">{c.text}</p>
                           </div>
                         ))}
