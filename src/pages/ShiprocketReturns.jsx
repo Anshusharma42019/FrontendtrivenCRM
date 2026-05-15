@@ -297,7 +297,11 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
                     {returns.map((r, i) => (
                       <tr key={i} className="hover:bg-gray-50/50 transition-colors">
                         <td className="px-4 py-3 font-mono text-[11px] text-gray-600">{r.order_id}</td>
-                        <td className="px-4 py-3 font-mono text-[11px] text-blue-600 font-bold">{r.awb_code || '—'}</td>
+                        <td className="px-4 py-3 font-mono text-[11px] text-blue-600 font-bold">
+                          <a href={`https://shiprocket.co/tracking/${r.awb_code}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                            {r.awb_code || '—'}
+                          </a>
+                        </td>
                         <td className="px-4 py-3 font-bold text-gray-800 text-[13px]">{r.billing_customer_name || '—'}</td>
                         <td className="px-4 py-3 text-gray-600 text-[11px] font-bold">{r.staff_name || '-'}</td>
                         <td className="px-4 py-3">
@@ -323,7 +327,11 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
                       <div className="bg-gray-50 rounded-xl p-2.5 flex items-center justify-between">
                         <div>
                           <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">AWB</p>
-                          <p className="text-xs font-mono text-blue-600 font-bold mt-0.5">{r.awb_code || '—'}</p>
+                          <p className="text-xs font-mono text-blue-600 font-bold mt-0.5">
+                            <a href={`https://shiprocket.co/tracking/${r.awb_code}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                              {r.awb_code || '—'}
+                            </a>
+                          </p>
                         </div>
                         <div className="text-right">
                           <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Amount</p>
@@ -712,7 +720,11 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
                           onClick={() => {
                             setNdrAction(p => ({ ...p, awb: n.awb_code }));
                             setSelectedNdr(n);
-                          }}>{n.awb_code}</td>
+                          }}>
+                          <a href={`https://shiprocket.co/tracking/${n.awb_code}`} target="_blank" rel="noopener noreferrer" className="hover:underline" onClick={e => e.stopPropagation()}>
+                            {n.awb_code}
+                          </a>
+                        </td>
                         <td className="px-4 py-3 font-mono text-[11px] text-gray-600">{n.channel_order_id}</td>
                         <td className="px-4 py-3 font-bold text-gray-800 text-[13px]">{n.customer_name?.trim() || '—'}</td>
                         <td className="px-4 py-3 text-[11px] text-gray-500 max-w-[200px] truncate" title={n.reason}>{n.reason || '—'}</td>
@@ -752,7 +764,9 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="font-bold text-gray-900 text-sm truncate">{n.customer_name?.trim() || 'Unknown'}</p>
-                          <p className="text-[10px] font-mono text-blue-600 font-bold uppercase mt-0.5">AWB: {n.awb_code}</p>
+                          <p className="text-[10px] font-mono text-blue-600 font-bold uppercase mt-0.5">
+                            AWB: <a href={`https://shiprocket.co/tracking/${n.awb_code}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{n.awb_code}</a>
+                          </p>
                         </div>
                         <div className="shrink-0 flex flex-col items-end">
                           <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Attempt</span>

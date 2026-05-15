@@ -131,13 +131,19 @@ const statusTone = (status) => {
 
 const isLongValue = (key) => ['address', 'address_2', 'remarks', 'comment'].includes(key);
 
-function DetailRow({ label, value, mono = false, long = false }) {
+function DetailRow({ label, value, mono = false, long = false, link = false, href = '' }) {
   const complex = isComplexValue(value);
 
   return (
     <div className={`grid gap-2 py-3 ${long ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)] md:gap-6'}`}>
       <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{label}</div>
-      <div className={`text-sm font-semibold text-slate-800 break-words ${mono || complex ? 'font-mono text-[13px]' : ''} ${complex ? 'whitespace-pre-wrap' : ''}`}>{value}</div>
+      <div className={`text-sm font-semibold text-slate-800 break-words ${mono || complex ? 'font-mono text-[13px]' : ''} ${complex ? 'whitespace-pre-wrap' : ''}`}>
+        {link && href ? (
+          <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+            {value}
+          </a>
+        ) : value}
+      </div>
     </div>
   );
 }
@@ -249,7 +255,11 @@ export default function NdrDetail() {
         <div className="grid grid-cols-1 gap-3 border-b border-gray-100 bg-slate-50/70 px-5 py-4 sm:grid-cols-2 xl:grid-cols-4 sm:px-6">
           <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">AWB Code</p>
-            <p className="mt-1 font-mono text-sm font-bold text-slate-800 break-all">{formatDetailValue(displayNdr.awb_code, 'awb_code')}</p>
+            <p className="mt-1 font-mono text-sm font-bold text-slate-800 break-all">
+              <a href={`https://shiprocket.co/tracking/${displayNdr.awb_code}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                {formatDetailValue(displayNdr.awb_code, 'awb_code')}
+              </a>
+            </p>
           </div>
           <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Order ID</p>
@@ -283,6 +293,8 @@ export default function NdrDetail() {
                     value={formatDetailValue(row.value, row.key)}
                     mono={row.key.includes('id') || row.key.includes('awb') || row.key.includes('code')}
                     long={isLongValue(row.key)}
+                    link={row.key === 'awb_code'}
+                    href={row.key === 'awb_code' ? `https://shiprocket.co/tracking/${row.value}` : ''}
                   />
                 ))}
               </div>

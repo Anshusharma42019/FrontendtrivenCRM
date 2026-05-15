@@ -151,7 +151,7 @@ export default function OrderDetail() {
         <Field label="Order ID" value={order.order_id} mono />
         <Field label="Shiprocket ID" value={order.shiprocket_order_id} mono />
         <Field label="Shipment ID" value={order.shiprocket_shipment_id} mono />
-        <Field label="AWB Code" value={order.awb_code} mono />
+        <Field label="AWB Code" value={order.awb_code} mono link href={`https://shiprocket.co/tracking/${order.awb_code}`} />
         <Field label="Courier" value={order.courier_name} />
         <Field label="Amount" value={order.sub_total ? `₹${Number(order.sub_total).toLocaleString()}` : null} />
         <Field label="Order Date" value={fmt(order.order_date || order.createdAt)} />

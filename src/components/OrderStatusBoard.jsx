@@ -15,10 +15,12 @@ const STATUS_LIST = [
   'RTO_IN_TRANSIT',
   'OUT_FOR_DELIVERY',
   'REACHED_BACK_AT_SELLER_CITY',
-  'UNDELIVERED-1ST_ATTEMPT',
+  'UNDELIVERED_1ST_ATTEMPT',
   'PICKUP_EXCEPTION',
-  'UNDELIVERED-2ND_ATTEMPT',
-  'UNDELIVERED-3RD_ATTEMPT',
+  'UNDELIVERED_2ND_ATTEMPT',
+  'UNDELIVERED_3RD_ATTEMPT',
+  'UNDELIVERED',
+  'UNDELIVERED_ATTEMPT_FAILURE',
   'RTO_INITIATED',
   'REACHED_AT_DESTINATION_HUB',
   'SHIPPED',
@@ -45,15 +47,19 @@ const STATUS_STYLES = {
   RTO_IN_TRANSIT: 'border-violet-200 bg-violet-50 text-violet-700',
   OUT_FOR_DELIVERY: 'border-cyan-200 bg-cyan-50 text-cyan-700',
   REACHED_BACK_AT_SELLER_CITY: 'border-lime-200 bg-lime-50 text-lime-700',
-  'UNDELIVERED-1ST_ATTEMPT': 'border-rose-200 bg-rose-50 text-rose-700',
+  'UNDELIVERED_1ST_ATTEMPT': 'border-rose-200 bg-rose-50 text-rose-700',
   PICKUP_EXCEPTION: 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700',
-  'UNDELIVERED-2ND_ATTEMPT': 'border-pink-200 bg-pink-50 text-pink-700',
-  'UNDELIVERED-3RD_ATTEMPT': 'border-purple-200 bg-purple-50 text-purple-700',
+  'UNDELIVERED_2ND_ATTEMPT': 'border-pink-200 bg-pink-50 text-pink-700',
+  'UNDELIVERED_3RD_ATTEMPT': 'border-purple-200 bg-purple-50 text-purple-700',
   RTO_INITIATED: 'border-yellow-200 bg-yellow-50 text-yellow-700',
   REACHED_AT_DESTINATION_HUB: 'border-indigo-200 bg-indigo-50 text-indigo-700',
   SHIPPED: 'border-green-200 bg-green-50 text-green-700',
   RTO_OFD: 'border-teal-200 bg-teal-50 text-teal-700',
   PICKUP_SCHEDULED: 'border-slate-200 bg-slate-50 text-slate-700',
+  UNDELIVERED: 'border-rose-200 bg-rose-50 text-rose-700',
+  UNDELIVERED_ATTEMPT_FAILURE: 'border-rose-200 bg-rose-50 text-rose-700',
+  MISROUTED: 'border-orange-200 bg-orange-50 text-orange-700',
+  INVOICED: 'border-blue-200 bg-blue-50 text-blue-700',
 };
 
 const formatDateInput = (date) => {
@@ -373,9 +379,26 @@ export default function OrderStatusBoard({
                       <p className="text-xs text-gray-400 font-semibold group-hover:text-green-600 transition-colors">Order</p>
                       <p className="text-sm font-bold text-gray-800 truncate group-hover:text-green-600 transition-colors underline decoration-dotted underline-offset-2">{order.order_id || order.shiprocket_order_id || '-'}</p>
                     </div>
-                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${STATUS_STYLES[normalizeStatus(order.status)] || 'border-gray-200 bg-gray-50 text-gray-600'}`}>
-                      {formatStatusLabel(order.status || selectedStatus)}
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${STATUS_STYLES[normalizeStatus(order.status)] || 'border-gray-200 bg-gray-50 text-gray-600'}`}>
+                        {formatStatusLabel(order.status || selectedStatus)}
+                      </span>
+                      <div className="flex flex-col items-end">
+                        {order.status_updated_at && (
+                          <span className="text-[10px] text-gray-500 font-bold bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 whitespace-nowrap">
+                            {new Date(order.status_updated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                            {', '}
+                            {new Date(order.status_updated_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                          </span>
+                        )}
+                        {(normalizeStatus(order.status).includes('DELIVERY') || normalizeStatus(order.status).includes('UNDELIVERED')) && order.delivery_attempt && (
+                          <span className="text-[9px] text-blue-600 font-extrabold mt-0.5 uppercase tracking-tighter bg-blue-50 px-1 rounded">
+                            {order.delivery_attempt === 1 ? '1st' : order.delivery_attempt === 2 ? '2nd' : order.delivery_attempt === 3 ? '3rd' : `${order.delivery_attempt}th`} ATTEMPT
+                            {new Date(order.status_updated_at).toDateString() === new Date().toDateString() ? ' - TODAY' : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
                     <div>
@@ -403,7 +426,16 @@ export default function OrderStatusBoard({
                     <div onClick={e => e.stopPropagation()}>
                       <p className="text-gray-400 font-semibold">AWB</p>
                       {order.awb_code
-                        ? <span className="font-mono font-bold text-blue-600 truncate select-all cursor-text">{order.awb_code}</span>
+                        ? (
+                          <a 
+                            href={`https://shiprocket.co/tracking/${order.awb_code}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="font-mono font-bold text-blue-600 truncate hover:underline"
+                          >
+                            {order.awb_code}
+                          </a>
+                        )
                         : <p className="font-mono font-semibold text-gray-400 truncate">-</p>
                       }
                     </div>

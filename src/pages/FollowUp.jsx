@@ -410,7 +410,9 @@ export default function FollowUp() {
                         <div className="min-w-0">
                           <p className="font-bold text-gray-800 text-sm truncate">{o.billing_customer_name || '—'}</p>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 py-0.5 px-1.5 bg-gray-50 rounded-lg border border-gray-100">{o.awb_code}</span>
+                            <a href={`https://shiprocket.co/tracking/${o.awb_code}`} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest text-gray-400 py-0.5 px-1.5 bg-gray-50 rounded-lg border border-gray-100 hover:text-blue-600 transition-colors">
+                              {o.awb_code}
+                            </a>
                             <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded uppercase">✓ All Done</span>
                           </div>
                         </div>
@@ -512,7 +514,9 @@ export default function FollowUp() {
                           <div className="min-w-0">
                             <p className="font-bold text-gray-800 text-sm truncate">{o.billing_customer_name || '—'}</p>
                             <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 py-0.5 px-1.5 bg-gray-50 rounded-lg border border-gray-100">{o.awb_code}</span>
+                              <a href={`https://shiprocket.co/tracking/${o.awb_code}`} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest text-gray-400 py-0.5 px-1.5 bg-gray-50 rounded-lg border border-gray-100 hover:text-blue-600 transition-colors">
+                                {o.awb_code}
+                              </a>
                               {allDone && (
                                 <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase">Done</span>
                               )}
@@ -640,7 +644,11 @@ export default function FollowUp() {
                   <div className="flex items-center gap-3 mt-1">
                     <p className="text-emerald-300 font-bold text-sm">{selected.billing_phone}</p>
                     <span className="w-1 h-1 rounded-full bg-emerald-400/50" />
-                    <p className="text-emerald-300 font-bold text-sm">{selected.awb_code}</p>
+                    <p className="text-emerald-300 font-bold text-sm">
+                      <a href={`https://shiprocket.co/tracking/${selected.awb_code}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                        {selected.awb_code}
+                      </a>
+                    </p>
                   </div>
                 </div>
                 <button onClick={() => setSelected(null)}
