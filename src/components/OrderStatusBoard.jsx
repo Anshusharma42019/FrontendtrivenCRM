@@ -241,6 +241,14 @@ export default function OrderStatusBoard({
     return acc;
   }, {});
 
+  // Merge all UNDELIVERED variants into the UNDELIVERED card
+  const undeliveredTotal = (statusCounts['UNDELIVERED_1ST_ATTEMPT'] || 0)
+    + (statusCounts['UNDELIVERED_2ND_ATTEMPT'] || 0)
+    + (statusCounts['UNDELIVERED_3RD_ATTEMPT'] || 0)
+    + (statusCounts['UNDELIVERED'] || 0)
+    + (statusCounts['UNDELIVERED_ATTEMPT_FAILURE'] || 0);
+  if (undeliveredTotal > 0) statusCounts['UNDELIVERED'] = undeliveredTotal;
+
   const listedStatuses = new Set(STATUS_LIST.map(normalizeStatus));
   const statusCards = [
     ...STATUS_LIST.map(status => ({ status: normalizeStatus(status), count: statusCounts[normalizeStatus(status)] || 0 })),
