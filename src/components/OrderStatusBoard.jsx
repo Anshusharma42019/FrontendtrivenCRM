@@ -265,18 +265,18 @@ export default function OrderStatusBoard({
 
   return (
     <div className={cardCls} style={cardStyle}>
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-6">
         <div>
           <h3 className="text-sm font-bold text-gray-800 uppercase tracking-widest">{title}</h3>
-          <p className="text-[11px] font-bold text-gray-400 mt-1 uppercase">{subtitle || `${orderTotal} ORDERS TOTAL`}</p>
+          <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 mt-1 uppercase">{subtitle || `${orderTotal} ORDERS TOTAL`}</p>
         </div>
-        <div className="w-full sm:w-auto flex flex-col gap-3">
+        <div className="w-full lg:w-auto flex flex-col gap-3">
           {!filterParams && (
-            <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
-              <div className="inline-flex items-center gap-1 rounded-xl bg-gray-100 p-1 shrink-0">
+            <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar shrink-0">
+              <div className="inline-flex items-center gap-1 rounded-xl bg-gray-100 p-1">
                 {DATE_FILTERS.map(filter => (
                   <button key={filter.id} onClick={() => selectDatePreset(filter.id)}
-                    className={`h-8 px-3 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap ${
+                    className={`h-8 px-3 rounded-lg text-[10px] sm:text-[11px] font-black transition-all whitespace-nowrap ${
                       datePreset === filter.id ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                     }`}>
                     {filter.label.toUpperCase()}
@@ -285,32 +285,33 @@ export default function OrderStatusBoard({
               </div>
             </div>
           )}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full lg:w-auto">
             {!filterParams && datePreset === 'custom' && (
               <div className="flex-1 grid grid-cols-2 gap-2">
-                <input type="date" className={`${inp} w-full py-2`} value={filterFrom} onChange={e => setFilterFrom(e.target.value)} />
-                <input type="date" className={`${inp} w-full py-2`} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
+                <input type="date" className={`${inp} w-full py-2.5`} value={filterFrom} onChange={e => setFilterFrom(e.target.value)} />
+                <input type="date" className={`${inp} w-full py-2.5`} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
               </div>
             )}
             {!filterParams && (
               <button onClick={() => applyDateFilter()}
-                className="h-9 text-[11px] bg-green-600 text-white px-5 rounded-xl hover:bg-green-700 font-bold shadow-md transition active:scale-95 inline-flex items-center justify-center gap-2">
+                className="h-10 text-[10px] sm:text-[11px] bg-green-600 text-white px-4 sm:px-5 rounded-xl hover:bg-green-700 font-bold shadow-md transition active:scale-95 inline-flex items-center justify-center gap-2 shrink-0">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
                   <path d="M3 4h18M6 12h12M10 20h4"/>
                 </svg>
-                APPLY
+                <span className="hidden sm:inline">APPLY</span>
+                <span className="sm:hidden">GO</span>
               </button>
             )}
             <button onClick={handleSync} disabled={syncing}
               title="Sync from Shiprocket"
-              className={`h-9 px-4 rounded-xl text-[11px] font-bold inline-flex items-center gap-1.5 transition active:scale-95 disabled:opacity-60 ${
+              className={`h-10 px-4 rounded-xl text-[10px] sm:text-[11px] font-bold inline-flex items-center gap-1.5 transition active:scale-95 disabled:opacity-60 shrink-0 ${
                 syncing ? 'bg-blue-100 text-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
               }`}>
               <svg className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
                 <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
               </svg>
-              {syncing ? 'SYNCING...' : 'SYNC'}
+              {syncing ? '...' : 'SYNC'}
             </button>
           </div>
           {syncMsg && (
@@ -324,21 +325,21 @@ export default function OrderStatusBoard({
       {statusCards.length === 0 ? (
         <p className="text-sm text-gray-300">No order data yet</p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
           {statusCards.map(({ status, count }) => {
             const selected = selectedStatus === status;
             return (
               <button key={status} onClick={() => openStatusDetails(status)}
-                className={`min-h-[86px] text-left rounded-xl border p-4 transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                className={`min-h-[70px] sm:min-h-[86px] text-left rounded-2xl border p-3.5 sm:p-4 transition-all hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
                   selected ? 'ring-2 ring-green-500 border-green-300 bg-green-50' : STATUS_STYLES[normalizeStatus(status)] || 'border-gray-200 bg-gray-50 text-gray-700'
                 }`}>
                 <div className="flex items-start justify-between gap-3">
-                  <span className="text-[11px] font-bold uppercase leading-4 break-words">{formatStatusLabel(status)}</span>
-                  <svg className="w-4 h-4 shrink-0 opacity-60" fill="none" stroke="currentColor" strokeWidth={2.3} viewBox="0 0 24 24">
+                  <span className="text-[10px] sm:text-[11px] font-black uppercase leading-4 break-words tracking-tight">{formatStatusLabel(status)}</span>
+                  <svg className="w-3.5 h-3.5 shrink-0 opacity-60" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                     <path d="M9 18l6-6-6-6"/>
                   </svg>
                 </div>
-                <div className="mt-3 text-2xl font-bold tracking-tight">{count}</div>
+                <div className="mt-2 sm:mt-3 text-xl sm:text-2xl font-black tracking-tight">{count}</div>
               </button>
             );
           })}

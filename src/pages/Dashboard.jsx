@@ -204,9 +204,9 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Date Filter Bar */}
-      <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 ${cardCls}`} style={cardStyle}>
+      <div className={`flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 p-4 ${cardCls}`} style={cardStyle}>
         <div className="flex items-center gap-2">
-           <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
+           <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
              <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
            </div>
            <div>
@@ -215,12 +215,12 @@ export default function Dashboard() {
            </div>
         </div>
         
-        <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-3">
-          <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
-            <div className="inline-flex items-center gap-1 rounded-xl bg-gray-100 p-1 shrink-0">
+        <div className="w-full lg:w-auto flex flex-col sm:flex-row gap-3">
+          <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar shrink-0">
+            <div className="inline-flex items-center gap-1 rounded-xl bg-gray-100 p-1">
               {DATE_FILTERS.map(filter => (
                 <button key={filter.id} onClick={() => selectDatePreset(filter.id)}
-                  className={`h-8 px-3 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap ${
+                  className={`h-8 px-3 rounded-lg text-[10px] sm:text-[11px] font-black transition-all whitespace-nowrap ${
                     datePreset === filter.id ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                   }`}>
                   {filter.label.toUpperCase()}
@@ -229,9 +229,9 @@ export default function Dashboard() {
             </div>
           </div>
           {datePreset === 'custom' && (
-            <div className="flex items-center gap-2">
-              <input type="date" className={`${inp} py-2`} value={filterFrom} onChange={e => setFilterFrom(e.target.value)} />
-              <input type="date" className={`${inp} py-2`} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <input type="date" className={`${inp} flex-1 sm:w-32 py-2`} value={filterFrom} onChange={e => setFilterFrom(e.target.value)} />
+              <input type="date" className={`${inp} flex-1 sm:w-32 py-2`} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
               <button onClick={load} className="h-9 px-4 rounded-xl bg-green-600 text-white text-[10px] font-bold hover:bg-green-700 transition active:scale-95">APPLY</button>
             </div>
           )}
@@ -239,7 +239,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
         <StatCard label="Total Leads" value={stats?.totalLeads} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} color="border-green-500" />
         <StatCard label={datePreset === 'all' ? "New Leads (Total)" : `New Leads (${getPeriodLabel()})`} value={stats?.newLeadsToday} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>} color="border-blue-500" />
         <StatCard label="Ready to Shipment" value={stats?.readyToShipmentCount} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>} color="border-purple-500" />

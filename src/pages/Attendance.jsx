@@ -111,17 +111,17 @@ function AttendanceCalendar({ records, year, month, onChangeMonth }) {
         </div>
   
         {/* Days Grid */}
-        <div className="grid grid-cols-7 gap-1.5">
+        <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
           {days.map((day, i) => {
-            if (!day) return <div key={`e${i}`} className="h-10 opacity-20" />;
+            if (!day) return <div key={`e${i}`} className="h-8 sm:h-10 opacity-20" />;
             const key = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
             const rec = map[key];
             const isToday = key === todayKey;
             const theme = rec ? STATUS_THEMES[rec.status] : null;
             
             return (
-              <div key={i} className={`group relative h-10 flex flex-col items-center justify-center rounded-xl transition-all duration-300 ${isToday ? 'ring-2 ring-green-500 ring-offset-1' : ''} ${theme ? `shadow-sm ${theme.bg} ${theme.border} border` : 'bg-gray-50/50 hover:bg-gray-100 border border-transparent'}`}>
-                <span className={`text-xs font-black ${theme ? theme.text : isToday ? 'text-green-600' : 'text-gray-400'}`}>
+              <div key={i} className={`group relative h-8 sm:h-10 flex flex-col items-center justify-center rounded-lg sm:rounded-xl transition-all duration-300 ${isToday ? 'ring-2 ring-green-500 ring-offset-1' : ''} ${theme ? `shadow-sm ${theme.bg} ${theme.border} border` : 'bg-gray-50/50 hover:bg-gray-100 border border-transparent'}`}>
+                <span className={`text-[10px] sm:text-xs font-black ${theme ? theme.text : isToday ? 'text-green-600' : 'text-gray-400'}`}>
                   {day}
                 </span>
                 {theme && (
@@ -523,128 +523,190 @@ function AdminAttendance() {
                 </div>
 
                 <div className="overflow-hidden rounded-[2rem] border border-gray-100 shadow-sm bg-gray-50/30">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="bg-white text-gray-400 text-left">
-                        <th className="py-5 px-6 font-black uppercase tracking-widest">Member</th>
-                        <th className="text-center py-5 px-4 font-black uppercase tracking-widest">History</th>
-                        <th className="text-center py-5 px-4 font-black uppercase tracking-widest">Activity</th>
-                        <th className="text-right py-5 px-4 font-black uppercase tracking-widest">Base</th>
-                        <th className="text-right py-5 px-4 font-black uppercase tracking-widest text-amber-600">Commission</th>
-                        <th className="text-right py-5 px-6 font-black uppercase tracking-widest text-emerald-600">Final</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {commData.staff.map(s => (
-                        <tr key={s.user._id} className="hover:bg-white transition-colors group">
-                          <td className="py-5 px-6">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${ROLE_GRADIENT[s.user.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-sm font-black uppercase shadow-lg group-hover:scale-110 transition-transform`}>
-                                {s.user.name?.charAt(0)}
+                  {/* Desktop Table View */}
+                  <div className="hidden lg:block overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-white text-gray-400 text-left">
+                          <th className="py-5 px-6 font-black uppercase tracking-widest">Member</th>
+                          <th className="text-center py-5 px-4 font-black uppercase tracking-widest">History</th>
+                          <th className="text-center py-5 px-4 font-black uppercase tracking-widest">Activity</th>
+                          <th className="text-right py-5 px-4 font-black uppercase tracking-widest">Base</th>
+                          <th className="text-right py-5 px-4 font-black uppercase tracking-widest text-amber-600">Commission</th>
+                          <th className="text-right py-5 px-6 font-black uppercase tracking-widest text-emerald-600">Final</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {commData.staff.map(s => (
+                          <tr key={s.user._id} className="hover:bg-white transition-colors group">
+                            <td className="py-5 px-6">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${ROLE_GRADIENT[s.user.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-sm font-black uppercase shadow-lg group-hover:scale-110 transition-transform`}>
+                                  {s.user.name?.charAt(0)}
+                                </div>
+                                <div>
+                                  <p className="font-black text-gray-900 text-sm">{s.user.name}</p>
+                                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{s.user.role}</p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="font-black text-gray-900 text-sm">{s.user.name}</p>
-                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{s.user.role}</p>
+                            </td>
+                            <td className="text-center py-5 px-4">
+                              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-[10px] font-black">
+                                <span className="text-green-600">{s.attendance.present + s.attendance.late}P</span>
+                                <span className="w-1 h-1 rounded-full bg-gray-300" />
+                                <span className="text-amber-500">{s.attendance.half_day}H</span>
                               </div>
-                            </div>
-                          </td>
-                          <td className="text-center py-5 px-4">
-                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-[10px] font-black">
-                              <span className="text-green-600">{s.attendance.present + s.attendance.late}P</span>
-                              <span className="w-1 h-1 rounded-full bg-gray-300" />
-                              <span className="text-amber-500">{s.attendance.half_day}H</span>
-                            </div>
-                          </td>
-                          <td className="text-center py-5 px-4">
-                            <div className="flex flex-col">
-                               <span className="font-black text-blue-600 text-sm">{s.totalDeliveries || 0}</span>
-                               <span className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">delivered</span>
-                            </div>
-                          </td>
-                          <td className="text-right py-5 px-4 text-gray-400 font-bold text-[10px]">
-                            {editingComm?.userId === s.user._id && editingComm?.field === 'base' ? (
-                              <div className="flex items-center justify-end gap-1">
-                                <input type="number" className="w-16 px-2 py-1 bg-white border border-gray-200 rounded text-right text-[10px] focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                                  value={editVal} onChange={e => setEditVal(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && handleSaveOverride()} />
-                                <button onClick={handleSaveOverride} className="text-emerald-500">✓</button>
-                                <button onClick={() => setEditingComm(null)} className="text-red-400">×</button>
+                            </td>
+                            <td className="text-center py-5 px-4">
+                              <div className="flex flex-col">
+                                 <span className="font-black text-blue-600 text-sm">{s.totalDeliveries || 0}</span>
+                                 <span className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">delivered</span>
                               </div>
-                            ) : (
-                              <div className="cursor-pointer hover:text-gray-900 group/cell" onClick={() => {
-                                setEditingComm({ userId: s.user._id, field: 'base' });
-                                setEditVal(s.basePay);
-                              }}>
-                                ₹{s.basePay?.toLocaleString()}
-                                <div className="text-[8px] opacity-0 group-hover/cell:opacity-60 font-black">EDIT BASE</div>
-                                <div className="text-[8px] opacity-60 font-black group-hover/cell:hidden">BASE</div>
-                              </div>
-                            )}
-                          </td>
-                          <td className="text-right py-5 px-4">
-                            <div className="flex flex-col items-end">
-                              {editingComm?.userId === s.user._id && editingComm?.field === 'commission' ? (
+                            </td>
+                            <td className="text-right py-5 px-4 text-gray-400 font-bold text-[10px]">
+                              {editingComm?.userId === s.user._id && editingComm?.field === 'base' ? (
                                 <div className="flex items-center justify-end gap-1">
-                                  <input type="number" className="w-20 px-2 py-1 bg-white border border-gray-200 rounded text-right text-xs font-black focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                  <input type="number" className="w-16 px-2 py-1 bg-white border border-gray-200 rounded text-right text-[10px] focus:outline-none focus:ring-1 focus:ring-emerald-500"
                                     value={editVal} onChange={e => setEditVal(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && handleSaveOverride()} />
                                   <button onClick={handleSaveOverride} className="text-emerald-500">✓</button>
                                   <button onClick={() => setEditingComm(null)} className="text-red-400">×</button>
                                 </div>
                               ) : (
-                                <div className="cursor-pointer hover:bg-amber-50 rounded-lg p-1 transition-colors group/comm" onClick={() => {
-                                  setEditingComm({ userId: s.user._id, field: 'commission' });
-                                  setEditVal(s.totalCommission);
+                                <div className="cursor-pointer hover:text-gray-900 group/cell" onClick={() => {
+                                  setEditingComm({ userId: s.user._id, field: 'base' });
+                                  setEditVal(s.basePay);
                                 }}>
-                                  <span className="font-black text-amber-600 text-sm">₹{(s.totalCommission || 0).toLocaleString()}</span>
-                                  <div className="text-[9px] text-amber-400 font-bold uppercase tracking-tighter">
-                                    @{s.user.commissionRate || 5}% <span className="opacity-0 group-hover/comm:opacity-100">· EDIT</span>
-                                  </div>
+                                  ₹{s.basePay?.toLocaleString()}
+                                  <div className="text-[8px] opacity-0 group-hover/cell:opacity-60 font-black">EDIT BASE</div>
+                                  <div className="text-[8px] opacity-60 font-black group-hover/cell:hidden">BASE</div>
                                 </div>
                               )}
-                            </div>
-                          </td>
-
-                          <td className="text-right py-5 px-6">
-                            <span className="text-base font-black text-gray-900 tracking-tight">₹{s.totalPay?.toLocaleString()}</span>
-                          </td>
-                        </tr>
-                      ))}
-
-                      {commData.unassignedDeliveries > 0 && (
-                        <tr className="bg-gray-50/50 italic border-t-2 border-dashed border-gray-200">
-                          <td className="py-5 px-6">
-                            <div className="flex items-center gap-3 opacity-60">
-                              <div className="w-10 h-10 rounded-2xl bg-gray-200 flex items-center justify-center text-gray-400 text-sm font-black uppercase shadow-sm">U</div>
-                              <div>
-                                <p className="font-black text-gray-500 text-sm">Unassigned Orders</p>
-                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">No Staff Assigned</p>
+                            </td>
+                            <td className="text-right py-5 px-4">
+                              <div className="flex flex-col items-end">
+                                {editingComm?.userId === s.user._id && editingComm?.field === 'commission' ? (
+                                  <div className="flex items-center justify-end gap-1">
+                                    <input type="number" className="w-20 px-2 py-1 bg-white border border-gray-200 rounded text-right text-xs font-black focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                      value={editVal} onChange={e => setEditVal(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && handleSaveOverride()} />
+                                    <button onClick={handleSaveOverride} className="text-emerald-500">✓</button>
+                                    <button onClick={() => setEditingComm(null)} className="text-red-400">×</button>
+                                  </div>
+                                ) : (
+                                  <div className="cursor-pointer hover:bg-amber-50 rounded-lg p-1 transition-colors group/comm" onClick={() => {
+                                    setEditingComm({ userId: s.user._id, field: 'commission' });
+                                    setEditVal(s.totalCommission);
+                                  }}>
+                                    <span className="font-black text-amber-600 text-sm">₹{(s.totalCommission || 0).toLocaleString()}</span>
+                                    <div className="text-[9px] text-amber-400 font-bold uppercase tracking-tighter">
+                                      @{s.user.commissionRate || 5}% <span className="opacity-0 group-hover/comm:opacity-100">· EDIT</span>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
+                            </td>
+                            <td className="text-right py-5 px-6">
+                              <span className="text-base font-black text-gray-900 tracking-tight">₹{s.totalPay?.toLocaleString()}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Card View */}
+                  <div className="lg:hidden divide-y divide-gray-100">
+                    {commData.staff.map(s => (
+                      <div key={s.user._id} className="p-5 bg-white space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${ROLE_GRADIENT[s.user.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-sm font-black uppercase shadow-lg`}>
+                              {s.user.name?.charAt(0)}
                             </div>
-                          </td>
-                          <td className="text-center py-5 px-4">
-                            <span className="text-gray-300">—</span>
-                          </td>
-                          <td className="text-center py-5 px-4">
-                            <div className="flex flex-col">
-                               <span className="font-black text-gray-400 text-sm">{commData.unassignedDeliveries}</span>
-                               <span className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">delivered</span>
+                            <div>
+                              <p className="font-black text-gray-900 text-sm">{s.user.name}</p>
+                              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{s.user.role}</p>
                             </div>
-                          </td>
-                          <td className="text-right py-5 px-4">
-                            <div className="flex flex-col items-end opacity-40">
-                               <span className="font-black text-gray-500 text-[10px]">₹{commData.unassignedRevenue?.toLocaleString()}</span>
-                               <span className="text-[8px] font-black uppercase tracking-tighter">revenue</span>
+                          </div>
+                          <div className="text-right">
+                             <p className="text-sm font-black text-emerald-600 tracking-tight">₹{s.totalPay?.toLocaleString()}</p>
+                             <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Total Payout</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100">
+                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Attendance</p>
+                             <div className="flex items-center gap-2">
+                               <span className="text-[11px] font-black text-green-600">{s.attendance.present + s.attendance.late}P</span>
+                               <span className="text-[11px] font-black text-amber-500">{s.attendance.half_day}H</span>
                              </div>
-                          </td>
-                          <td className="text-right py-5 px-4">
-                            <span className="text-gray-300">—</span>
-                          </td>
-                          <td className="text-right py-5 px-6">
-                            <span className="text-gray-300">—</span>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                          </div>
+                          <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100">
+                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Performance</p>
+                             <p className="text-[11px] font-black text-blue-600">{s.totalDeliveries || 0} Delivered</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-1">
+                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Base Pay</p>
+                             <p className="text-xs font-black text-gray-800">₹{s.basePay?.toLocaleString()}</p>
+                          </div>
+                          <div className="p-1 text-right">
+                             <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Commission</p>
+                             <p className="text-xs font-black text-amber-600">₹{(s.totalCommission || 0).toLocaleString()}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {commData.unassignedDeliveries > 0 && (
+                    <div className="bg-gray-50/50 italic border-t-2 border-dashed border-gray-200 p-5 lg:p-0">
+                      {/* Desktop unassigned */}
+                      <table className="hidden lg:table w-full text-xs opacity-60">
+                        <tbody>
+                          <tr>
+                            <td className="py-5 px-6 w-[20%]">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-gray-200 flex items-center justify-center text-gray-400 text-sm font-black uppercase shadow-sm">U</div>
+                                <div>
+                                  <p className="font-black text-gray-500 text-sm">Unassigned Orders</p>
+                                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">No Staff Assigned</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="text-center py-5 px-4 w-[15%]">—</td>
+                            <td className="text-center py-5 px-4 w-[15%]">
+                              <div className="flex flex-col">
+                                 <span className="font-black text-gray-400 text-sm">{commData.unassignedDeliveries}</span>
+                                 <span className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">delivered</span>
+                              </div>
+                            </td>
+                            <td className="text-right py-5 px-4 w-[15%]">
+                              <div className="flex flex-col items-end opacity-40">
+                                 <span className="font-black text-gray-500 text-[10px]">₹{commData.unassignedRevenue?.toLocaleString()}</span>
+                                 <span className="text-[8px] font-black uppercase tracking-tighter">revenue</span>
+                               </div>
+                            </td>
+                            <td className="text-right py-5 px-4 w-[15%]">—</td>
+                            <td className="text-right py-5 px-6 w-[20%]">—</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      {/* Mobile unassigned */}
+                      <div className="lg:hidden flex items-center justify-between opacity-60">
+                         <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-xl bg-gray-200 flex items-center justify-center text-gray-400 text-xs font-black">U</div>
+                            <div>
+                              <p className="font-black text-gray-500 text-[10px]">Unassigned Orders</p>
+                              <p className="text-[8px] text-gray-400 font-bold uppercase">{commData.unassignedDeliveries} Delivered</p>
+                            </div>
+                         </div>
+                         <p className="text-[10px] font-black text-gray-500">₹{commData.unassignedRevenue?.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (

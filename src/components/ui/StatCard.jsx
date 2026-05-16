@@ -12,18 +12,18 @@ const configs = {
 export default function StatCard({ label, value, icon, color = 'border-green-500', sub }) {
   const { grad, glow, ring } = configs[color] || configs['border-green-500'];
   return (
-    <div className={`relative bg-white rounded-2xl p-5 shadow-md ${glow} hover:shadow-lg transition-all duration-200 overflow-hidden group`}
+    <div className={`relative bg-white rounded-2xl p-4 sm:p-5 shadow-md ${glow} hover:shadow-lg transition-all duration-200 overflow-hidden group`}
       style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
       {/* subtle bg accent */}
       <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full bg-gradient-to-br ${grad} opacity-5 group-hover:opacity-10 transition-opacity`} />
-      <div className="flex items-start justify-between mb-4">
-        <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center shadow-md ring-4 ${ring}`}>
-          {icon}
+      <div className="flex items-start justify-between mb-3 sm:mb-4">
+        <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center shadow-md ring-4 ${ring}`}>
+          {icon && <span className="scale-90 sm:scale-100">{icon}</span>}
         </div>
       </div>
-      <div className="text-3xl font-extrabold text-gray-800 tracking-tight leading-none">{value ?? '—'}</div>
-      <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1.5">{label}</div>
-      {sub && <div className="text-xs text-gray-400 mt-1">{sub}</div>}
+      <div className="text-xl sm:text-3xl font-extrabold text-gray-800 tracking-tight leading-none truncate">{value ?? '—'}</div>
+      <div className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1.5 truncate">{label}</div>
+      {sub && <div className="text-[10px] sm:text-xs text-gray-400 mt-1 truncate">{sub}</div>}
     </div>
   );
 }

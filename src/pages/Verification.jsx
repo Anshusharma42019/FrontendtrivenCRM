@@ -619,6 +619,12 @@ export default function Verification() {
 
                 <SectionHead label="Order" />
                 <DetailRow label="Price" value={selected.price ? `₹${selected.price}` : null} />
+                {selected.relief_percentage != null && (
+                  <div className="flex items-start gap-3 py-2 border-b border-gray-50">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">Relief %</span>
+                    <span className="text-sm font-black text-emerald-600">{selected.relief_percentage}%</span>
+                  </div>
+                )}
                 <DetailRow label="Call Date" value={selected.reminderAt ? new Date(selected.reminderAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null} />
               </>
             )}
@@ -748,6 +754,12 @@ export default function Verification() {
                   
                   <SectionHead label="Order Details" />
                   <DetailRow label="Price" value={selected.price ? `₹${selected.price}` : null} />
+                  {selected.relief_percentage != null && (
+                    <div className="flex items-start gap-3 py-2 border-b border-gray-50">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">Relief %</span>
+                      <span className="text-sm font-black text-emerald-600">{selected.relief_percentage}%</span>
+                    </div>
+                  )}
                   
                   <div className="flex flex-col gap-3 pt-6 pb-4">
                     <div className="flex gap-2.5">

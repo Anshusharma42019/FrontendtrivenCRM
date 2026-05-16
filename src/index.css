@@ -58,9 +58,17 @@ html {
 /* Glassmorphism */
 .glass {
   background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
+}
+
+.glass-dark {
+  background: rgba(7, 20, 7, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Better inputs */
@@ -100,16 +108,22 @@ button {
 
 /* Mobile Responsive Adjustments */
 @media (max-width: 640px) {
-  .p-main { padding: 0.5rem 0.75rem !important; }
+  .p-main { padding: 0.75rem 0.75rem !important; }
   .h-main { height: calc(100vh - 64px) !important; }
+  .text-responsive-h1 { font-size: 1.25rem !important; }
+  .text-responsive-base { font-size: 0.875rem !important; }
 }
 
 @media (max-width: 768px) {
   .modal-scroll-container { max-height: 85vh !important; }
   h1 { font-size: 1.25rem !important; }
   h2 { font-size: 1.15rem !important; }
-  .p-main { padding: 0.75rem 1rem !important; }
+  .p-main { padding: 1rem 1rem !important; }
 }
+
+/* Visibility Utilities */
+.mobile-only { @apply block md:hidden; }
+.desktop-only { @apply hidden md:block; }
 
 /* Safe area for mobile notched devices */
 .pb-safe { padding-bottom: env(safe-area-inset-bottom); }

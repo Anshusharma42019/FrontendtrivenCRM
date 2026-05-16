@@ -91,15 +91,15 @@ export default function Sidebar({ open, onClose, unreadCount = 0 }) {
                   {visibleItems.map(({ to, icon, label, end }) => (
                     <NavLink key={to} to={to} end={!!end} onClick={onClose}
                       className={({ isActive }) =>
-                        `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group relative
+                        `flex items-center gap-3.5 px-4 py-3.5 md:py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group relative
                         ${isActive
                           ? 'bg-green-500/20 text-green-300 active-nav'
                           : 'text-white/80 hover:text-white hover:bg-white/10'}`}>
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-green-400 rounded-r-full opacity-0 group-[.active-nav]:opacity-100 transition-opacity" />
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-green-400 rounded-r-full opacity-0 group-[.active-nav]:opacity-100 transition-opacity" />
                       <span className="transition-all duration-150 text-white/60 group-hover:text-white group-[.active-nav]:text-green-400">{icon}</span>
-                      <span className="flex-1">{label}</span>
+                      <span className="flex-1 truncate">{label}</span>
                       {label === 'Notifications' && unreadCount > 0 && (
-                        <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full min-w-4 text-center font-bold">
+                        <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center font-bold">
                           {unreadCount > 99 ? '99+' : unreadCount}
                         </span>
                       )}

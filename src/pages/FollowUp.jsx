@@ -60,9 +60,9 @@ const isDue = (value, inputDate) => {
 
 const DetailRow = ({ label, value }) =>
   value ? (
-    <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">{label}</span>
-      <span className="text-sm text-gray-800 font-medium flex-1">{value}</span>
+    <div className="flex items-start gap-2 sm:gap-3 py-2 border-b border-gray-50 last:border-0">
+      <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-gray-400 w-20 sm:w-28 shrink-0 mt-0.5">{label}</span>
+      <span className="text-xs sm:text-sm text-gray-800 font-medium flex-1">{value}</span>
     </div>
   ) : null;
 
@@ -95,6 +95,9 @@ export default function FollowUp() {
   const [settings, setSettings] = useState({ total_followups: 5, followup_gap_days: 6 });
   const [activity, setActivity] = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editFields, setEditFields] = useState({});
+  const [editSaving, setEditSaving] = useState(false);
   const followupNumbers = Array.from({ length: Number(settings.total_followups) || 5 }, (_, i) => i + 1);
 
   const load = useCallback(async () => {
@@ -149,8 +152,16 @@ export default function FollowUp() {
       const res = await api.post(`/shiprocket/orders/${oid}/complete-followup`);
       const { completedCount, next_follow_up } = res.data.data;
       setCompletedMap(prev => ({ ...prev, [oid]: completedCount }));
-      if (completedCount >= (Number(settings.total_followups) || 5)) {
+      const totalFollowups = Number(settings.total_followups) || 5;
+      if (completedCount >= totalFollowups) {
+         // Use selected (most up-to-date) or fall back to all
+         const doneOrder = selected && String(selected._id) === oid ? selected : all.find(o => String(o._id) === oid);
          setAll(prev => prev.filter(o => String(o._id) !== oid));
+         const finalOrder = doneOrder ? { ...doneOrder, all_followups_done: true } : null;
+         if (finalOrder) {
+           setCompletedList(prev => [finalOrder, ...prev]);
+           setCompletedTotal(prev => prev + 1);
+         }
          setSelected(null);
          return;
       }
@@ -197,11 +208,34 @@ export default function FollowUp() {
     setDoneLoading(String(oid));
     try {
       await api.post(`/shiprocket/orders/${oid}/send-to-verification`);
-      alert('Successfully sent to Verification!');
+      const verificationActivity = {
+        _id: Date.now().toString(),
+        title: 'Sent to Verification',
+        description: 'Order sent back to Verification for a new cycle.',
+        actor: { name: 'Staff' },
+        occurred_at: new Date().toISOString(),
+      };
+      // Use selected (most up-to-date) or fall back to all list
+      const orderData = (selected && String(selected._id) === String(oid))
+        ? selected
+        : all.find(o => String(o._id) === String(oid)) || completedList.find(o => String(o._id) === String(oid));
+      // Remove from active list
       setAll(prev => prev.filter(o => String(o._id) !== String(oid)));
-      setCompletedList(prev => prev.filter(o => String(o._id) !== String(oid)));
-      setCompletedTotal(prev => Math.max(0, prev - 1));
-      setSelected(null);
+      // Always add/update in completed list
+      if (orderData) {
+        const sentOrder = { ...orderData, sent_to_verification: true };
+        setCompletedList(prev => {
+          const exists = prev.some(o => String(o._id) === String(oid));
+          if (exists) return prev.map(o => String(o._id) === String(oid) ? sentOrder : o);
+          setCompletedTotal(t => t + 1);
+          return [sentOrder, ...prev];
+        });
+      }
+      // Update activity and keep modal open
+      if (selected && String(selected._id) === String(oid)) {
+        setActivity(prev => [verificationActivity, ...prev]);
+        setSelected(prev => prev ? { ...prev, sent_to_verification: true } : prev);
+      }
     } catch (e) {
       alert(e.response?.data?.message || e.message);
     } finally {
@@ -223,6 +257,20 @@ export default function FollowUp() {
     } finally { setNoteSaving(false); }
   };
 
+  const saveContact = async () => {
+    if (!selected) return;
+    setEditSaving(true);
+    try {
+      const res = await api.patch(`/shiprocket/orders/${selected._id}/contact`, editFields);
+      const updated = { ...selected, ...res.data.data };
+      setSelected(updated);
+      setAll(prev => prev.map(o => String(o._id) === String(selected._id) ? { ...o, ...res.data.data } : o));
+      setEditMode(false);
+    } catch (e) {
+      alert('Failed to save: ' + (e?.response?.data?.message || e.message));
+    } finally { setEditSaving(false); }
+  };
+
   const dueCounts = followupNumbers.reduce((acc, n) => {
     acc[n] = all.filter(o => {
       const fu = getFollowup(o, n);
@@ -232,6 +280,11 @@ export default function FollowUp() {
   }, {});
 
   const filtered = all.filter(o => {
+    // Exclude orders that are fully done or sent to verification
+    const allFUs = (o.followups || []).sort((a, b) => a.followup_number - b.followup_number);
+    const completedCount = completedMap[o._id] ?? allFUs.filter(f => f.completed).length;
+    const totalFU = Number(settings.total_followups) || 5;
+    if (completedCount >= totalFU || o.sent_to_verification || o.followup_done) return false;
     if (filterFollowupNum) {
       const fu = getFollowup(o, filterFollowupNum);
       if (!fu || fu.completed || !previousFollowupsDone(o, filterFollowupNum) || !isDue(fu.scheduled_date, filterDelivered)) return false;
@@ -257,6 +310,8 @@ export default function FollowUp() {
     setSelected(order);
     setNoteText('');
     setActivity([]);
+    setEditMode(false);
+    setEditFields({});
     setActivityLoading(true);
     api.get(`/shiprocket/orders/${order._id}/activity`)
       .then(res => setActivity(Array.isArray(res.data?.data) ? res.data.data : []))
@@ -265,55 +320,49 @@ export default function FollowUp() {
   };
 
   return (
-    <div className="space-y-8 bg-glow pb-10">
+    <div className="min-h-full bg-glow pb-10 px-3 sm:px-6 lg:px-8 space-y-8 pt-4">
       {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4 animate-slide-up">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 overflow-x-auto pb-2 no-scrollbar lg:overflow-visible">
         {followupNumbers.map((n, i) => {
           const colors = ['from-emerald-400 to-teal-500', 'from-blue-400 to-indigo-500', 'from-amber-400 to-orange-500', 'from-rose-400 to-red-500', 'from-purple-400 to-violet-500'];
           const icons = ['M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', 'M16 3h5m0 0v5m0-5l-6 6M5 3l6 6m-6-6v5m0-5h5', 'M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129', 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2', 'M5 13l4 4L19 7'];
-          const item = { label: `${ordinal(n - 1)} Follow Up`, val: dueCounts[n] || 0, color: colors[i % colors.length], icon: icons[i % icons.length] };
+          const count = dueCounts[n] || 0;
+          const label = `${ordinal(n - 1)} Call`;
+          const color = colors[i % colors.length];
+          const icon = icons[i % icons.length];
+          
           return (
-          <div key={i} className="relative overflow-hidden group bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100/50 hover:shadow-2xl hover:-translate-y-1 transition-all duration-500" style={{ animationDelay: `${i * 100}ms` }}>
-            <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${item.color} opacity-[0.04] rounded-bl-full group-hover:scale-150 transition-transform duration-700`} />
-            <div className="flex items-center gap-5 relative z-10">
-              <div className={`w-14 h-14 rounded-[1.25rem] bg-gradient-to-br ${item.color} flex items-center justify-center text-white shadow-xl shadow-${item.color.split(' ')[1]}/20 transform group-hover:rotate-6 transition-transform duration-500`}>
-                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d={item.icon}/></svg>
-              </div>
-              <div>
-                <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.25em] mb-1">{item.label}</p>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-4xl font-black text-gray-900 tracking-tight">{item.val}</span>
-                  <span className="text-[11px] font-bold text-gray-300">READY</span>
+            <div key={n} className="bg-white rounded-2xl p-3 sm:p-5 shadow-sm border border-gray-100/50 hover:shadow-lg transition-all min-w-[140px] sm:min-w-0">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className={`w-8 h-8 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl bg-gradient-to-br ${color} flex items-center justify-center text-white shrink-0 shadow-lg`}>
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d={icon}/></svg>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest truncate">{label}</p>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-lg sm:text-2xl font-black text-gray-900">{count}</span>
+                    <span className="text-[8px] sm:text-[9px] font-bold text-gray-300">DUE</span>
+                  </div>
                 </div>
               </div>
             </div>
-            <div className={`absolute -inset-1 bg-gradient-to-r ${item.color} opacity-0 group-hover:opacity-[0.03] blur-xl transition-opacity duration-500`} />
-          </div>
-        )})}
+          );
+        })}
       </div>
 
       {/* Header Section */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-end justify-between gap-6 px-2">
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <span className="px-3 py-1 bg-emerald-100 text-emerald-600 text-[10px] font-black uppercase tracking-widest rounded-full">Customer Retention</span>
-            <div className="h-px w-12 bg-gray-200" />
-          </div>
-          <h2 className="text-4xl font-black text-gray-900 tracking-tighter uppercase leading-none">Follow Ups</h2>
-          <p className="text-sm font-medium text-gray-400">Track and manage customer calls after delivery.</p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-          {/* Tabs */}
-          <div className="flex items-center bg-white rounded-2xl border border-gray-100 p-1 shadow-sm shrink-0 overflow-x-auto">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3 w-full">
+          {/* Tabs Container */}
+          <div className="flex items-center bg-white rounded-2xl border border-gray-100 p-1 shadow-sm overflow-x-auto no-scrollbar max-w-full">
             <button
               type="button"
               onClick={() => { setShowCompleted(false); setFilterFollowupNum(''); setPage(1); }}
-              className={`px-5 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition whitespace-nowrap ${
+              className={`px-4 py-2.5 rounded-xl text-[10px] sm:text-[11px] font-black uppercase tracking-widest transition whitespace-nowrap ${
                 !showCompleted && !filterFollowupNum ? 'bg-emerald-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'
               }`}
             >
-              All Orders ({all.length})
+              All ({all.length})
             </button>
             {followupNumbers.map(n => {
               const active = !showCompleted && filterFollowupNum === String(n);
@@ -322,49 +371,51 @@ export default function FollowUp() {
                   key={n}
                   type="button"
                   onClick={() => { setShowCompleted(false); setFilterFollowupNum(String(n)); setPage(1); }}
-                  className={`px-5 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition whitespace-nowrap ${
+                  className={`px-4 py-2.5 rounded-xl text-[10px] sm:text-[11px] font-black uppercase tracking-widest transition whitespace-nowrap ${
                     active ? 'bg-emerald-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'
                   }`}
                 >
-                  {ordinal(n - 1)} Call ({dueCounts[n] || 0})
+                  {ordinal(n - 1)} ({dueCounts[n] || 0})
                 </button>
               );
             })}
             <button
               type="button"
               onClick={() => { setShowCompleted(true); setCompletedPage(1); loadCompleted(1, search); }}
-              className={`px-5 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition whitespace-nowrap ${
+              className={`px-4 py-2.5 rounded-xl text-[10px] sm:text-[11px] font-black uppercase tracking-widest transition whitespace-nowrap ${
                 showCompleted ? 'bg-gray-800 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'
               }`}
             >
-              ✅ Completed ({completedTotal})
+              ✅ Done ({completedTotal})
             </button>
           </div>
 
-          <div className="relative group flex-1 lg:flex-none">
-            <input 
-              type="date" 
-              value={filterDelivered} 
-              onChange={(e) => { setFilterDelivered(e.target.value); setPage(1); }}
-              className="w-full bg-white border border-gray-100 rounded-2xl px-5 py-3 text-sm font-black text-gray-700 focus:ring-4 focus:ring-emerald-500/10 transition-all cursor-pointer shadow-sm hover:shadow-md"
-            />
-          </div>
+          <div className="flex flex-col sm:flex-row flex-1 items-center gap-3 w-full">
+            <div className="relative group w-full sm:w-auto sm:min-w-[160px]">
+              <input 
+                type="date" 
+                value={filterDelivered} 
+                onChange={(e) => { setFilterDelivered(e.target.value); setPage(1); }}
+                className="w-full bg-white border border-gray-100 rounded-2xl px-4 py-3 text-xs font-black text-gray-700 focus:ring-4 focus:ring-emerald-500/10 transition-all cursor-pointer shadow-sm hover:shadow-md"
+              />
+            </div>
 
-          <div className="relative flex-1 lg:w-64">
-             <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-               <circle cx="11" cy="11" r="8" /><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35" />
-             </svg>
-             <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-               placeholder="Search name, phone..."
-               className="w-full pl-11 pr-5 py-3 rounded-2xl border border-gray-100 bg-white text-sm font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-emerald-400/20 transition shadow-sm" />
+            <div className="relative w-full sm:flex-1 sm:max-w-[300px]">
+               <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                 <circle cx="11" cy="11" r="8" /><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35" />
+               </svg>
+               <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+                 placeholder="Search name, phone, awb..."
+                 className="w-full pl-11 pr-5 py-3 rounded-2xl border border-gray-100 bg-white text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-emerald-400/20 transition shadow-sm" />
+            </div>
+
+            <button onClick={syncAndLoad} disabled={syncing || loading}
+              className="w-full sm:w-auto flex items-center justify-center gap-3 px-6 py-3 rounded-2xl text-[10px] font-black text-white shadow-xl hover:-translate-y-1 transition-all uppercase tracking-widest active:scale-95 disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+              <svg className={`w-4 h-4 ${syncing || loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+              <span>{syncing ? 'Syncing...' : 'Sync Data'}</span>
+            </button>
           </div>
-          
-          <button onClick={syncAndLoad} disabled={syncing || loading}
-            className="flex-1 lg:flex-none flex items-center justify-center gap-3 px-6 py-3 rounded-2xl text-[11px] font-black text-white shadow-xl hover:-translate-y-1 transition-all uppercase tracking-widest active:scale-95 disabled:opacity-50"
-            style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
-            <svg className={`w-4 h-4 ${syncing || loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
-            {syncing ? 'Syncing...' : loading ? 'Loading...' : 'Sync'}
-          </button>
         </div>
       </div>
 
@@ -388,8 +439,9 @@ export default function FollowUp() {
             <p className="text-xl font-bold text-gray-400">No completed follow-ups yet</p>
           </div>
         ) : (
-          <div className="table-responsive no-scrollbar">
-            <table className="w-full text-xs min-w-[900px]">
+          <div className="overflow-x-auto no-scrollbar -mx-2 sm:-mx-4 lg:-mx-6 px-2 sm:px-4 lg:px-6">
+            {/* Desktop Table */}
+            <table className="hidden xl:table w-full text-xs min-w-[850px]">
               <thead>
                 <tr className="text-gray-400 border-b border-gray-100 text-left bg-white">
                   <th className="py-5 px-6 font-black uppercase tracking-[0.15em] text-[10px]">Customer</th>
@@ -398,6 +450,7 @@ export default function FollowUp() {
                   <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Delivered</th>
                   <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Status</th>
                   <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Amount</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Mark Down</th>
                   <th className="py-5 px-6 font-black uppercase tracking-[0.15em] text-[10px] text-right">View</th>
                 </tr>
               </thead>
@@ -406,7 +459,7 @@ export default function FollowUp() {
                   <tr key={o._id} className="hover:bg-gradient-to-r hover:from-white hover:to-gray-50/50 transition-all duration-300 group">
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br from-gray-500 to-gray-600 flex items-center justify-center text-white text-base font-black shadow-lg shadow-black/5 shrink-0`}>{initials(o.billing_customer_name)}</div>
+                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br from-gray-500 to-gray-600 flex items-center justify-center text-white text-sm font-black shadow-lg shadow-black/5 shrink-0`}>{initials(o.billing_customer_name)}</div>
                         <div className="min-w-0">
                           <p className="font-bold text-gray-800 text-sm truncate">{o.billing_customer_name || '—'}</p>
                           <div className="flex items-center gap-2 mt-1">
@@ -438,8 +491,20 @@ export default function FollowUp() {
                       </div>
                     </td>
                     <td className="py-4 px-2 text-center"><span className="text-sm font-black text-gray-700">₹{o.sub_total}</span></td>
+                    <td className="py-4 px-2 text-center">
+                      <button
+                        onClick={() => !o.sent_to_verification && handleSendToVerification(o._id)}
+                        disabled={doneLoading === String(o._id) || !!o.sent_to_verification}
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm ${
+                          o.sent_to_verification
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                            : 'bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white disabled:opacity-50'
+                        }`}>
+                        {o.sent_to_verification ? '✓ Sent' : doneLoading === String(o._id) ? '...' : 'Verification'}
+                      </button>
+                    </td>
                     <td className="py-4 px-6 text-right">
-                      <button onClick={() => handleSelect(o)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-50 text-gray-500 hover:bg-gray-900 hover:text-white transition-all shadow-sm hover:shadow-lg">
+                      <button onClick={() => handleSelect(o)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-100 text-gray-700 hover:bg-emerald-600 hover:text-white transition-all shadow-sm hover:shadow-lg">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                       </button>
                     </td>
@@ -447,6 +512,54 @@ export default function FollowUp() {
                 ))}
               </tbody>
             </table>
+
+            {/* Mobile Cards */}
+            <div className="xl:hidden divide-y divide-gray-100">
+              {completedList.map((o) => {
+                const completedCount = completedMap[o._id] ?? (o.followups || []).filter(f => f.completed).length;
+                return (
+                <div key={o._id} className="p-4 bg-white hover:bg-gray-50/50 transition-colors">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-500 font-black shrink-0 shadow-sm">{initials(o.billing_customer_name)}</div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-gray-900 text-sm truncate">{o.billing_customer_name}</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{o.billing_phone} • {o.billing_city}</p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-black text-gray-900 text-sm">₹{o.sub_total}</p>
+                      <span className="inline-block text-[9px] font-bold text-emerald-600 uppercase bg-emerald-50 px-2 py-0.5 rounded-full mt-1 border border-emerald-100">✓ Done</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-gray-50 rounded-xl p-2.5 border border-gray-100 mb-3">
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Number(settings.total_followups) || 5 }, (_, idx) => (
+                        <div key={idx} className="w-6 h-6 rounded-lg text-[9px] font-black flex items-center justify-center bg-emerald-100 text-emerald-600 border border-emerald-200">
+                          {idx + 1}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="text-[10px] font-bold text-gray-400">
+                      Delivered: <span className="text-gray-700">{formatDate(o.delivered_at || o.createdAt, { day: '2-digit', month: 'short' })}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                     <button onClick={() => !o.sent_to_verification && handleSendToVerification(o._id)} disabled={doneLoading === String(o._id) || !!o.sent_to_verification}
+                       className={`flex-1 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                         o.sent_to_verification ? 'bg-gray-100 text-gray-400' : 'bg-orange-50 text-orange-600 border border-orange-100 shadow-sm'
+                       }`}>
+                       {o.sent_to_verification ? 'Sent' : 'Verification'}
+                     </button>
+                     <button onClick={() => handleSelect(o)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-900 text-white shadow-lg shrink-0">
+                       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                     </button>
+                  </div>
+                </div>
+              )})}
+            </div>
           </div>
         )}
         {(() => { const tp = Math.ceil(completedTotal / PER_PAGE); return tp > 1 ? (
@@ -482,18 +595,19 @@ export default function FollowUp() {
             <p className="text-sm text-gray-300 mt-2">{search ? 'Try a different search' : `Nothing due on ${formatDate(filterDelivered)}`}</p>
           </div>
         ) : (
-          <div className="table-responsive no-scrollbar">
-            <table className="w-full text-xs min-w-[1080px]">
+          <div className="overflow-x-auto no-scrollbar -mx-2 sm:-mx-4 lg:-mx-6 px-2 sm:px-4 lg:px-6">
+            {/* Desktop Table */}
+            <table className="hidden xl:table w-full text-xs min-w-[850px]">
               <thead>
                 <tr className="text-gray-400 border-b border-gray-100 text-left bg-white">
-                  <th className="py-5 px-6 font-black uppercase tracking-[0.15em] text-[10px]">Customer Order</th>
-                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px]">Location & Contact</th>
-                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px]">Medicine</th>
-                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Delivered</th>
-                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Progress</th>
-                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Next Call</th>
-                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Amount</th>
-                  <th className="py-5 px-6 font-black uppercase tracking-[0.15em] text-[10px] text-right">Controls</th>
+                  <th className="py-4 px-6 font-black uppercase tracking-wider text-[10px]">Customer Order</th>
+                  <th className="py-4 px-2 font-black uppercase tracking-wider text-[10px]">Location & Contact</th>
+                  <th className="py-4 px-2 font-black uppercase tracking-wider text-[10px]">Medicine</th>
+                  <th className="py-4 px-2 font-black uppercase tracking-wider text-[10px] text-center">Delivered</th>
+                  <th className="py-4 px-2 font-black uppercase tracking-wider text-[10px] text-center">Progress</th>
+                  <th className="py-4 px-2 font-black uppercase tracking-wider text-[10px] text-center">Next Call</th>
+                  <th className="py-4 px-2 font-black uppercase tracking-wider text-[10px] text-center">Amount</th>
+                  <th className="py-4 px-6 font-black uppercase tracking-wider text-[10px] text-right">Controls</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50/50">
@@ -517,9 +631,6 @@ export default function FollowUp() {
                               <a href={`https://shiprocket.co/tracking/${o.awb_code}`} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest text-gray-400 py-0.5 px-1.5 bg-gray-50 rounded-lg border border-gray-100 hover:text-blue-600 transition-colors">
                                 {o.awb_code}
                               </a>
-                              {allDone && (
-                                <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase">Done</span>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -535,9 +646,6 @@ export default function FollowUp() {
                           <span className="text-xs font-bold text-gray-700 truncate max-w-[140px]" title={o.order_items?.[0]?.name}>
                             {o.order_items?.[0]?.name || '—'}
                           </span>
-                          {o.order_items?.length > 1 && (
-                            <span className="text-[9px] font-black text-emerald-500 uppercase tracking-tighter">+{o.order_items.length - 1} more items</span>
-                          )}
                         </div>
                       </td>
                       <td className="py-4 px-2 text-center">
@@ -546,15 +654,15 @@ export default function FollowUp() {
                          </span>
                       </td>
                       <td className="py-4 px-2">
-                        <div className="flex items-center justify-center gap-1.5">
+                        <div className="flex items-center justify-center gap-1">
                           {Array.from({ length: Number(settings.total_followups) || 5 }, (_, idx) => {
                             const isDone = idx < completedCount;
                             const isCurrent = idx === completedCount && !allDone;
                             return (
                               <div key={idx} 
-                                className={`text-[10px] font-black w-7 h-7 flex items-center justify-center rounded-lg border transition-all ${
+                                className={`text-[9px] font-black w-6 h-6 flex items-center justify-center rounded-lg border transition-all ${
                                   isDone ? 'bg-gray-100 text-gray-400 border-gray-200' :
-                                  isCurrent ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-500/20 scale-110 z-10' :
+                                  isCurrent ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' :
                                   'bg-gray-50 text-gray-300 border-gray-100'
                                 }`}>
                                 {idx + 1}
@@ -566,9 +674,8 @@ export default function FollowUp() {
                       <td className="py-4 px-2 text-center">
                          <div className="flex flex-col items-center gap-1">
                             <span className={`text-[11px] font-black uppercase tracking-widest ${allDone ? 'text-gray-400' : 'text-orange-500'}`}>
-                              {allDone ? 'COMPLETED' : formatDate(activeFU?.scheduled_date, { day: '2-digit', month: 'short' })}
+                              {allDone ? 'DONE' : formatDate(activeFU?.scheduled_date, { day: '2-digit', month: 'short' })}
                             </span>
-                            {!allDone && <span className="text-[9px] font-bold text-gray-400 uppercase">Scheduled</span>}
                          </div>
                       </td>
                       <td className="py-4 px-2 text-center">
@@ -577,11 +684,8 @@ export default function FollowUp() {
                       <td className="py-4 px-6 text-right">
                         <div className="flex items-center justify-end gap-2">
                           {!activeFU?.completed && !allDone && (
-                            <button 
-                              onClick={() => handleFollowUpDone(o._id)}
-                              disabled={doneLoading === String(o._id)}
-                              className="w-10 h-10 flex items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-sm hover:shadow-lg disabled:opacity-50 group/btn"
-                              title="Mark Follow Up Done">
+                            <button onClick={() => handleFollowUpDone(o._id)} disabled={doneLoading === String(o._id)}
+                              className="w-10 h-10 flex items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-sm active:scale-95 disabled:opacity-50">
                               {doneLoading === String(o._id) ? (
                                 <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                               ) : (
@@ -589,9 +693,8 @@ export default function FollowUp() {
                               )}
                             </button>
                           )}
-                          <button onClick={() => handleSelect(o)} title="Open Details" 
-                            className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-50 text-gray-500 hover:bg-gray-900 hover:text-white transition-all shadow-sm hover:shadow-lg">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                          <button onClick={() => handleSelect(o)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-50 text-gray-800 hover:bg-gray-900 hover:text-white transition-all shadow-sm active:scale-95">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                           </button>
                         </div>
                       </td>
@@ -600,21 +703,87 @@ export default function FollowUp() {
                 })}
               </tbody>
             </table>
+
+            {/* Mobile Cards */}
+            <div className="xl:hidden divide-y divide-gray-100">
+              {paged.map((o, i) => {
+                const allFUs = (o.followups || []).sort((a, b) => a.followup_number - b.followup_number);
+                const completedCount = completedMap[o._id] ?? allFUs.filter(f => f.completed).length;
+                const allDone = completedCount >= (Number(settings.total_followups) || 5);
+                const activeFU = getFollowup(o, filterFollowupNum) || allFUs[completedCount];
+                const gradient = ROLE_GRADIENT[i % ROLE_GRADIENT.length];
+
+                return (
+                  <div key={o._id} className="p-4 bg-white hover:bg-gray-50/30 transition-colors">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-base font-black shrink-0 shadow-lg shadow-black/5`}>{initials(o.billing_customer_name)}</div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-900 text-sm truncate">{o.billing_customer_name}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                             <span className="text-[10px] font-bold text-gray-400 uppercase">{o.billing_phone}</span>
+                             <span className="w-1 h-1 rounded-full bg-gray-200" />
+                             <span className="text-[10px] font-bold text-gray-400 uppercase truncate">{o.billing_city}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-black text-gray-900 text-sm">₹{o.sub_total}</p>
+                        <p className="text-[9px] font-bold text-orange-500 uppercase mt-1">
+                          {allDone ? 'COMPLETED' : `Next: ${formatDate(activeFU?.scheduled_date, { day: '2-digit', month: 'short' })}`}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between bg-gray-50 rounded-[1.25rem] p-3 border border-gray-100 mb-4">
+                      <div className="flex items-center gap-1.5">
+                        {Array.from({ length: Number(settings.total_followups) || 5 }, (_, idx) => {
+                          const isDone = idx < completedCount;
+                          const isCurrent = idx === completedCount && !allDone;
+                          return (
+                            <div key={idx} className={`w-6 h-6 rounded-lg text-[9px] font-black flex items-center justify-center border transition-all ${
+                              isDone ? 'bg-gray-200 text-gray-400 border-gray-200' :
+                              isCurrent ? 'bg-emerald-600 text-white border-emerald-600 shadow-md' :
+                              'bg-white text-gray-300 border-gray-200'
+                            }`}>{idx + 1}</div>
+                          );
+                        })}
+                      </div>
+                      <div className="text-[10px] font-bold text-gray-400">
+                        Delivered: <span className="text-gray-700">{formatDate(o.delivered_at || o.createdAt, { day: '2-digit', month: 'short' })}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                       {!activeFU?.completed && !allDone && (
+                         <button onClick={() => handleFollowUpDone(o._id)} disabled={doneLoading === String(o._id)}
+                           className="flex-1 h-11 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white text-[11px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 active:scale-95 disabled:opacity-50">
+                           {doneLoading === String(o._id) ? 'Processing...' : 'Mark Done'}
+                         </button>
+                       )}
+                       <button onClick={() => handleSelect(o)} className="flex-1 h-11 flex items-center justify-center gap-2 rounded-xl bg-gray-900 text-white text-[11px] font-black uppercase tracking-widest shadow-lg active:scale-95">
+                         View Details
+                       </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
         {/* Pagination Footer */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/50">
-            <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Page {page} of {totalPages}</span>
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-3xl">
+            <span className="text-[10px] sm:text-[11px] font-black text-gray-400 uppercase tracking-widest">Page {page} of {totalPages}</span>
+            <div className="flex items-center gap-2 sm:gap-3">
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-white hover:shadow-sm disabled:opacity-30 transition-all">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="m15 18-6-6 6-6"/></svg>
+                className="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-white hover:shadow-md disabled:opacity-30 transition-all active:scale-95">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="m15 18-6-6 6-6"/></svg>
               </button>
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-white hover:shadow-sm disabled:opacity-30 transition-all">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6"/></svg>
+                className="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-white hover:shadow-md disabled:opacity-30 transition-all active:scale-95">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6"/></svg>
               </button>
             </div>
           </div>
@@ -631,34 +800,44 @@ export default function FollowUp() {
         return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          <div className="bg-white rounded-[1.5rem] sm:rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"
             style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
             
-            <div className="px-6 py-5 shrink-0" style={{ background: 'linear-gradient(135deg, #064e3b, #065f46)' }}>
-              <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-xl font-black shadow-lg`}>
+            <div className="px-3 sm:px-6 py-3 sm:py-5 shrink-0" style={{ background: 'linear-gradient(135deg, #064e3b, #065f46)' }}>
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className={`w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-base sm:text-xl font-black shadow-lg`}>
                   {initials(selected.billing_customer_name)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-white font-black text-xl tracking-tight truncate">{selected.billing_customer_name || 'Order Detail'}</h3>
-                  <div className="flex items-center gap-3 mt-1">
-                    <p className="text-emerald-300 font-bold text-sm">{selected.billing_phone}</p>
-                    <span className="w-1 h-1 rounded-full bg-emerald-400/50" />
-                    <p className="text-emerald-300 font-bold text-sm">
+                  <h3 className="text-white font-black text-base sm:text-xl tracking-tight truncate">{selected.billing_customer_name || 'Order Detail'}</h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mt-0.5 sm:mt-1">
+                    <p className="text-emerald-300 font-bold text-xs sm:text-sm">{selected.billing_phone}</p>
+                    <span className="hidden sm:inline w-1 h-1 rounded-full bg-emerald-400/50" />
+                    <p className="text-emerald-300 font-bold text-xs sm:text-sm truncate">
                       <a href={`https://shiprocket.co/tracking/${selected.awb_code}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
                         {selected.awb_code}
                       </a>
                     </p>
                   </div>
                 </div>
-                <button onClick={() => setSelected(null)}
-                  className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/10 text-emerald-100 hover:bg-white/20 hover:text-white transition-all text-2xl leading-none shadow-sm">
-                  ×
-                </button>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <button
+                    onClick={() => {
+                      if (editMode) { setEditMode(false); setEditFields({}); }
+                      else { setEditMode(true); setEditFields({ billing_phone: selected.billing_phone, billing_city: selected.billing_city, billing_state: selected.billing_state, billing_pincode: selected.billing_pincode, billing_address: selected.billing_address }); }
+                    }}
+                    className="px-2.5 sm:px-3 py-1.5 rounded-lg sm:rounded-xl bg-white/10 text-emerald-100 hover:bg-white/20 text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all">
+                    {editMode ? 'EXIT' : 'EDIT'}
+                  </button>
+                  <button onClick={() => setSelected(null)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg sm:rounded-xl bg-white/10 text-emerald-100 hover:bg-white/20 hover:text-white transition-all text-xl sm:text-2xl leading-none shadow-sm">
+                    ×
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-5 custom-scrollbar bg-gray-50/30">
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5 custom-scrollbar bg-gray-50/30">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                 <div>
                   <SectionHead label="Order Details" />
@@ -667,12 +846,44 @@ export default function FollowUp() {
                   <DetailRow label="Courier" value={selected.courier_name} />
                   <DetailRow label="Payment" value={selected.payment_method} />
                   <DetailRow label="Amount" value={`₹${selected.sub_total}`} />
+                  <DetailRow label="Delivered" value={formatDate(selected.delivered_at || selected.shiprocket_delivered_date || selected.createdAt, { day: '2-digit', month: 'short', year: 'numeric' })} />
+                  {editMode ? (
+                    <div className="flex items-start gap-3 py-2 border-b border-gray-50">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-2">Phone</span>
+                      <input className={inputCls} value={editFields.billing_phone || ''} onChange={e => setEditFields(p => ({ ...p, billing_phone: e.target.value }))} placeholder="Phone" />
+                    </div>
+                  ) : (
+                    <DetailRow label="Phone" value={selected.billing_phone} />
+                  )}
                   
                   <SectionHead label="Address" />
-                  <DetailRow label="City" value={selected.billing_city} />
-                  <DetailRow label="State" value={selected.billing_state} />
-                  <DetailRow label="Pincode" value={selected.billing_pincode} />
-                  <DetailRow label="Address" value={selected.billing_address} />
+                  {editMode ? (
+                    <div className="space-y-2">
+                      {[['City', 'billing_city'], ['State', 'billing_state'], ['Pincode', 'billing_pincode']].map(([label, key]) => (
+                        <div key={key} className="flex items-center gap-3 py-1">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0">{label}</span>
+                          <input className={inputCls} value={editFields[key] || ''} onChange={e => setEditFields(p => ({ ...p, [key]: e.target.value }))} placeholder={label} />
+                        </div>
+                      ))}
+                      <div className="flex items-start gap-3 py-1">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-2">Address</span>
+                        <textarea className={inputCls + ' resize-none'} rows={3} value={editFields.billing_address || ''} onChange={e => setEditFields(p => ({ ...p, billing_address: e.target.value }))} placeholder="Address" />
+                      </div>
+                      <button onClick={saveContact} disabled={editSaving}
+                        className="w-full py-2 rounded-xl text-[11px] font-black text-white tracking-widest disabled:opacity-50 transition-all active:scale-95"
+                        style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+                        {editSaving ? 'SAVING...' : 'SAVE CHANGES'}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <DetailRow label="City" value={selected.billing_city} />
+                      <DetailRow label="State" value={selected.billing_state} />
+                      <DetailRow label="Pincode" value={selected.billing_pincode} />
+                      <DetailRow label="Address" value={selected.billing_address} />
+
+                    </>
+                  )}
                 </div>
                 
                 <div>
@@ -720,7 +931,7 @@ export default function FollowUp() {
 
               <div className="mt-8">
                 <SectionHead label="Follow-up Timeline" />
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
                   {allFUs.map((fu, i) => {
                     const isCurrent = !fu.completed && (i === 0 || allFUs[i-1]?.completed);
                     const staffName = fu.staff?.name || (fu.status === 'missed' ? 'System' : '');
@@ -750,11 +961,59 @@ export default function FollowUp() {
                         {staffName && <p className="text-[10px] font-bold text-emerald-600 mt-1 truncate">By {staffName}</p>}
                         {(fu.notes || fu.note) && <p className="text-[10px] text-gray-500 mt-2 line-clamp-2">{fu.notes || fu.note}</p>}
                         
+                        {/* Relief % per followup */}
+                        <div className="mt-2">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">Relief % <span className="text-red-400">*</span></p>
+                          {fu.completed && fu.relief_percentage != null && fu.relief_percentage !== '' ? (
+                            <span className="text-xs font-black text-emerald-600">{fu.relief_percentage}%</span>
+                          ) : (
+                            <input
+                              type="number" min="0" max="100"
+                              placeholder="e.g. 70"
+                              value={fu.relief_percentage !== null && fu.relief_percentage !== undefined && fu.relief_percentage !== '' ? fu.relief_percentage : ''}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setSelected(prev => ({
+                                  ...prev,
+                                  followups: prev.followups.map(f =>
+                                    f.followup_number === fu.followup_number ? { ...f, relief_percentage: val === '' ? '' : val } : f
+                                  )
+                                }));
+                              }}
+                              onBlur={async e => {
+                                const val = String(e.target.value).trim();
+                                if (!val) return;
+                                try {
+                                  await api.patch(`/shiprocket/orders/${selected._id}/followup-relief`, {
+                                    followup_number: fu.followup_number,
+                                    relief_percentage: Number(val)
+                                  });
+                                  const numVal = Number(val);
+                                  setSelected(prev => ({
+                                    ...prev,
+                                    followups: prev.followups.map(f =>
+                                      f.followup_number === fu.followup_number ? { ...f, relief_percentage: numVal } : f
+                                    )
+                                  }));
+                                  setAll(prev => prev.map(o => String(o._id) === String(selected._id) ? {
+                                    ...o,
+                                    followups: (o.followups || []).map(f =>
+                                      f.followup_number === fu.followup_number ? { ...f, relief_percentage: numVal } : f
+                                    )
+                                  } : o));
+                                } catch { /* silent */ }
+                              }}
+                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 transition"
+                            />
+                          )}
+                        </div>
+
                         {isCurrent && (
                           <div className="flex flex-col gap-1.5 mt-3">
-                            <button 
+                            <button
                               onClick={() => handleFollowUpDone(selected._id)}
-                              disabled={doneLoading === String(selected._id)}
+                              disabled={doneLoading === String(selected._id) || !fu.relief_percentage}
+                              title={!fu.relief_percentage ? 'Enter relief % first' : ''}
                               className="w-full py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-[10px] font-black rounded-xl shadow-md hover:shadow-lg active:scale-95 transition-all disabled:opacity-50 tracking-widest">
                               {doneLoading === String(selected._id) ? 'WAIT...' : 'MARK DONE'}
                             </button>
@@ -786,20 +1045,33 @@ export default function FollowUp() {
                 </div>
               </div>
 
-              {allDone && (
-                <div className="mt-6">
-                  <button 
-                    onClick={() => handleSendToVerification(selected._id)}
-                    disabled={doneLoading === String(selected._id)}
-                    className="w-full py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xs font-black rounded-xl shadow-lg hover:shadow-xl active:scale-[0.98] transition-all disabled:opacity-50 uppercase tracking-widest flex items-center justify-center gap-2">
-                    {doneLoading === String(selected._id) ? (
-                      <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> SENDING...</>
-                    ) : (
-                      <><svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> SEND TO VERIFICATION</>
-                    )}
-                  </button>
-                </div>
-              )}
+              <div className="mt-6">
+                {(() => {
+                  const lastRelief = [...allFUs].reverse().find(f => f.relief_percentage != null && f.relief_percentage !== '')?.relief_percentage;
+                  return lastRelief != null ? (
+                    <div className="mb-3 flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-2.5">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Last Relief %</span>
+                      <span className="text-sm font-black text-emerald-700">{lastRelief}%</span>
+                    </div>
+                  ) : null;
+                })()}
+                <button
+                  onClick={() => !selected.sent_to_verification && handleSendToVerification(selected._id)}
+                  disabled={doneLoading === String(selected._id) || !!selected.sent_to_verification}
+                  className={`w-full py-3 text-xs font-black rounded-xl shadow-lg hover:shadow-xl active:scale-[0.98] transition-all uppercase tracking-widest flex items-center justify-center gap-2 ${
+                    selected.sent_to_verification
+                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white disabled:opacity-50'
+                  }`}>
+                  {doneLoading === String(selected._id) ? (
+                    <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> SENDING...</>
+                  ) : selected.sent_to_verification ? (
+                    <><svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> SENT TO VERIFICATION</>
+                  ) : (
+                    <><svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> SEND TO VERIFICATION</>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
