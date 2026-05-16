@@ -48,10 +48,10 @@ export const syncShiprocket = () => api.post(`${BASE}/orders/sync`);
 export const backfillDeliveredAt = () => api.post(`${BASE}/orders/backfill-delivered`);
 export const debugOrderFields = () => api.get(`${BASE}/orders/debug-fields`);
 export const getOrder = (id) => api.get(`${BASE}/orders/show/${id}`);
-export const getFollowupCommissionSettings = () => api.get(`${BASE}/settings/followups-commission`);
-export const updateFollowupCommissionSettings = (body) => api.patch(`${BASE}/settings/followups-commission`, body);
-export const getOrderActivity = (id) => api.get(`${BASE}/orders/${id}/activity`);
-export const getStaffCommissions = (params) => api.get(`${BASE}/commissions`, { params });
+export const getFollowupCommissionSettings = () => api.get('/commission/settings');
+export const updateFollowupCommissionSettings = (body) => api.put('/commission/settings', body);
+export const getOrderActivity = (id) => api.get(`${BASE}/orders/${id}/notes`);
+export const getStaffCommissions = (params) => api.get('/commission/reorder', { params });
 
 // ── Courier ───────────────────────────────────────────────────────────────────
 export const checkServiceability = (params) => api.get(`${BASE}/courier/serviceability`, { params });
