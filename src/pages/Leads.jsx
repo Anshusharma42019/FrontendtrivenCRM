@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useToast } from '../context/ToastContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getLeads, getLead, createLead, updateLead, deleteLead, assignLead, addLeadNote, markCNP, createCallAgain } from '../services/lead.service';
@@ -56,6 +57,7 @@ export default function Leads() {
   const [searchParams, setSearchParams] = useSearchParams();
   const pendingOpenId = searchParams.get('openId');
 
+  const { error: toastError } = useToast();
   const navigate = useNavigate();
   const canManage = user?.role === 'admin' || user?.role === 'manager';
   const canEdit = canManage || user?.role === 'sales';
@@ -114,7 +116,11 @@ export default function Leads() {
       else if (action === 'lost') { await updateLead(lead._id, { status: 'closed_lost' }).catch(() => {}); }
       setIsCreating(false);
       load();
-    } catch (err) { setError(err.response?.data?.message || 'Failed to create lead'); }
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to create lead';
+      if (err.response?.status === 409) { toastError(`Phone ${form.phone} already exists`, 'Duplicate Number'); }
+      else { setError(msg); }
+    }
     finally { setLoading(false); }
   };
 

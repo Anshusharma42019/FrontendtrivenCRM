@@ -56,7 +56,7 @@ const isDue = (value, inputDate) => {
     today.setHours(23, 59, 59, 999);
     return date <= today;
   }
-  return toDateInputValue(value) === inputDate;
+  return toDateInputValue(value) <= inputDate;
 };
 
 const DetailRow = ({ label, value }) =>
@@ -81,7 +81,7 @@ export default function FollowUp() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
-  const [filterDelivered, setFilterDelivered] = useState('');
+  const [filterDelivered, setFilterDelivered] = useState(() => toDateInputValue(new Date()));
   const [filterFollowupNum, setFilterFollowupNum] = useState(() =>
     new URLSearchParams(window.location.search).get('phone') ? '' : '1'
   );
