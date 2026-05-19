@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, Fragment } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../api';
 
 const PER_PAGE = 20;
@@ -74,19 +75,24 @@ const SectionHead = ({ label }) => (
 );
 
 export default function FollowUp() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [all, setAll] = useState([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
   const [filterDelivered, setFilterDelivered] = useState('');
-  const [filterFollowupNum, setFilterFollowupNum] = useState('1');
+  const [filterFollowupNum, setFilterFollowupNum] = useState(() =>
+    new URLSearchParams(window.location.search).get('phone') ? '' : '1'
+  );
   const [selected, setSelected] = useState(null);
   const [noteText, setNoteText] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
   const [completedMap, setCompletedMap] = useState({});
   const [doneLoading, setDoneLoading] = useState(null);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() =>
+    new URLSearchParams(window.location.search).get('phone') || ''
+  );
   const [completedList, setCompletedList] = useState([]);
   const [completedTotal, setCompletedTotal] = useState(0);
   const [completedPage, setCompletedPage] = useState(1);

@@ -106,6 +106,7 @@ export default function CallAgain() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(null);
   const [taskModal, setTaskModal] = useState(null);
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('phone') || '');
   const navigate = useNavigate();
 
   const load = useCallback(async () => {
@@ -124,6 +125,12 @@ export default function CallAgain() {
     catch { /* ignore */ }
     finally { setUpdating(null); }
   };
+
+  const filtered = leads.filter(r => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return r.lead?.name?.toLowerCase().includes(q) || r.lead?.phone?.includes(q);
+  });
 
   if (loading)
     return (
@@ -156,17 +163,24 @@ export default function CallAgain() {
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-gray-50 bg-gray-50/50 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="px-5 py-3.5 border-b border-gray-50 bg-gray-50/50 flex items-center gap-3">
+          <div className="flex items-center gap-2 shrink-0">
             <div className="w-2 h-2 rounded-full bg-amber-500" />
             <h3 className="font-semibold text-gray-700 text-sm">Call Again Leads</h3>
           </div>
-          <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full font-medium">
-            {leads.length} lead{leads.length !== 1 ? 's' : ''}
+          <div className="relative flex-1 max-w-xs">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+            </svg>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name or phone..."
+              className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-100 bg-white text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-300/50 focus:border-amber-400 transition shadow-sm" />
+          </div>
+          <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full font-medium shrink-0">
+            {filtered.length} lead{filtered.length !== 1 ? 's' : ''}
           </span>
         </div>
 
-        {leads.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className="py-16 text-center">
             <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center mx-auto mb-3">
               <svg className="w-6 h-6 text-amber-300" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -177,7 +191,7 @@ export default function CallAgain() {
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
-            {leads.map((record) => (
+            {filtered.map((record) => (
               <div key={record._id} className="px-5 py-4 flex items-center gap-3 hover:bg-amber-50/30 transition-colors">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white shadow-sm">
                   {record.lead?.name?.charAt(0)}

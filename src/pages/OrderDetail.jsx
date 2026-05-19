@@ -65,7 +65,7 @@ export default function OrderDetail() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    srSvc.getLocalOrderLookup({ order_id: id })
+    srSvc.getLocalOrderLookup(id.match(/^[0-9a-f]{24}$/i) ? { _id: id } : { order_id: id })
       .then(res => {
         const o = res.data?.data;
         setOrder(o);

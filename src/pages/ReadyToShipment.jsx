@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import API from '../api';
 import Modal from '../components/ui/Modal';
 
@@ -36,11 +36,12 @@ const SectionHead = ({ label }) => (
 );
 
 export default function ReadyToShipment() {
+  const [searchParams] = useSearchParams();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
-  const [search, setSearch] = useState('');
-  const [dayFilter, setDayFilter] = useState('today');
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('phone') || '');
+  const [dayFilter, setDayFilter] = useState(() => new URLSearchParams(window.location.search).get('phone') ? 'all' : 'today');
   const [customDate, setCustomDate] = useState('');
   const [repairing, setRepairing] = useState(false);
   const navigate = useNavigate();

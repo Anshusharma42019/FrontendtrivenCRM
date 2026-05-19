@@ -71,7 +71,7 @@ export default function Tasks() {
   const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('phone') || '');
   const [noteText, setNoteText] = useState('');
   const [pincodeData, setPincodeData] = useState([]);
   const [pincodeLoading, setPincodeLoading] = useState(false);

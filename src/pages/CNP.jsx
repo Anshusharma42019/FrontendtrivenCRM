@@ -52,9 +52,9 @@ export default function CNP() {
   const [cnpTasks, setCnpTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(null);
-  const [tab, setTab] = useState("tasks");
+  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'tasks');
   const [selected, setSelected] = useState(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('phone') || '');
   const [dateFilter, setDateFilter] = useState('today');
   const [callAgainDateFilter, setCallAgainDateFilter] = useState('today');
   const [note, setNote] = useState('');

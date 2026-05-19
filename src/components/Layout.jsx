@@ -48,6 +48,7 @@ export default function Layout() {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const STATUS_COLORS = {
+    // Lead statuses
     new: 'bg-blue-100 text-blue-700',
     contacted: 'bg-yellow-100 text-yellow-700',
     interested: 'bg-green-100 text-green-700',
@@ -56,6 +57,29 @@ export default function Layout() {
     closed_lost: 'bg-red-100 text-red-700',
     on_hold: 'bg-gray-100 text-gray-600',
     old: 'bg-orange-100 text-orange-700',
+    verification: 'bg-violet-100 text-violet-700',
+    ready_to_shipment: 'bg-orange-100 text-orange-700',
+    verified: 'bg-violet-100 text-violet-700',
+    // Order statuses
+    delivered: 'bg-emerald-100 text-emerald-700',
+    'rto delivered': 'bg-teal-100 text-teal-700',
+    'in transit': 'bg-blue-100 text-blue-700',
+    canceled: 'bg-red-100 text-red-700',
+    'rto in transit': 'bg-orange-100 text-orange-700',
+    'out for delivery': 'bg-cyan-100 text-cyan-700',
+    'reached back at seller city': 'bg-amber-100 text-amber-700',
+    'undelivered 1st attempt': 'bg-rose-100 text-rose-700',
+    'pickup exception': 'bg-red-100 text-red-600',
+    'undelivered 2nd attempt': 'bg-rose-100 text-rose-700',
+    'undelivered 3rd attempt': 'bg-rose-200 text-rose-800',
+    undelivered: 'bg-red-100 text-red-700',
+    'undelivered attempt failure': 'bg-red-200 text-red-800',
+    'rto initiated': 'bg-orange-100 text-orange-700',
+    'reached at destination hub': 'bg-indigo-100 text-indigo-700',
+    shipped: 'bg-blue-100 text-blue-600',
+    'rto ofd': 'bg-amber-100 text-amber-700',
+    'pickup scheduled': 'bg-sky-100 text-sky-700',
+    misrouted: 'bg-red-100 text-red-600',
   };
 
   const doSearch = useCallback(async (q) => {
@@ -97,16 +121,54 @@ export default function Layout() {
 
   const handleResultClick = async (item) => {
     setSearchOpen(false); setPhoneQuery(''); setSearchResults([]);
-    setQuickLoading(true); setQuickDetail(null); setShowFullDetail(false);
-    try {
-      if (item.type === 'lead') {
-        const full = await getLead(item._id);
-        setQuickDetail({ type: 'lead', data: full });
-      } else {
-        setQuickDetail({ type: item.type, data: item });
+    // Lead result
+    if (item.type === 'lead') {
+      const s = item.meta?.toLowerCase();
+      if (s === 'verification') { navigate(`/verification?openId=${item._id}`); return; }
+      if (s === 'follow_up') { navigate(`/follow-up?phone=${encodeURIComponent(item.subtitle || '')}`); return; }
+      if (item.cnp || s === 'cnp') { navigate(`/cnp?phone=${encodeURIComponent(item.subtitle || '')}`); return; }
+      if (s === 'ready_to_shipment') { navigate(`/ready-to-shipment?phone=${encodeURIComponent(item.subtitle || '')}`); return; }
+      navigate(`/leads?openId=${item._id}`); return;
+    }
+    // Task result
+    if (item.type === 'task') {
+      if (item.category === 'verification' || item.meta?.toLowerCase() === 'verification') {
+        navigate(`/verification?openId=${item._id}`);
+        return;
       }
-    } catch { setQuickDetail(null); }
-    finally { setQuickLoading(false); }
+      if (item.meta?.toLowerCase() === 'ready_to_shipment') {
+        navigate(`/ready-to-shipment?phone=${encodeURIComponent(item.subtitle || '')}`);
+        return;
+      }
+      if (item.meta?.toLowerCase() === 'on_hold' || item.meta?.toLowerCase() === 'pending') {
+        try {
+          const res = await API.get(`/verification/by-task/${item._id}`).catch(() => null);
+          if (res?.data?.data?._id) {
+            navigate(`/verification?openId=${res.data.data._id}`);
+            return;
+          }
+        } catch { }
+      }
+      setQuickLoading(true); setQuickDetail(null); setShowFullDetail(false);
+      try { setQuickDetail({ type: 'task', data: item }); }
+      finally { setQuickLoading(false); }
+      return;
+    }
+    // Call Again result
+    if (item.type === 'callagain') {
+      navigate(`/cnp?tab=callAgain&phone=${encodeURIComponent(item.subtitle || '')}`);
+      return;
+    }
+    // RTS result
+    if (item.type === 'rts') {
+      navigate(`/ready-to-shipment?phone=${encodeURIComponent(item.subtitle || '')}`);
+      return;
+    }
+    // Order result — navigate to full order detail page
+    if (item.type === 'order') {
+      navigate(`/orders/${item._id}`);
+      return;
+    }
   };
 
   const handleAvatarFileChange = async (e) => {
@@ -200,10 +262,10 @@ export default function Layout() {
                     <div className="px-4 py-6 text-center text-sm text-gray-400">No results found</div>
                   ) : (
                     <div className="max-h-96 overflow-y-auto">
-                      {['lead', 'order', 'task'].map(type => {
-                        const items = searchResults.filter(r => r.type === type);
+                      {['lead', 'order', 'rts', 'callagain', 'task'].map(type => {
+                        const items = searchResults.filter(r => r.type === type && r.category !== 'verification');
                         if (!items.length) return null;
-                        const labels = { lead: '👤 Leads', order: '📦 Orders', task: '✅ Tasks' };
+                        const labels = { lead: '👤 Leads', order: '📦 Orders', rts: '🚚 Ready to Ship', callagain: '📞 Call Again', task: '✅ Tasks' };
                         return (
                           <div key={type}>
                             <div className="px-4 py-1.5 bg-gray-50 text-[10px] font-extrabold uppercase tracking-widest text-gray-400 sticky top-0">
@@ -217,7 +279,7 @@ export default function Layout() {
                                     <span className="text-sm font-semibold text-gray-800 truncate">{item.title}</span>
                                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
                                       STATUS_COLORS[item.meta?.toLowerCase()] || 'bg-gray-100 text-gray-500'
-                                    }`}>{item.meta?.replace(/_/g, ' ')}</span>
+                                    }`}>{item.type === 'rts' ? (item.meta || 'Ready to Ship') : item.meta?.replace(/_/g, ' ')}</span>
                                   </div>
                                   <div className="flex items-center gap-2 mt-0.5">
                                     {item.subtitle && <span className="text-xs text-green-700 font-medium">{item.subtitle}</span>}
@@ -232,6 +294,34 @@ export default function Layout() {
                           </div>
                         );
                       })}
+                      {/* Verification section */}
+                      {(() => {
+                        const vItems = searchResults.filter(r => r.category === 'verification');
+                        if (!vItems.length) return null;
+                        return (
+                          <div>
+                            <div className="px-4 py-1.5 bg-gray-50 text-[10px] font-extrabold uppercase tracking-widest text-gray-400 sticky top-0">✅ Verification</div>
+                            {vItems.map(item => (
+                              <button key={item._id} onClick={() => handleResultClick(item)}
+                                className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 flex items-center gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-semibold text-gray-800 truncate">{item.title}</span>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
+                                      STATUS_COLORS[item.meta?.toLowerCase()] || 'bg-violet-100 text-violet-600'
+                                    }`}>{item.meta?.replace(/_/g, ' ')}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    {item.subtitle && <span className="text-xs text-green-700 font-medium">{item.subtitle}</span>}
+                                    {item.assignedTo && <span className="text-xs text-blue-500">→ {item.assignedTo}</span>}
+                                  </div>
+                                </div>
+                                <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -435,13 +525,27 @@ export default function Layout() {
                     </div>
                   )}
                 </div>
-                <div className="px-6 py-4 border-t border-gray-50 shrink-0">
+                <div className="px-6 py-4 border-t border-gray-50 shrink-0 flex gap-2">
                   <button onClick={() => setShowFullDetail(f => !f)}
-                    className="w-full py-3 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2"
+                    className="flex-1 py-3 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2"
                     style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)' }}>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    {showFullDetail ? 'Less' : 'View'}
+                    {showFullDetail ? 'Less' : 'Details'}
                   </button>
+                  {(() => {
+                    const s = quickDetail.data.status?.toLowerCase();
+                    const route = s === 'follow_up' || s === 'on_hold' ? '/follow-up' : s === 'cnp' ? '/cnp' : null;
+                    const routeLabel = route === '/follow-up' ? 'Follow Up' : 'CNP';
+                    if (!route) return null;
+                    return (
+                      <button onClick={() => { setQuickDetail(null); navigate(route); }}
+                        className="flex-1 py-3 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2"
+                        style={{ background: 'linear-gradient(135deg,#6366f1,#4f46e5)' }}>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+                        Go to {routeLabel}
+                      </button>
+                    );
+                  })()}
                 </div>
               </>
             ) : quickDetail?.type === 'order' ? (

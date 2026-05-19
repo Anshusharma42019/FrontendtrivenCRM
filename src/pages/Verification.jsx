@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getVerificationRecords, syncVerificationRecords, updateVerificationStatus, updateVerificationRecord, updateTask, deleteVerificationRecord, getOnHoldVerificationRecords } from '../services/task.service';
 import { updateLead, markCNP, createCallAgain } from '../services/lead.service';
 import API from '../api';
@@ -38,6 +38,7 @@ const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2 text-sm bg-
 
 export default function Verification() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -49,12 +50,12 @@ export default function Verification() {
   const [onHoldDate, setOnHoldDate] = useState('');
   const [onHoldReason, setOnHoldReason] = useState('');
   const [showOnHoldPicker, setShowOnHoldPicker] = useState(false);
-  const [dayFilter, setDayFilter] = useState('today');
+  const [dayFilter, setDayFilter] = useState('all');
   const [customDate, setCustomDate] = useState('');
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('pending');
   const [onHoldRecords, setOnHoldRecords] = useState([]);
-  const [ohDayFilter, setOhDayFilter] = useState('today');
+  const [ohDayFilter, setOhDayFilter] = useState('all');
   const [ohCustomDate, setOhCustomDate] = useState('');
   const [ohSearch, setOhSearch] = useState('');
 
@@ -85,6 +86,32 @@ export default function Verification() {
       })
       .catch(() => {});
   }, [load, loadOnHold]);
+
+  // Handle openId from search navigation — runs after records are populated
+  useEffect(() => {
+    const openId = searchParams.get('openId');
+    if (!openId) return;
+    const allRecs = [...records, ...onHoldRecords];
+    if (allRecs.length === 0) return; // wait for records to load
+    const match = allRecs.find(r =>
+      r._id === openId ||
+      r.lead?._id === openId ||
+      r.lead === openId ||
+      r.task?._id === openId ||
+      r.task === openId
+    );
+    if (match) {
+      const flattened = flattenRecord(match);
+      setSelected(flattened);
+      if (match.status === 'on_hold') {
+        setActiveTab('on_hold');
+        setOhDayFilter('all');
+      } else {
+        setDayFilter('all');
+      }
+    }
+    setSearchParams({}, { replace: true });
+  }, [records, onHoldRecords, searchParams]);
 
   const flattenRecord = (r) => {
     const taskData = r.task && typeof r.task === 'object' ? r.task : {};
