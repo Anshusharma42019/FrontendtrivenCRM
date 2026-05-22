@@ -137,10 +137,11 @@ export default function Shiprocket({ initialSection, initialReturnsTab = 'return
   const fetchAddress = async (pin, type) => {
     if (pin.length !== 6) return;
     try {
-      const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '')}/api/pincode/${pin}`);
       const data = await res.json();
-      if (data[0]?.Status === 'Success') {
-        const office = data[0].PostOffice?.[0];
+      const result = Array.isArray(data) ? data[0] : data;
+      if (result?.Status === 'Success') {
+        const office = result.PostOffice?.[0];
         if (office) {
           const addr = `${office.District}, ${office.State}`;
           setPincodeAddress(p => ({ ...p, [type]: addr }));

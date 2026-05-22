@@ -174,10 +174,11 @@ export default function Tasks() {
     if (val.length !== 6) return;
     setPincodeLoading(true);
     try {
-      const res = await fetch(`https://api.postalpincode.in/pincode/${val}`);
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '')}/api/pincode/${val}`);
       const data = await res.json();
-      if (data[0]?.Status === 'Success') {
-        const offices = data[0].PostOffice || [];
+      const result = Array.isArray(data) ? data[0] : data;
+      if (result?.Status === 'Success') {
+        const offices = result.PostOffice || [];
         setPincodeData(offices);
         if (offices.length > 0) {
           setForm(f => ({ ...f, district: offices[0].District, state: offices[0].State }));
