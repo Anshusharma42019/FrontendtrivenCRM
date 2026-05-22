@@ -312,7 +312,7 @@ export default function Verification() {
     sf('pincode', val);
     if (val.length !== 6) return;
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '')}/api/pincode/${val}`);
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/pincode/${val}`);
       const data = await res.json();
       const result = Array.isArray(data) ? data[0] : data;
       if (result?.Status === 'Success') {
