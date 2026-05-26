@@ -1,6 +1,7 @@
 import API from '../api';
 
 export const getLeads = (params) => API.get('/leads', { params }).then(r => r.data.data);
+export const exportLeads = (params) => API.get('/leads/export', { params }).then(r => r.data.data);
 export const getLead = (id) => API.get(`/leads/${id}`).then(r => r.data.data);
 export const createLead = (data) => API.post('/leads', data).then(r => r.data.data);
 export const updateLead = (id, data) => API.patch(`/leads/${id}`, data).then(r => r.data.data);
@@ -12,5 +13,5 @@ export const unmarkCNP = (id) => API.patch(`/leads/${id}/uncnp`).then(r => r.dat
 export const searchByPhone = (phone) => API.get('/leads/search-phone', { params: { phone } }).then(r => r.data.data);
 export const globalSearch = (q) => API.get('/search', { params: { q } }).then(r => r.data.data);
 export const createCallAgain = (leadId) => API.post('/call-again', { leadId }).then(r => r.data.data);
-export const getCallAgains = (filter) => API.get('/call-again', { params: filter ? { filter } : {} }).then(r => r.data.data);
+export const getCallAgains = (params) => API.get('/call-again', { params }).then(r => r.data.data);
 export const updateCallAgain = (id, data) => API.patch(`/call-again/${id}`, data).then(r => r.data.data);

@@ -1,5 +1,7 @@
+
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { getVerificationRecords, syncVerificationRecords, updateVerificationStatus, updateVerificationRecord, updateTask, deleteVerificationRecord, getOnHoldVerificationRecords } from '../services/task.service';
 import { updateLead, markCNP, createCallAgain } from '../services/lead.service';
 import API from '../api';
@@ -15,6 +17,8 @@ const PIN_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
   'bg-rose-500', 'bg-amber-500', 'bg-cyan-500', 'bg-pink-500',
 ];
+
+const DEPARTMENTS = ['migraine', 'piles'];
 
 const initials = (name = '') =>
   name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
@@ -37,8 +41,11 @@ const SectionHead = ({ label }) => (
 const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition";
 
 export default function Verification() {
+  const { user } = useAuth();
+  const canManage = user?.role === 'admin' || user?.role === 'manager';
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [department, setDepartment] = useState('');
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -61,31 +68,33 @@ export default function Verification() {
 
   const load = useCallback(async () => {
     try {
-      const data = await getVerificationRecords();
+      const data = await getVerificationRecords(department ? { department } : {});
+      console.log("FETCHED VERIFICATION RECORDS HOT RELOADED:", data.slice(0, 5));
       setRecords(Array.isArray(data) ? data : []);
     } catch (e) {
       setError(e?.response?.data?.message || e.message || 'Failed to load');
     } finally { setLoading(false); }
-  }, []);
+  }, [department]);
 
   const loadOnHold = useCallback(async () => {
     try {
-      const data = await getOnHoldVerificationRecords();
+      const data = await getOnHoldVerificationRecords(department ? { department } : {});
       setOnHoldRecords(Array.isArray(data) ? data : []);
     } catch { }
-  }, []);
+  }, [department]);
 
   useEffect(() => {
     load();
     loadOnHold();
+    const filter = department ? { department } : {};
     syncVerificationRecords()
-      .then(() => Promise.all([getVerificationRecords(), getOnHoldVerificationRecords()]))
+      .then(() => Promise.all([getVerificationRecords(filter), getOnHoldVerificationRecords(filter)]))
       .then(([pending, onHold]) => {
         setRecords(Array.isArray(pending) ? pending : []);
         setOnHoldRecords(Array.isArray(onHold) ? onHold : []);
       })
-      .catch(() => {});
-  }, [load, loadOnHold]);
+      .catch(() => { });
+  }, [load, loadOnHold, department]);
 
   // Handle openId from search navigation — runs after records are populated
   useEffect(() => {
@@ -119,7 +128,7 @@ export default function Verification() {
     const filteredTaskData = Object.fromEntries(
       Object.entries(taskData).filter(([_, v]) => v !== null && v !== undefined && v !== '')
     );
-    
+
     return {
       ...r,
       ...filteredTaskData,
@@ -128,6 +137,7 @@ export default function Verification() {
       lead: r.lead,
       assignedTo: r.assignedTo || r.task?.assignedTo,
       title: r.title || r.task?.title,
+      department: r.department || r.lead?.department || r.task?.department,
       task: r.task,
       _isPipelineOnly: r._isPipelineOnly,
     };
@@ -223,11 +233,11 @@ export default function Verification() {
       const { name, phone, ...verificationFields } = editForm;
       await updateVerificationRecord(selected._id, verificationFields);
       if (selected.lead?._id) await updateLead(selected.lead._id, { name, phone });
-      
+
       const freshData = await getVerificationRecords();
       const freshRecords = Array.isArray(freshData) ? freshData : [];
       setRecords(freshRecords);
-      
+
       const freshSelected = freshRecords.find(r => r._id === selected._id);
       const flattened = freshSelected ? flattenRecord(freshSelected) : { ...selected, ...verificationFields };
       setSelected({ ...flattened, lead: { ...(flattened.lead || selected.lead || {}), name, phone } });
@@ -252,7 +262,7 @@ export default function Verification() {
         setRecords(prev => prev.filter(r => r._id !== selected._id));
         setSelected(null);
         if (status === 'on_hold') {
-          await API.post('/verification/repair').catch(() => {});
+          await API.post('/verification/repair').catch(() => { });
           await loadOnHold();
         }
       } else if (status === 'pending') {
@@ -334,14 +344,13 @@ export default function Verification() {
     <div className="flex gap-4 scroll-container-h overflow-hidden animate-slide-up mobile-p-safe">
       {/* ── LEFT PANEL ── */}
       <div className={`flex flex-col gap-4 transition-all duration-300 ${selected ? 'w-full lg:w-[55%]' : 'w-full'} h-full overflow-hidden`}>
-        
+
         {/* Tabs */}
         <div className="flex gap-2 shrink-0">
           {[['pending', 'Pending'], ['on_hold', 'On Hold']].map(([val, label]) => (
             <button key={val} onClick={() => { setActiveTab(val); setSelected(null); }}
-              className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
-                activeTab === val ? 'bg-green-600 text-white border-green-600 shadow-md' : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50'
-              }`}>
+              className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${activeTab === val ? 'bg-green-600 text-white border-green-600 shadow-md' : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50'
+                }`}>
               {label}
               {val === 'on_hold' && onHoldRecords.length > 0 && (
                 <span className="ml-1.5 bg-gray-500 text-white text-[9px] px-1.5 py-0.5 rounded-full">{onHoldRecords.length}</span>
@@ -355,15 +364,13 @@ export default function Verification() {
           <div className="flex items-center gap-3 shrink-0 glass px-4 py-3 rounded-2xl border border-white/50 shadow-sm">
             {[['all', 'All'], ['today', 'Today'], ['yesterday', 'Yesterday']].map(([val, label]) => (
               <button key={val} onClick={() => { setOhDayFilter(val); setOhCustomDate(''); }}
-                className={`px-3 py-2 rounded-xl text-xs font-bold border whitespace-nowrap transition-all shrink-0 ${
-                  ohDayFilter === val ? 'bg-gray-700 text-white border-gray-700 shadow-md' : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50'
-                }`}>{label}</button>
+                className={`px-3 py-2 rounded-xl text-xs font-bold border whitespace-nowrap transition-all shrink-0 ${ohDayFilter === val ? 'bg-gray-700 text-white border-gray-700 shadow-md' : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50'
+                  }`}>{label}</button>
             ))}
             <input type="date" value={ohCustomDate} max={new Date().toISOString().slice(0, 10)}
               onChange={e => { setOhCustomDate(e.target.value); setOhDayFilter(e.target.value ? 'custom' : 'all'); }}
-              className={`px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer outline-none shrink-0 ${
-                ohDayFilter === 'custom' ? 'bg-gray-700 text-white border-gray-700 shadow-md' : 'bg-white text-gray-400 border-gray-100'
-              }`} />
+              className={`px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer outline-none shrink-0 ${ohDayFilter === 'custom' ? 'bg-gray-700 text-white border-gray-700 shadow-md' : 'bg-white text-gray-400 border-gray-100'
+                }`} />
             <div className="relative flex-1">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                 <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
@@ -375,6 +382,16 @@ export default function Verification() {
             <div className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-white text-xs font-bold shadow-md shrink-0 bg-gray-600">
               {filteredOnHold.length} On Hold
             </div>
+            {canManage && (
+              <select
+                value={department}
+                onChange={e => setDepartment(e.target.value)}
+                className="px-3 py-2.5 rounded-xl border border-gray-100 bg-white text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400/20 transition shadow-sm shrink-0"
+              >
+                <option value="">All Depts</option>
+                {DEPARTMENTS.map(d => <option key={d} value={d}>{d.toUpperCase()}</option>)}
+              </select>
+            )}
           </div>
         )}
 
@@ -383,15 +400,13 @@ export default function Verification() {
           {/* Day filters */}
           {[['all', 'All'], ['today', 'Today'], ['yesterday', 'Yesterday']].map(([val, label]) => (
             <button key={val} onClick={() => { setDayFilter(val); setCustomDate(''); }}
-              className={`px-3 py-2 rounded-xl text-xs font-bold border whitespace-nowrap transition-all shrink-0 ${
-                dayFilter === val ? 'bg-green-600 text-white border-green-600 shadow-md' : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50'
-              }`}>{label}</button>
+              className={`px-3 py-2 rounded-xl text-xs font-bold border whitespace-nowrap transition-all shrink-0 ${dayFilter === val ? 'bg-green-600 text-white border-green-600 shadow-md' : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50'
+                }`}>{label}</button>
           ))}
           <input type="date" value={customDate} max={new Date().toISOString().slice(0, 10)}
             onChange={e => { setCustomDate(e.target.value); setDayFilter(e.target.value ? 'custom' : 'all'); }}
-            className={`px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer outline-none shrink-0 ${
-              dayFilter === 'custom' ? 'bg-green-600 text-white border-green-600 shadow-md' : 'bg-white text-gray-400 border-gray-100'
-            }`} />
+            className={`px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer outline-none shrink-0 ${dayFilter === 'custom' ? 'bg-green-600 text-white border-green-600 shadow-md' : 'bg-white text-gray-400 border-gray-100'
+              }`} />
           {/* Search */}
           <div className="relative flex-1">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
@@ -405,8 +420,18 @@ export default function Verification() {
           <div className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-white text-xs font-bold shadow-md shrink-0"
             style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)' }}>
             <VerifyIcon className="w-3.5 h-3.5" />
-            {filteredRecords.length} Pending
+            {filteredRecords.length} Pending ✓
           </div>
+          {canManage && (
+            <select
+              value={department}
+              onChange={e => setDepartment(e.target.value)}
+              className="px-3 py-2.5 rounded-xl border border-gray-100 bg-white text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-400/20 transition shadow-sm shrink-0"
+            >
+              <option value="">All Depts</option>
+              {DEPARTMENTS.map(d => <option key={d} value={d}>{d.toUpperCase()}</option>)}
+            </select>
+          )}
         </div>
 
         {/* List (Scrollable) */}
@@ -446,6 +471,9 @@ export default function Verification() {
                         {flattened.assignedTo?.name && (
                           <span className="text-[10px] text-gray-400 hidden sm:block">Assigned: {flattened.assignedTo.name}</span>
                         )}
+                        {flattened.department && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 uppercase">{flattened.department}</span>
+                        )}
                       </div>
                     </div>
                   );
@@ -466,6 +494,7 @@ export default function Verification() {
                 const color = PIN_COLORS[i % PIN_COLORS.length];
                 const isActive = selected?._id === r._id;
                 const flattened = flattenRecord(r);
+                if (i === 0) console.log("RENDER FIRST ITEM:", flattened.title, "DEPT:", flattened.department);
                 return (
                   <div
                     key={r._id}
@@ -497,22 +526,24 @@ export default function Verification() {
                     </div>
 
                     <div className="flex flex-col items-end gap-1 shrink-0">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${
-                        flattened.status === 'on_hold' ? 'bg-gray-50 text-gray-600 border-gray-100' :
-                        flattened.status === 'verified' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                        flattened.status === 'rejected' ? 'bg-rose-50 text-rose-700 border-rose-100' :
-                        'bg-amber-50 text-amber-700 border-amber-100'
-                      }`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${flattened.status === 'on_hold' ? 'bg-gray-50 text-gray-600 border-gray-100' :
+                          flattened.status === 'verified' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                            flattened.status === 'rejected' ? 'bg-rose-50 text-rose-700 border-rose-100' :
+                              'bg-amber-50 text-amber-700 border-amber-100'
+                        }`}>
                         {flattened.status?.replace(/_/g, ' ').toUpperCase()}
                       </span>
                       {flattened.assignedTo?.name && (
                         <span className="text-[10px] text-gray-400 hidden sm:block">Assigned: {flattened.assignedTo.name}</span>
                       )}
+                      {flattened.department && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 uppercase">{flattened.department}</span>
+                      )}
                     </div>
 
                     <button onClick={(e) => handleDelete(r._id, e)}
                       className="w-8 h-8 flex items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-100 border border-red-100 transition shrink-0 font-bold text-base">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" /></svg>
                     </button>
                   </div>
                 );
@@ -526,7 +557,7 @@ export default function Verification() {
       {selected && (
         <div className="hidden lg:flex flex-col w-[45%] bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden h-full">
           <div className="h-1.5 shrink-0" style={{ background: 'linear-gradient(90deg,#16a34a,#15803d,#16a34a)' }} />
-          
+
           <div className="px-5 py-4 flex items-center justify-between border-b border-gray-50 shrink-0">
             <div className="flex items-center gap-2.5">
               <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold ${PIN_COLORS[filteredRecords.findIndex(r => r._id === selected._id) % PIN_COLORS.length]}`}>
@@ -573,7 +604,7 @@ export default function Verification() {
                   <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Call Date</label>
                     <input type="date" className={`${inputCls} mt-1`} value={editForm.reminderAt} onChange={e => sf('reminderAt', e.target.value)} /></div>
                 </div>
-                
+
                 <SectionHead label="Address" />
                 <div className="grid grid-cols-2 gap-3">
                   <div className="col-span-2">
@@ -598,7 +629,7 @@ export default function Verification() {
                   <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">State</label>
                     <input className={`${inputCls} mt-1`} value={editForm.state} onChange={e => sf('state', e.target.value)} /></div>
                 </div>
-                
+
                 <div className="flex gap-2 pt-2">
                   <button type="submit" disabled={saving} className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-green-600 hover:bg-green-700 transition disabled:opacity-50">
                     {saving ? 'Saving...' : 'Save Changes'}
@@ -632,7 +663,7 @@ export default function Verification() {
                 <DetailRow label="State" value={selected.state || selected.lead?.state} />
                 <DetailRow label="Pincode" value={selected.pincode || selected.lead?.pincode} />
                 <DetailRow label="Landmark" value={selected.landmark || selected.lead?.landmark} />
-                
+
                 {!(selected.address || selected.lead?.address || selected.houseNo || selected.lead?.houseNo || selected.cityVillage || selected.lead?.cityVillage || selected.pincode || selected.lead?.pincode) && (
                   <p className="text-[10px] text-gray-400 italic py-1 px-1">Address details not provided for this lead.</p>
                 )}
@@ -685,7 +716,7 @@ export default function Verification() {
                       className="flex-1 py-3 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-emerald-900/10 bg-gradient-to-r from-emerald-500 to-emerald-600 disabled:opacity-50">
                       <VerifyIcon /> Verified
                     </button>
-                  
+
                     {showOnHoldPicker ? (
                       <div className="flex-[1.5] flex flex-col gap-1.5 bg-gray-50 p-2.5 rounded-xl border border-gray-200">
                         <input
@@ -714,7 +745,7 @@ export default function Verification() {
                       </button>
                     )}
                   </div>
-                  
+
                   <button onClick={handleReadyToShipment}
                     className="w-full py-3 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-amber-900/10 bg-gradient-to-r from-amber-500 to-amber-600">
                     Ready to Shipment
@@ -774,12 +805,12 @@ export default function Verification() {
                   <DetailRow label="Assigned" value={selected.assignedTo?.name} />
                   <DetailRow label="Problem" value={selected.problem} />
                   <DetailRow label="Duration" value={selected.problemDuration} />
-                  
+
                   <SectionHead label="Address Details" />
                   <DetailRow label="City/Village" value={selected.cityVillage} />
                   <DetailRow label="Pincode" value={selected.pincode} />
                   <DetailRow label="Landmark" value={selected.landmark} />
-                  
+
                   <SectionHead label="Order Details" />
                   <DetailRow label="Price" value={selected.price ? `₹${selected.price}` : null} />
                   {selected.relief_percentage != null && (
@@ -788,20 +819,20 @@ export default function Verification() {
                       <span className="text-sm font-black text-emerald-600">{selected.relief_percentage}%</span>
                     </div>
                   )}
-                  
+
                   <div className="flex flex-col gap-3 pt-6 pb-4">
                     <div className="flex gap-2.5">
-                      <button onClick={() => handleStatusUpdate('verified')} 
+                      <button onClick={() => handleStatusUpdate('verified')}
                         className="flex-1 py-4 rounded-xl text-[11px] font-bold text-white shadow-lg shadow-emerald-900/10 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                         style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
                         <VerifyIcon className="w-4 h-4" /> VERIFY RECORD
                       </button>
-                      <button onClick={() => setEditMode(true)} 
+                      <button onClick={() => setEditMode(true)}
                         className="px-6 py-4 rounded-xl text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 transition-all active:scale-[0.98]">
                         EDIT
                       </button>
                     </div>
-                    <button onClick={handleReadyToShipment} 
+                    <button onClick={handleReadyToShipment}
                       className="w-full py-4 rounded-xl text-[11px] font-bold text-white shadow-lg shadow-amber-900/10 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                       style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -809,7 +840,7 @@ export default function Verification() {
                       </svg>
                       READY TO SHIPMENT
                     </button>
-                    
+
                     <button onClick={(e) => handleDelete(selected._id, e)}
                       className="w-full py-3 mt-2 rounded-xl text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-100 transition-all hover:bg-rose-100 active:scale-[0.98] flex items-center justify-center gap-2">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

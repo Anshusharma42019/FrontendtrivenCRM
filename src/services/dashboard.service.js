@@ -1,25 +1,28 @@
 import API from '../api';
-export const fetchStats = (date, from, to) => {
+export const fetchStats = (date, from, to, department) => {
   let url = `/dashboard/stats?date=${date || ''}`;
   if (from) url += `&from=${from}`;
   if (to) url += `&to=${to}`;
+  if (department) url += `&department=${department}`;
   return API.get(url).then(r => r.data.data);
 };
 export const fetchRevenueChart = (period = 'monthly') => API.get(`/dashboard/revenue-chart?period=${period}`).then(r => r.data.data);
-export const fetchStaffStats = (date, staffId, from, to) => {
+export const fetchStaffStats = (date, staffId, from, to, department) => {
   let url = `/dashboard/staff-stats?date=${date || ''}`;
   if (staffId) url += `&staffId=${staffId}`;
   if (from) url += `&from=${from}`;
   if (to) url += `&to=${to}`;
+  if (department) url += `&department=${department}`;
   return API.get(url).then(r => r.data.data);
 };
 export const saveStaffTarget = (target) => API.post('/dashboard/staff-target', { target }).then(r => r.data.data);
 export const fetchStaffVerifications = () => API.get('/dashboard/staff-verifications').then(r => r.data.data);
-export const fetchStaffTodayLists = (date, staffId, from, to) => {
+export const fetchStaffTodayLists = (date, staffId, from, to, department) => {
   let url = `/dashboard/staff-today-lists?date=${date || ''}`;
   if (staffId) url += `&staffId=${staffId}`;
   if (from) url += `&from=${from}`;
   if (to) url += `&to=${to}`;
+  if (department) url += `&department=${department}`;
   return API.get(url).then(r => r.data.data);
 };
 export const fetchStaffMonthlyChart = () => API.get('/dashboard/staff-monthly-chart').then(r => r.data.data);

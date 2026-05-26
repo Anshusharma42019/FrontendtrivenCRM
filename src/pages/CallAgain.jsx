@@ -191,8 +191,9 @@ export default function CallAgain() {
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
-            {filtered.map((record) => (
+            {filtered.map((record, i) => (
               <div key={record._id} className="px-5 py-4 flex items-center gap-3 hover:bg-amber-50/30 transition-colors">
+                <span className="text-[11px] font-bold text-gray-400 w-5 text-center shrink-0">{i + 1}</span>
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white shadow-sm">
                   {record.lead?.name?.charAt(0)}
                 </div>

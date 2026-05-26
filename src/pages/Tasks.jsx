@@ -34,6 +34,7 @@ const SectionHead = ({ label, color = "emerald" }) => (
 );
 
 const TYPES = ['call', 'follow_up', 'meeting', 'email', 'task'];
+const DEPARTMENTS = ['migraine', 'piles'];
 const STATUSES = [
   { value: 'interested', label: 'Interested', color: 'bg-green-600 border-green-600' },
   { value: 'cancel_call', label: 'Not Interested', color: 'bg-red-500 border-red-500' },
@@ -45,7 +46,7 @@ const STATUSES = [
 const HIDDEN_TASK_STATUSES = new Set(['cnp', 'verification', 'interested', 'cancel_call', 'cancelled', 'on_hold', 'closed_lost']);
 const HIDDEN_TASK_LEAD_STATUSES = new Set(['closed_lost', 'on_hold', 'follow_up']);
 
-const EMPTY = { title: '', description: '', problem: '', type: 'task', lead: '', assignedTo: '', dueDate: '', priority: 'medium', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending', age: '', weight: '', height: '', otherProblems: '', problemDuration: '', price: '', phone: '' };
+const EMPTY = { title: '', description: '', problem: '', type: 'task', lead: '', assignedTo: '', dueDate: '', priority: 'medium', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', status: 'pending', age: '', weight: '', height: '', otherProblems: '', problemDuration: '', price: '', phone: '', department: '' };
 
 const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition";
 
@@ -63,7 +64,7 @@ export default function Tasks() {
   const [daily, setDaily] = useState([]);
   const [salesUsers, setSalesUsers] = useState([]);
   const [tab, setTab] = useState('daily');
-  const [filters, setFilters] = useState({ status: '', type: '' });
+  const [filters, setFilters] = useState({ status: '', type: '', department: '' });
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState(EMPTY);
@@ -88,7 +89,8 @@ export default function Tasks() {
       const params = {};
       if (filters.status) params.status = filters.status;
       if (filters.type) params.type = filters.type;
-      const [all, day] = await Promise.all([getTasks(params), getDailyTasks()]);
+      if (filters.department) params.department = filters.department;
+      const [all, day] = await Promise.all([getTasks(params), getDailyTasks(params)]);
       setTasks(Array.isArray(all) ? all : []);
       setDaily(Array.isArray(day) ? day : []);
     } catch (err) {
@@ -164,7 +166,7 @@ export default function Tasks() {
       landmark: task.landmark || '', pincode: task.pincode || '', state: task.state || '',
       status: task.status || 'pending',
       age: task.age || '', weight: task.weight || '', height: task.height || '',
-      otherProblems: task.otherProblems || '', problemDuration: task.problemDuration || '', price: task.price || '', phone });
+      otherProblems: task.otherProblems || '', problemDuration: task.problemDuration || '', price: task.price || '', phone, department: task.department || '' });
     setError(''); setModal('edit');
   };
 
@@ -205,6 +207,7 @@ export default function Tasks() {
       if (!payload.lead) delete payload.lead;
       if (!payload.assignedTo) delete payload.assignedTo;
       if (!payload.reminderAt) delete payload.reminderAt;
+      if (!payload.department) delete payload.department;
 
       if (modal === 'create') {
         await createTask(payload);
@@ -313,15 +316,22 @@ export default function Tasks() {
                 className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-100 bg-white text-sm font-medium text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/20 focus:border-emerald-400 transition shadow-sm"
               />
             </div>
-            {tab === 'all' && (
-              <div className="flex gap-2">
+            <div className="flex gap-2">
+              {canManage && (
+                <select value={filters.department} onChange={(e) => setFilters(f => ({ ...f, department: e.target.value }))}
+                  className="border border-gray-100 rounded-xl px-4 py-2 text-xs bg-white font-bold text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-400 shadow-sm min-w-[120px]">
+                  <option value="">All Depts</option>
+                  {DEPARTMENTS.map(d => <option key={d} value={d}>{d.toUpperCase()}</option>)}
+                </select>
+              )}
+              {tab === 'all' && (
                 <select value={filters.type} onChange={(e) => setFilters(f => ({ ...f, type: e.target.value }))}
                   className="border border-gray-100 rounded-xl px-4 py-2 text-xs bg-white font-bold text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-400 shadow-sm min-w-[120px]">
                   <option value="">All Types</option>
                   {TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
                 </select>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
@@ -365,6 +375,12 @@ export default function Tasks() {
                         <span className="text-xs text-gray-400 font-medium">{task.lead?.name || 'No Lead'}</span>
                         <span className="text-xs text-gray-300">•</span>
                         <span className="text-[10px] text-gray-400 font-bold uppercase">{task.type.replace(/_/g, ' ')}</span>
+                        {task.department && (
+                          <>
+                            <span className="text-xs text-gray-300">•</span>
+                            <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase">{task.department}</span>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -603,6 +619,14 @@ export default function Tasks() {
                   {['low', 'medium', 'high'].map(p => <option key={p} value={p}>{p}</option>)}
                 </select></div>
             </div>
+
+            {canManage && (
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Department</label>
+                <select className={`${inputCls} mt-1`} value={form.department || ''} onChange={(e) => setForm({ ...form, department: e.target.value })}>
+                  <option value="">Select Department</option>
+                  {DEPARTMENTS.map(d => <option key={d} value={d}>{d.toUpperCase()}</option>)}
+                </select></div>
+            )}
 
             <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Problem</label>
               <textarea rows={1} className={`${inputCls} mt-1`} value={form.problem} onChange={(e) => setForm({ ...form, problem: e.target.value })} /></div>

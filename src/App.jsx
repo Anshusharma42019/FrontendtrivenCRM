@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LanguageProvider } from './context/LanguageContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { ToastProvider } from './context/ToastContext';
 import Layout from './components/Layout';
@@ -32,36 +33,72 @@ function AppRoutes() {
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Navigate to={user?.role === 'doctor' ? '/doctor-dashboard' : '/dashboard'} replace />} />
         <Route path="dashboard" element={
-          user?.role === 'sales'
+          ['sales', 'support', 'logistics'].includes(user?.role)
             ? <StaffDashboard />
             : <ProtectedRoute roles={['admin', 'manager']}><Dashboard /></ProtectedRoute>
         } />
         <Route path="doctor-dashboard" element={
           <ProtectedRoute roles={['doctor']}><DoctorDashboard /></ProtectedRoute>
         } />
-        <Route path="leads" element={<Leads />} />
-        <Route path="pipeline" element={<Pipeline />} />
-        <Route path="cnp" element={<CNP />} />
-        <Route path="call-again" element={<CallAgain />} />
-        <Route path="tasks" element={<Tasks />} />
-        <Route path="attendance" element={<Attendance />} />
-        <Route path="appointments" element={<AppointmentBook />} />
-        <Route path="follow-up" element={<FollowUp />} />
+        <Route path="leads" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support']}><Leads /></ProtectedRoute>
+        } />
+        <Route path="pipeline" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support']}><Pipeline /></ProtectedRoute>
+        } />
+        <Route path="cnp" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support']}><CNP /></ProtectedRoute>
+        } />
+        <Route path="call-again" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support']}><CallAgain /></ProtectedRoute>
+        } />
+        <Route path="tasks" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support']}><Tasks /></ProtectedRoute>
+        } />
+        <Route path="attendance" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support', 'logistics']}><Attendance /></ProtectedRoute>
+        } />
+        <Route path="appointments" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'doctor', 'support']}><AppointmentBook /></ProtectedRoute>
+        } />
+        <Route path="follow-up" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support']}><FollowUp /></ProtectedRoute>
+        } />
         <Route path="reorder-commission" element={
           <ProtectedRoute roles={['admin']}>
             <ReorderCommission />
           </ProtectedRoute>
         } />
-        <Route path="verification" element={<Verification />} />
-        <Route path="ready-to-shipment" element={<ReadyToShipment />} />
-        <Route path="shiprocket" element={<Shiprocket />} />
-        <Route path="shiprocket/orders" element={<Shiprocket initialSection="orders" />} />
-        <Route path="shiprocket/shipments" element={<Shiprocket initialSection="shipments" />} />
-        <Route path="shiprocket/returns" element={<Shiprocket initialSection="returns" initialReturnsTab="returns" />} />
-        <Route path="shiprocket/ndr" element={<Shiprocket initialSection="returns" initialReturnsTab="ndr" />} />
-        <Route path="shiprocket/ndr/detail" element={<NdrDetail />} />
-        <Route path="orders/:id" element={<OrderDetail />} />
-        <Route path="notifications" element={<Notifications />} />
+        <Route path="verification" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support']}><Verification /></ProtectedRoute>
+        } />
+        <Route path="ready-to-shipment" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><ReadyToShipment /></ProtectedRoute>
+        } />
+        <Route path="shiprocket" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><Shiprocket /></ProtectedRoute>
+        } />
+        <Route path="shiprocket/orders" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><Shiprocket initialSection="orders" /></ProtectedRoute>
+        } />
+        <Route path="shiprocket/shipments" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><Shiprocket initialSection="shipments" /></ProtectedRoute>
+        } />
+        <Route path="shiprocket/returns" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><Shiprocket initialSection="returns" initialReturnsTab="returns" /></ProtectedRoute>
+        } />
+        <Route path="shiprocket/ndr" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><Shiprocket initialSection="returns" initialReturnsTab="ndr" /></ProtectedRoute>
+        } />
+        <Route path="shiprocket/ndr/detail" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><NdrDetail /></ProtectedRoute>
+        } />
+        <Route path="orders/:id" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support', 'logistics']}><OrderDetail /></ProtectedRoute>
+        } />
+        <Route path="notifications" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'support', 'logistics']}><Notifications /></ProtectedRoute>
+        } />
         <Route path="users" element={
           <ProtectedRoute roles={['admin', 'manager']}>
             <Users />
@@ -75,12 +112,14 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <ToastProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </ToastProvider>
-    </AuthProvider>
+    <LanguageProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </ToastProvider>
+      </AuthProvider>
+    </LanguageProvider>
   );
 }

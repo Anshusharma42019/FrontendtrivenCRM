@@ -2,8 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { getNotifications } from '../services/notification.service';
 import { globalSearch, getLead } from '../services/lead.service';
+import * as attendanceSvc from '../services/attendance.service';
 import API from '../api';
 
 const PAGE_TITLES = {
@@ -46,6 +48,171 @@ export default function Layout() {
   const initials = user?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const pageTitle = PAGE_TITLES[location.pathname] || '';
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+
+  // Premium dropdown states
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '' });
+  const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
+  const THEMES = [
+    { id: 'light',    label: 'Light',    colors: ['#f8fafc','#ffffff','#16a34a'] },
+    { id: 'dark',     label: 'Forest',   colors: ['#080d09','#0d1f0d','#22c55e'] },
+    { id: 'ocean',    label: 'Ocean',    colors: ['#0a1628','#071e38','#38bdf8'] },
+    { id: 'rose',     label: 'Rose',     colors: ['#1a0a0f','#200d13','#fb7185'] },
+    { id: 'violet',   label: 'Violet',   colors: ['#0d0a1a','#130f22','#a78bfa'] },
+    { id: 'amber',    label: 'Amber',    colors: ['#1a1200','#201700','#fbbf24'] },
+    { id: 'slate',    label: 'Slate',    colors: ['#0f172a','#141e33','#94a3b8'] },
+    { id: 'teal',     label: 'Teal',     colors: ['#021a18','#04201e','#2dd4bf'] },
+    { id: 'crimson',  label: 'Crimson',  colors: ['#1a0505','#200808','#f87171'] },
+    { id: 'indigo',   label: 'Indigo',   colors: ['#06061a','#0b0b22','#818cf8'] },
+    { id: 'mint',     label: 'Mint',     colors: ['#f0fdf4','#dcfce7','#059669'] },
+    { id: 'midnight', label: 'Midnight', colors: ['#020617','#0a0f1e','#6366f1'] },
+    { id: 'sunset',   label: 'Sunset',   colors: ['#1a0a00','#2a1000','#f97316'] },
+    { id: 'aurora',   label: 'Aurora',   colors: ['#030d12','#051520','#06b6d4'] },
+    { id: 'sakura',   label: 'Sakura',   colors: ['#1a0812','#22091a','#f472b6'] },
+    { id: 'gold',     label: 'Gold',     colors: ['#120e00','#1c1500','#eab308'] },
+    { id: 'nordic',   label: 'Nordic',   colors: ['#0d1117','#161b22','#58a6ff'] },
+    { id: 'lava',     label: 'Lava',     colors: ['#150500','#200800','#ef4444'] },
+    { id: 'lime',     label: 'Lime',     colors: ['#0a1200','#111a00','#84cc16'] },
+    { id: 'dusk',     label: 'Dusk',     colors: ['#12080f','#1c0f18','#c084fc'] },
+  ];
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+  const { lang, setLang, t: translate } = useLanguage();
+  const [attStatus, setAttStatus] = useState(null);
+  const [attLoading, setAttLoading] = useState(false);
+  const [commissionStats, setCommissionStats] = useState(null);
+  const [shiftTime, setShiftTime] = useState('00h 00m 00s');
+
+  const DEPT_COLOR = {
+    migraine: 'bg-purple-50 text-purple-600 border-purple-100',
+    piles: 'bg-amber-50 text-amber-600 border-amber-100',
+    logistics: 'bg-blue-50 text-blue-600 border-blue-100',
+  };
+
+  // Sync profile details if user changes
+  useEffect(() => {
+    if (user) {
+      setProfileForm({ name: user.name || '', phone: user.phone || '', email: user.email || '' });
+    }
+  }, [user]);
+
+  // Sync Theme
+  useEffect(() => {
+    const html = document.documentElement;
+    const allThemeClasses = ['dark','theme-ocean','theme-rose','theme-violet','theme-amber','theme-slate','theme-teal','theme-crimson','theme-indigo','theme-mint','theme-midnight','theme-sunset','theme-aurora','theme-sakura','theme-gold','theme-nordic','theme-lava','theme-lime','theme-dusk'];
+    html.classList.remove(...allThemeClasses);
+    if (theme === 'light') { /* default */ }
+    else if (theme === 'dark') { html.classList.add('dark'); }
+    else { html.classList.add('dark', `theme-${theme}`); }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  // Fetch Attendance & Commission
+  const loadAttendance = useCallback(async () => {
+    try {
+      const status = await attendanceSvc.getTodayStatus();
+      setAttStatus(status);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    loadAttendance();
+    const t = setInterval(loadAttendance, 60000);
+    return () => clearInterval(t);
+  }, [loadAttendance]);
+
+  useEffect(() => {
+    if (user && ['sales', 'support', 'logistics'].includes(user.role)) {
+      const now = new Date();
+      API.get(`/dashboard/staff-commission?month=${now.getMonth()}&year=${now.getFullYear()}`)
+        .then(res => {
+          if (res.data && res.data.data) {
+            setCommissionStats(res.data.data);
+          }
+        }).catch(() => {});
+    }
+  }, [user]);
+
+  // Running Shift Timer
+  useEffect(() => {
+    if (!attStatus?.checkIn || attStatus?.checkOut) {
+      setShiftTime('00h 00m 00s');
+      return;
+    }
+    const checkInTime = new Date(attStatus.checkIn).getTime();
+    const interval = setInterval(() => {
+      const diffMs = Date.now() - checkInTime;
+      const hours = Math.floor(diffMs / 3600000);
+      const minutes = Math.floor((diffMs % 3600000) / 60000);
+      const seconds = Math.floor((diffMs % 60000) / 1000);
+      const pad = (n) => String(n).padStart(2, '0');
+      setShiftTime(`${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [attStatus]);
+
+  const handleProfileSubmit = async (e) => {
+    e.preventDefault();
+    setAvatarLoading(true);
+    try {
+      const res = await API.patch('/users/me', {
+        name: profileForm.name,
+        phone: profileForm.phone,
+        email: profileForm.email || undefined
+      });
+      updateUser(res.data.data);
+      setProfileModalOpen(false);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update profile');
+    } finally {
+      setAvatarLoading(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      alert("Passwords do not match!");
+      return;
+    }
+    setAvatarLoading(true);
+    try {
+      await API.patch('/users/me', {
+        password: passwordForm.newPassword
+      });
+      setPasswordModalOpen(false);
+      setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+      alert("Password updated successfully!");
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update password');
+    } finally {
+      setAvatarLoading(false);
+    }
+  };
+
+  const handleQuickCheckIn = async () => {
+    setAttLoading(true);
+    try {
+      const res = await attendanceSvc.checkIn();
+      setAttStatus(res);
+      loadAttendance();
+    } catch (e) {
+      alert(e.response?.data?.message || 'Check-in failed');
+    }
+    setAttLoading(false);
+  };
+
+  const handleQuickCheckOut = async () => {
+    setAttLoading(true);
+    try {
+      const res = await attendanceSvc.checkOut();
+      setAttStatus(res);
+      loadAttendance();
+    } catch (e) {
+      alert(e.response?.data?.message || 'Check-out failed');
+    }
+    setAttLoading(false);
+  };
 
   const STATUS_COLORS = {
     // Lead statuses
@@ -201,7 +368,7 @@ export default function Layout() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: '#f0f4f0' }}>
+    <div className="flex h-screen overflow-hidden theme-root" style={{ background: 'var(--theme-bg, #f0f4f0)' }}>
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} unreadCount={unreadCount} />
 
       <div className="flex-1 md:ml-64 flex flex-col h-screen min-w-0 overflow-hidden">
@@ -367,61 +534,162 @@ export default function Layout() {
               {avatarOpen && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setAvatarOpen(false)} />
-                  <div className="absolute right-0 top-11 z-20 w-52 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                    {/* User info header */}
-                    <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-3">
-                      <div
-                        className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center text-sm font-bold text-white"
-                        style={user?.avatar ? {} : { background: 'linear-gradient(135deg, #16a34a, #4ade80)' }}
-                      >
-                        {user?.avatar
-                          ? <img src={user.avatar} alt="avatar" className="w-full h-full object-cover" />
-                          : initials
-                        }
+                  <div className="absolute right-0 top-12 z-20 w-80 rounded-3xl shadow-2xl border border-gray-100 overflow-hidden"
+                    style={{ background: 'linear-gradient(160deg, #ffffff 0%, #f8fffe 100%)' }}>
+
+                    {/* Hero Header */}
+                    <div className="relative px-5 pt-5 pb-4 overflow-hidden"
+                      style={{ background: 'linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%)' }}>
+                      {/* Decorative circles */}
+                      <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #6ee7b7, transparent)' }} />
+                      <div className="absolute -bottom-4 -left-4 w-20 h-20 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #34d399, transparent)' }} />
+
+                      <div className="relative flex items-center gap-3.5">
+                        <button onClick={() => setAvatarOpen(false)}
+                          className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white/15 hover:bg-white/30 flex items-center justify-center transition-colors border border-white/20">
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                        </button>
+                        <div className="relative group/avatar cursor-pointer shrink-0" onClick={() => fileInputRef.current?.click()}>
+                          <div className="w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center text-lg font-black text-white ring-2 ring-white/20 shadow-xl"
+                            style={user?.avatar ? {} : { background: 'linear-gradient(135deg, #10b981, #34d399)' }}>
+                            {user?.avatar ? <img src={user.avatar} alt="avatar" className="w-full h-full object-cover" /> : initials}
+                          </div>
+                          <div className="absolute inset-0 bg-black/50 rounded-2xl opacity-0 group-hover/avatar:opacity-100 flex items-center justify-center transition-opacity">
+                            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                          </div>
+                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-400 rounded-full border-2 border-white" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-white font-black text-base tracking-tight truncate leading-tight">{user?.name}</p>
+                          <p className="text-emerald-300 text-[10px] font-extrabold uppercase tracking-widest mt-0.5">{user?.role}</p>
+                          {user?.departments?.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {user.departments.map(d => (
+                                <span key={d} className="text-[8px] font-extrabold px-2 py-0.5 rounded-full bg-white/15 text-white/90 uppercase tracking-wide border border-white/20">{d}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-gray-800 truncate">{user?.name}</div>
-                        <div className="text-xs text-green-600 capitalize">{user?.role}</div>
+
+                      {/* Shift status bar */}
+                      <div className="relative mt-4 flex items-center justify-between bg-white/10 rounded-2xl px-3.5 py-2.5 border border-white/10">
+                        <div>
+                          <p className="text-[8px] font-extrabold text-emerald-300 uppercase tracking-widest">{translate('ACTIVE SHIFT')}</p>
+                          <p className="text-sm font-black text-white tracking-tight font-mono mt-0.5">{shiftTime}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-full border border-white/10">
+                          <span className={`w-1.5 h-1.5 rounded-full ${attStatus?.checkIn && !attStatus?.checkOut ? 'bg-emerald-400 animate-pulse' : 'bg-gray-400'}`} />
+                          <span className="text-[9px] font-black text-white/80 uppercase tracking-wider">
+                            {attStatus?.checkIn && !attStatus?.checkOut ? translate('ONLINE') : translate('OFFLINE')}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Change avatar button */}
-                    <button
-                      id="change-avatar-btn"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={avatarLoading}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2 font-medium disabled:opacity-60"
-                    >
-                      {avatarLoading ? (
-                        <>
-                          <svg className="w-4 h-4 animate-spin text-green-600" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                          </svg>
-                          Uploading…
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                            <circle cx="12" cy="13" r="4"/>
-                          </svg>
-                          Change photo
-                        </>
+                    <div className="p-4 space-y-3">
+                      {/* Commission */}
+                      {['sales', 'support', 'logistics'].includes(user?.role) && commissionStats && (
+                        <div className="flex items-center justify-between rounded-2xl px-3.5 py-2.5 border border-emerald-100"
+                          style={{ background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)' }}>
+                          <div>
+                            <p className="text-[8px] font-extrabold text-emerald-600 uppercase tracking-widest">ESTIMATED EARNINGS</p>
+                            <p className="text-sm font-black text-emerald-800 mt-0.5">₹{(commissionStats.commission || 0).toLocaleString('en-IN')}</p>
+                          </div>
+                          <div className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center text-base shadow-md shadow-emerald-200">
+                            💰
+                          </div>
+                        </div>
                       )}
-                    </button>
 
-                    {avatarError && (
-                      <p className="px-4 pb-2 text-xs text-red-500">{avatarError}</p>
-                    )}
+                      {/* Theme Picker */}
+                      <div className="rounded-2xl border border-gray-100 overflow-hidden">
+                        <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-gray-50">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center text-xs">🎨</span>
+                            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Appearance</span>
+                          </div>
+                          <span className="text-[9px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider"
+                            style={{ color: THEMES.find(t=>t.id===theme)?.colors[2], background: `${THEMES.find(t=>t.id===theme)?.colors[2]}18`, borderColor: `${THEMES.find(t=>t.id===theme)?.colors[2]}30` }}>
+                            {THEMES.find(t=>t.id===theme)?.label}
+                          </span>
+                        </div>
+                        <div className="px-3 py-2.5 overflow-x-auto no-scrollbar">
+                          <div className="grid grid-rows-2 grid-flow-col gap-2" style={{ gridTemplateRows: 'repeat(2, auto)' }}>
+                            {THEMES.map(t => {
+                              const isActive = theme === t.id;
+                              const [base, surface, accent] = t.colors;
+                              return (
+                                <button key={t.id} onClick={() => setTheme(t.id)}
+                                  className="flex flex-col items-center gap-1 transition-all duration-200"
+                                  style={{ width: 56 }}>
+                                  <div className="w-full rounded-xl overflow-hidden relative"
+                                    style={{
+                                      height: 40,
+                                      background: base,
+                                      outline: isActive ? `2px solid ${accent}` : '2px solid transparent',
+                                      outlineOffset: 1,
+                                      boxShadow: isActive ? `0 2px 12px ${accent}50` : '0 1px 3px rgba(0,0,0,0.15)',
+                                      transition: 'all 0.2s',
+                                    }}>
+                                    <div className="absolute left-0 top-0 bottom-0 w-2.5 flex flex-col items-center py-1 gap-0.5"
+                                      style={{ background: surface }}>
+                                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: accent }} />
+                                      <div className="w-1 h-0.5 rounded-full" style={{ background: `${accent}50` }} />
+                                      <div className="w-1 h-0.5 rounded-full" style={{ background: `${accent}30` }} />
+                                    </div>
+                                    <div className="absolute left-3 right-1 top-1 bottom-1 flex flex-col gap-0.5">
+                                      <div className="h-1.5 rounded-full w-4/5" style={{ background: `${accent}70` }} />
+                                      <div className="h-1 rounded-full w-full" style={{ background: `${accent}20` }} />
+                                      <div className="h-1 rounded-full w-3/5" style={{ background: `${accent}20` }} />
+                                      <div className="mt-auto h-2.5 rounded-md w-full flex items-center justify-center" style={{ background: accent }}>
+                                        <div className="w-2 h-0.5 rounded-full bg-white/80" />
+                                      </div>
+                                    </div>
+                                    {isActive && (
+                                      <div className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full flex items-center justify-center" style={{ background: accent }}>
+                                        <svg className="w-2 h-2" fill="none" stroke="white" strokeWidth={3} viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <span className="text-[8px] font-bold leading-none truncate w-full text-center"
+                                    style={{ color: isActive ? accent : '#9ca3af' }}>{t.label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
 
-                    {/* Sign out */}
-                    <button
-                      onClick={() => { logout(); setAvatarOpen(false); }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors font-medium border-t border-gray-100"
-                    >
-                      Sign out
-                    </button>
+                      {/* Action Buttons */}
+                      <div className="rounded-2xl border border-gray-100 overflow-hidden divide-y divide-gray-50">
+                        <button onClick={() => { setProfileModalOpen(true); setAvatarOpen(false); }}
+                          className="w-full flex items-center gap-3 px-3.5 py-2.5 hover:bg-gray-50 transition-colors group">
+                          <span className="w-7 h-7 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 group-hover:bg-blue-100 transition-colors">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                          </span>
+                          <span className="text-xs font-bold text-gray-600">{translate('My Profile')}</span>
+                          <svg className="w-3.5 h-3.5 text-gray-300 ml-auto" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+                        </button>
+                        <button onClick={() => { setPasswordModalOpen(true); setAvatarOpen(false); }}
+                          className="w-full flex items-center gap-3 px-3.5 py-2.5 hover:bg-gray-50 transition-colors group">
+                          <span className="w-7 h-7 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500 group-hover:bg-amber-100 transition-colors">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                          </span>
+                          <span className="text-xs font-bold text-gray-600">{translate('Change Password')}</span>
+                          <svg className="w-3.5 h-3.5 text-gray-300 ml-auto" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+                        </button>
+                      </div>
+
+                      {/* Sign Out */}
+                      <button onClick={() => { logout(); setAvatarOpen(false); }}
+                        className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl border border-red-100 hover:bg-red-50 transition-colors group">
+                        <span className="w-7 h-7 rounded-xl bg-red-50 flex items-center justify-center text-red-400 group-hover:bg-red-100 transition-colors">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                        </span>
+                        <span className="text-xs font-black text-red-500">{translate('Sign out')}</span>
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
@@ -443,6 +711,60 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Edit Profile Modal */}
+      {profileModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden p-6 space-y-4 border border-gray-100/50">
+            <div className="flex justify-between items-center pb-2 border-b border-gray-50">
+              <h3 className="text-base font-black text-gray-900 tracking-tight">{'Edit Profile'}</h3>
+              <button onClick={() => setProfileModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-sm font-bold">✕</button>
+            </div>
+            <form onSubmit={handleProfileSubmit} className="space-y-3.5">
+              <div>
+                <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">{'Name'}</label>
+                <input required className="w-full border border-gray-100 rounded-xl px-3.5 py-2.5 text-xs bg-gray-50 font-bold text-gray-700 mt-1" value={profileForm.name} onChange={e => setProfileForm({...profileForm, name: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">{'Phone'}</label>
+                <input required type="tel" className="w-full border border-gray-100 rounded-xl px-3.5 py-2.5 text-xs bg-gray-50 font-bold text-gray-700 mt-1" value={profileForm.phone} onChange={e => setProfileForm({...profileForm, phone: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">{'Email (Optional)'}</label>
+                <input type="email" className="w-full border border-gray-100 rounded-xl px-3.5 py-2.5 text-xs bg-gray-50 font-bold text-gray-700 mt-1" value={profileForm.email} onChange={e => setProfileForm({...profileForm, email: e.target.value})} />
+              </div>
+              <button type="submit" className="w-full py-3.5 rounded-xl text-[11px] font-black text-white bg-gradient-to-r from-green-500 to-emerald-600 shadow-md active:scale-95 transition-all mt-4 uppercase tracking-widest">
+                {'SAVE CHANGES'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Change Password Modal */}
+      {passwordModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden p-6 space-y-4 border border-gray-100/50">
+            <div className="flex justify-between items-center pb-2 border-b border-gray-50">
+              <h3 className="text-base font-black text-gray-900 tracking-tight">{'Change Password'}</h3>
+              <button onClick={() => setPasswordModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-sm font-bold">✕</button>
+            </div>
+            <form onSubmit={handlePasswordSubmit} className="space-y-3.5">
+              <div>
+                <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">{'New Password'}</label>
+                <input required type="password" minLength={8} className="w-full border border-gray-100 rounded-xl px-3.5 py-2.5 text-xs bg-gray-50 font-bold text-gray-700 mt-1" value={passwordForm.newPassword} onChange={e => setPasswordForm({...passwordForm, newPassword: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">{'Confirm New Password'}</label>
+                <input required type="password" minLength={8} className="w-full border border-gray-100 rounded-xl px-3.5 py-2.5 text-xs bg-gray-50 font-bold text-gray-700 mt-1" value={passwordForm.confirmPassword} onChange={e => setPasswordForm({...passwordForm, confirmPassword: e.target.value})} />
+              </div>
+              <button type="submit" className="w-full py-3.5 rounded-xl text-[11px] font-black text-white bg-gradient-to-r from-green-500 to-emerald-600 shadow-md active:scale-95 transition-all mt-4 uppercase tracking-widest">
+                {'UPDATE PASSWORD'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Quick Detail Modal */}
       {(quickLoading || quickDetail) && (

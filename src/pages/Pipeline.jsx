@@ -11,6 +11,8 @@ const PIN_COLORS = [
   'bg-orange-500', 'bg-emerald-500', 'bg-rose-500', 'bg-gray-500',
 ];
 
+const DEPARTMENTS = ['migraine', 'piles'];
+
 const initials = (name = '') =>
   name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
 
@@ -58,8 +60,9 @@ export default function Pipeline() {
   const [selected, setSelected] = useState(null);
   const [leadTask, setLeadTask] = useState(null);
   const [search, setSearch] = useState('');
-
+  const [department, setDepartment] = useState('');
   
+  const canManage = user?.role === 'admin' || user?.role === 'manager';
   // Follow-up state
   const [note, setNote] = useState('');
   const [nextDate, setNextDate] = useState('');
@@ -70,13 +73,16 @@ export default function Pipeline() {
     try {
       API.post('/verification/repair').catch(() => {});
 
+      const query = { limit: 500 };
+      if (department) query.department = department;
+
       const [interestedRes, onHoldRes, closedLostRes, ordersRes, cnpRes, callAgainRes] = await Promise.all([
-        getLeads({ limit: 500, status: 'interested' }),
-        getLeads({ limit: 500, status: 'on_hold' }),
-        getLeads({ limit: 500, status: 'closed_lost' }),
+        getLeads({ ...query, status: 'interested' }),
+        getLeads({ ...query, status: 'on_hold' }),
+        getLeads({ ...query, status: 'closed_lost' }),
         API.get('/shiprocket/orders/with-followups'),
-        getCnpRecords(),
-        getCallAgains(),
+        getCnpRecords(query),
+        getCallAgains(query),
       ]);
       setInterestedLeads(Array.isArray(interestedRes?.leads) ? interestedRes.leads : []);
       setOnHoldLeads(Array.isArray(onHoldRes?.leads) ? onHoldRes.leads.filter(l => !l.cnp) : []);
@@ -87,7 +93,7 @@ export default function Pipeline() {
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to load');
     } finally { setLoading(false); }
-  }, []);
+  }, [department]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -262,16 +268,28 @@ export default function Pipeline() {
                 </button>
               ))}
           </div>
-          <div className="relative w-1/2">
-            <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-            </svg>
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search by name, phone..."
-              className="w-full pl-11 pr-4 py-2.5 rounded-2xl border border-gray-100 bg-white text-sm font-medium text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-400/20 transition shadow-sm"
-            />
+          <div className="relative w-full md:w-1/2 flex items-center gap-2">
+            <div className="relative flex-1">
+              <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+              </svg>
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search by name, phone..."
+                className="w-full pl-11 pr-4 py-2.5 rounded-2xl border border-gray-100 bg-white text-sm font-medium text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-400/20 transition shadow-sm"
+              />
+            </div>
+            {canManage && (
+              <select
+                value={department}
+                onChange={e => setDepartment(e.target.value)}
+                className="w-full md:w-auto px-4 py-2.5 rounded-2xl border border-gray-100 bg-white text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-400/20 transition shadow-sm shrink-0"
+              >
+                <option value="">All Depts</option>
+                {DEPARTMENTS.map(d => <option key={d} value={d}>{d.toUpperCase()}</option>)}
+              </select>
+            )}
           </div>
         </div>
 
@@ -378,6 +396,8 @@ export default function Pipeline() {
                     
                     <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${barColor}`} />
                     
+                    <span className="text-[11px] font-bold text-gray-400 w-5 text-center shrink-0">{i + 1}</span>
+
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0 ${color}`}>
                       {initials(lead.name || item.title)}
                     </div>
@@ -387,6 +407,7 @@ export default function Pipeline() {
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs text-gray-400">{lead.phone}</span>
                         {item.cnpCount > 0 && <span className="text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-md">{item.cnpCount}/3 CNP</span>}
+                        {(lead.department || item.department) && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 uppercase">{lead.department || item.department}</span>}
                       </div>
                     </div>
 
@@ -471,6 +492,7 @@ export default function Pipeline() {
                     <>
                       <SectionHead label="Lead Information" />
                       <DetailRow label="Status" value={lead.status?.replace(/_/g,' ')} />
+                      <DetailRow label="Department" value={lead.department || selected.department} color="blue" />
                       <DetailRow label="Assigned To" value={lead.assignedTo?.name || selected.assignedTo?.name} />
                       <DetailRow label="Added By" value={lead.createdBy?.name || selected.createdBy?.name} />
                       {lead.status === 'on_hold' && lead.onHoldReason && (

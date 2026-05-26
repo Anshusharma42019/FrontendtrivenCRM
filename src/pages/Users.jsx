@@ -17,8 +17,14 @@ const icons = {
   phone: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 11.61 19a19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 3.09 4.18 2 2 0 0 1 5.07 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L9.91 9.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>,
 };
 
-const ROLES = ['manager', 'sales', 'doctor', 'staff'];
-const EMPTY = { name: '', phone: '', password: '', role: 'manager', baseSalary: 0, commissionRate: 5, specialization: '' };
+const ROLES = ['manager', 'sales', 'doctor', 'staff', 'logistics', 'support'];
+const DEPARTMENTS = ['migraine', 'piles'];
+const DEPT_COLOR = {
+  logistics: 'bg-blue-50 text-blue-600 border-blue-100',
+  migraine: 'bg-purple-50 text-purple-600 border-purple-100',
+  piles: 'bg-amber-50 text-amber-600 border-amber-100',
+};
+const EMPTY = { name: '', phone: '', password: '', role: 'manager', departments: [], baseSalary: 0, commissionRate: 5, specialization: '' };
 
 const ROLE_GRADIENT = {
   admin:   'from-purple-500 to-violet-600',
@@ -26,6 +32,8 @@ const ROLE_GRADIENT = {
   sales:   'from-green-500 to-emerald-500',
   doctor:  'from-teal-500 to-cyan-600',
   staff:   'from-orange-500 to-amber-500',
+  logistics: 'from-rose-500 to-pink-500',
+  support:   'from-sky-500 to-indigo-500',
 };
 
 export default function Users() {
@@ -135,6 +143,7 @@ export default function Users() {
       phone: u.phone || '', 
       password: '', 
       role: u.role, 
+      departments: u.departments || [],
       baseSalary: u.baseSalary || 0, 
       commissionRate: u.commissionRate || 5,
       specialization: u.specialization || '' 
@@ -249,7 +258,7 @@ export default function Users() {
           <div className="table-responsive no-scrollbar">
             <table className="w-full text-xs min-w-[1080px]">
               <thead>
-                <tr className="text-gray-400 border-b border-gray-100 text-left bg-white">
+                <tr className="text-gray-400 border-b border-gray-100 text-left">
                   <th className="py-5 px-6 font-black uppercase tracking-[0.15em] text-[10px]">Staff Identity</th>
                   <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Leads</th>
                   <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Calls</th>
@@ -272,7 +281,7 @@ export default function Users() {
                   });
                   
                   // Preferred order
-                  const order = ['sales', 'manager', 'doctor', 'admin'];
+                  const order = ['sales', 'support', 'logistics', 'manager', 'doctor', 'admin'];
                   const sortedRoles = Object.keys(grouped).sort((a, b) => {
                     const iA = order.indexOf(a);
                     const iB = order.indexOf(b);
@@ -284,8 +293,8 @@ export default function Users() {
 
                   return sortedRoles.map(role => (
                     <tbody key={role} className="divide-y divide-gray-50/50">
-                      <tr className="bg-gray-50/30">
-                        <td colSpan={11} className="py-2 px-6 border-b border-gray-100">
+                      <tr className="">
+                        <td colSpan={11} className="py-2 px-6 border-b border-white/5">
                           <div className="flex items-center gap-2">
                             <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
                             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">{role} DIVISION</span>
@@ -296,7 +305,7 @@ export default function Users() {
                         const s = staffStats[u._id] || {};
                         const readyCount = s.readyToShipmentCount || 0;
                         return (
-                          <tr key={u._id} className="hover:bg-gradient-to-r hover:from-white hover:to-gray-50/50 transition-all duration-300 group relative">
+                          <tr key={u._id} className="hover:bg-white/5 transition-all duration-200 group relative border-b border-white/5">
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-4">
                           <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${ROLE_GRADIENT[u.role] || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white text-base font-black shadow-lg shadow-black/5 group-hover:scale-110 transition-transform duration-300`}>
@@ -304,8 +313,11 @@ export default function Users() {
                           </div>
                           <div className="min-w-0">
                             <p className="font-bold text-gray-800 text-sm">{u.name}</p>
-                            <div className="flex items-center gap-2 mt-1">
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
                               <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 py-0.5 px-1.5 bg-gray-50 rounded-lg">{u.role}</span>
+                              {(u.departments || []).map(dept => (
+                                <span key={dept} className={`text-[9px] font-bold uppercase tracking-wider py-0.5 px-1.5 rounded-lg border ${DEPT_COLOR[dept] || 'bg-gray-50 text-gray-500 border-gray-100'}`}>{dept}</span>
+                              ))}
                               {readyCount > 0 && (
                                 <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-lg border border-emerald-100">
                                   <span className="w-1 h-1 rounded-full bg-emerald-500 animate-ping" /> SHIP READY
@@ -612,6 +624,36 @@ export default function Users() {
               <select className={`${inputCls} mt-1.5`} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                 {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
               </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Departments</label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {DEPARTMENTS.map(dept => {
+                  const isSelected = form.departments.includes(dept);
+                  return (
+                    <button
+                      key={dept}
+                      type="button"
+                      onClick={() => {
+                        setForm(prev => ({
+                          ...prev,
+                          departments: isSelected
+                            ? prev.departments.filter(d => d !== dept)
+                            : [...prev.departments, dept]
+                        }));
+                      }}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider border-2 transition-all duration-200 ${
+                        isSelected
+                          ? `${DEPT_COLOR[dept]} border-current shadow-sm scale-105`
+                          : 'bg-gray-50 text-gray-400 border-gray-100 hover:border-gray-200'
+                      }`}
+                    >
+                      {isSelected && <span className="mr-1">✓</span>}
+                      {dept}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             {form.role === 'doctor' && (
               <div>

@@ -1,10 +1,22 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import API from '../api';
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('crmUser') || 'null'));
+
+  useEffect(() => {
+    const tokens = JSON.parse(localStorage.getItem('crmTokens') || 'null');
+    if (tokens && tokens.access && tokens.access.token) {
+      API.get('/users/me').then(res => {
+        if (res.data && res.data.data) {
+          localStorage.setItem('crmUser', JSON.stringify(res.data.data));
+          setUser(res.data.data);
+        }
+      }).catch(() => {});
+    }
+  }, []);
 
   const login = async (form) => {
     const payload = { role: form.role, password: form.password };

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from '../context/AuthContext';
 import API from '../api';
 import {
   getLeads,
@@ -25,6 +26,8 @@ const PIN_COLORS = [
   'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-emerald-500',
 ];
 
+const DEPARTMENTS = ['migraine', 'piles'];
+
 const initials = (name = '') =>
   name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
 
@@ -45,6 +48,8 @@ const SectionHead = ({ label, color = "red" }) => (
 );
 
 export default function CNP() {
+  const { user } = useAuth();
+  const canManage = user?.role === 'admin' || user?.role === 'manager';
   const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
   const [allLeads, setAllLeads] = useState([]);
@@ -56,6 +61,7 @@ export default function CNP() {
   const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'tasks');
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState(() => _initPhone);
+  const [department, setDepartment] = useState('');
   const [dateFilter, setDateFilter] = useState(() => _initPhone ? 'all' : 'today');
   const [callAgainDateFilter, setCallAgainDateFilter] = useState(() => _initPhone ? 'all' : 'today');
   const [note, setNote] = useState('');
@@ -94,7 +100,8 @@ export default function CNP() {
       district: lead.district || '',
       state: lead.state || '',
       pincode: lead.pincode || '',
-      landmark: lead.landmark || ''
+      landmark: lead.landmark || '',
+      department: lead.department || ''
     });
     setEditError('');
     setEditModal(true);
@@ -113,7 +120,7 @@ export default function CNP() {
       if (payload.lead) await updateLead(payload.lead, { cnp: false }).catch(() => {});
       setTaskModal(false);
       setSelected(null);
-      load(dateFilter, callAgainDateFilter);
+      load(dateFilter, callAgainDateFilter, department);
     } catch (err) { setTaskError(err.response?.data?.message || 'Failed'); }
     finally { setTaskLoading(false); }
   };
@@ -194,13 +201,13 @@ export default function CNP() {
     finally { setSavingNote(false); }
   };
 
-  const load = useCallback(async (cnpFilter = '', caFilter = '') => {
+  const load = useCallback(async (cnpFilter = '', caFilter = '', deptFilter = '') => {
     try {
       const [cnpRes, allRes, tasksRes, callAgainRes] = await Promise.all([
-        getLeads({ cnp: "true", limit: 200 }),
-        getLeads({ limit: 200 }),
-        getCnpRecords(cnpFilter || undefined),
-        getCallAgains(caFilter || undefined),
+        getLeads({ cnp: "true", limit: 200, department: deptFilter || undefined }),
+        getLeads({ limit: 200, department: deptFilter || undefined }),
+        getCnpRecords({ filter: cnpFilter || undefined, department: deptFilter || undefined }),
+        getCallAgains({ filter: caFilter || undefined, department: deptFilter || undefined }),
       ]);
       setLeads(Array.isArray(cnpRes?.leads) ? cnpRes.leads : []);
       setAllLeads(Array.isArray(allRes?.leads) ? allRes.leads : []);
@@ -213,7 +220,7 @@ export default function CNP() {
     }
   }, []);
 
-  useEffect(() => { load(dateFilter, callAgainDateFilter); }, [load, dateFilter, callAgainDateFilter]);
+  useEffect(() => { load(dateFilter, callAgainDateFilter, department); }, [load, dateFilter, callAgainDateFilter, department]);
 
   const handleStatusChange = async (leadId, status, taskId = null) => {
     setUpdating(leadId);
@@ -230,7 +237,7 @@ export default function CNP() {
         setCallAgainLeads(prev => prev.filter(r => r._id !== selected?._id));
       }
       setSelected(null);
-      load(dateFilter, callAgainDateFilter);
+      load(dateFilter, callAgainDateFilter, department);
     } catch { } finally { setUpdating(null); }
   };
 
@@ -312,16 +319,28 @@ export default function CNP() {
                 );
               })}
             </div>
-            <div className="relative w-1/2">
-              <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-              </svg>
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search name, phone..."
-                className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-100 bg-white text-sm font-medium text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-red-400/20 focus:border-red-400 transition shadow-sm"
-              />
+            <div className="relative w-full md:w-1/2 flex items-center gap-2">
+              <div className="relative flex-1">
+                <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                </svg>
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search name, phone..."
+                  className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-100 bg-white text-sm font-medium text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-red-400/20 focus:border-red-400 transition shadow-sm"
+                />
+              </div>
+              {canManage && (
+                <select
+                  value={department}
+                  onChange={e => setDepartment(e.target.value)}
+                  className="w-full md:w-auto px-4 py-2.5 rounded-xl border border-gray-100 bg-white text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-400/20 transition shadow-sm shrink-0"
+                >
+                  <option value="">All Depts</option>
+                  {DEPARTMENTS.map(d => <option key={d} value={d}>{d.toUpperCase()}</option>)}
+                </select>
+              )}
             </div>
           </div>
         </div>
@@ -352,6 +371,8 @@ export default function CNP() {
                     
                     <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${tab === 'tasks' ? 'bg-red-500' : 'bg-amber-500'}`} />
                     
+                    <span className="text-[11px] font-bold text-gray-400 w-5 text-center shrink-0">{i + 1}</span>
+
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0 ${color}`}>
                       {initials(lead.name || item.title)}
                     </div>
@@ -365,6 +386,7 @@ export default function CNP() {
                             {item.cnpCount || 1}/3
                           </span>
                         )}
+                        {(lead.department || item.department) && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 uppercase">{lead.department || item.department}</span>}
                       </div>
                     </div>
 
@@ -417,6 +439,7 @@ export default function CNP() {
           <div className="px-5 py-4 overflow-y-auto flex-1 custom-scrollbar">
             <SectionHead label="Contact Information" color={tab === 'tasks' ? 'red' : 'amber'} />
             <DetailRow label="Phone" value={selected.lead?.phone} />
+            <DetailRow label="Department" value={selected.lead?.department || selected.department} color="blue" />
             <DetailRow label="Problem" value={selected.lead?.problem} />
             
             <SectionHead label="Address Details" color={tab === 'tasks' ? 'red' : 'amber'} />
@@ -662,6 +685,12 @@ export default function CNP() {
             </div>
             <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Problem</label>
               <textarea rows={2} className={`${inputCls} mt-1`} value={editForm.problem||''} onChange={e => setEditForm(f => ({...f, problem: e.target.value}))} /></div>
+            <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Department</label>
+              <select className={`${inputCls} mt-1`} value={editForm.department||''} onChange={e => setEditForm(f => ({...f, department: e.target.value}))}>
+                <option value="">No Department</option>
+                {DEPARTMENTS.map(d => <option key={d} value={d}>{d.toUpperCase()}</option>)}
+              </select>
+            </div>
             <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Address</label>
               <textarea rows={2} className={`${inputCls} mt-1`} value={editForm.address||''} onChange={e => setEditForm(f => ({...f, address: e.target.value}))} /></div>
             <div className="grid grid-cols-2 gap-3">

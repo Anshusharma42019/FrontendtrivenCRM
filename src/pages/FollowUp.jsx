@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, Fragment } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import api from '../api';
 
 const PER_PAGE = 20;
@@ -14,6 +15,8 @@ const PIN_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
   'bg-rose-500', 'bg-amber-500', 'bg-cyan-500', 'bg-pink-500',
 ];
+
+const DEPARTMENTS = ['migraine', 'piles'];
 
 const ROLE_GRADIENT = [
   'from-purple-500 to-violet-600',
@@ -75,7 +78,10 @@ const SectionHead = ({ label }) => (
 );
 
 export default function FollowUp() {
+  const { user } = useAuth();
+  const canManage = user?.role === 'admin' || user?.role === 'manager';
   const [searchParams, setSearchParams] = useSearchParams();
+  const [department, setDepartment] = useState('');
   const [all, setAll] = useState([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -109,7 +115,7 @@ export default function FollowUp() {
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const res = await api.get('/shiprocket/orders/with-followups');
+      const res = await api.get('/shiprocket/orders/with-followups', { params: department ? { department } : {} });
       const data = Array.isArray(res.data?.data) ? res.data.data : [];
       setAll(data);
       return data.length;
@@ -129,7 +135,7 @@ export default function FollowUp() {
   const loadCompleted = useCallback(async (pg = 1, q = '') => {
     setCompletedLoading(true);
     try {
-      const res = await api.get('/shiprocket/orders/completed-followups', { params: { page: pg, per_page: PER_PAGE, search: q || undefined } });
+      const res = await api.get('/shiprocket/orders/completed-followups', { params: { page: pg, per_page: PER_PAGE, search: q || undefined, ...(department && { department }) } });
       setCompletedList(Array.isArray(res.data?.data?.data) ? res.data.data.data : []);
       setCompletedTotal(res.data?.data?.total || 0);
     } catch (e) { setError(e?.response?.data?.message || e.message); }
@@ -146,10 +152,10 @@ export default function FollowUp() {
   useEffect(() => {
     loadSettings();
     load().then(count => {
-      if (count === 0) syncAndLoad();
+      if (count === 0 && !department) syncAndLoad();
       loadCompleted(1);
     });
-  }, [load, loadCompleted, loadSettings]);
+  }, [load, loadCompleted, loadSettings, department]);
 
   const handleFollowUpDone = async (orderId) => {
     const oid = String(orderId);
@@ -159,6 +165,11 @@ export default function FollowUp() {
       const { completedCount, next_follow_up } = res.data.data;
       setCompletedMap(prev => ({ ...prev, [oid]: completedCount }));
       const totalFollowups = Number(settings.total_followups) || 5;
+      // Auto-switch to next call tab
+      if (filterFollowupNum && completedCount < totalFollowups) {
+        setFilterFollowupNum(String(completedCount + 1));
+        setPage(1);
+      }
       if (completedCount >= totalFollowups) {
          // Use selected (most up-to-date) or fall back to all
          const doneOrder = selected && String(selected._id) === oid ? selected : all.find(o => String(o._id) === oid);
@@ -394,6 +405,16 @@ export default function FollowUp() {
             >
               ✅ Done ({completedTotal})
             </button>
+            {canManage && (
+              <select
+                value={department}
+                onChange={e => setDepartment(e.target.value)}
+                className="px-3 py-2.5 rounded-xl border border-gray-100 bg-white text-[11px] font-black uppercase tracking-widest text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-400/20 transition shadow-sm ml-2"
+              >
+                <option value="">ALL DEPTS</option>
+                {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            )}
           </div>
 
           <div className="flex flex-col sm:flex-row flex-1 items-center gap-3 w-full">
@@ -462,7 +483,7 @@ export default function FollowUp() {
               </thead>
               <tbody className="divide-y divide-gray-50/50">
                 {completedList.map((o, i) => (
-                  <tr key={o._id} className="hover:bg-gradient-to-r hover:from-white hover:to-gray-50/50 transition-all duration-300 group">
+                  <tr key={o._id} className="transition-all duration-300 group hover:bg-gray-50/30 dark:hover:bg-white/5">
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-4">
                         <div className={`w-10 h-10 rounded-xl bg-gradient-to-br from-gray-500 to-gray-600 flex items-center justify-center text-white text-sm font-black shadow-lg shadow-black/5 shrink-0`}>{initials(o.billing_customer_name)}</div>
@@ -625,7 +646,7 @@ export default function FollowUp() {
                   const activeFU = getFollowup(o, filterFollowupNum) || allFUs[completedCount];
                   
                   return (
-                    <tr key={o._id} className="hover:bg-gradient-to-r hover:from-white hover:to-emerald-50/30 transition-all duration-300 group">
+                    <tr key={o._id} className="transition-all duration-300 group hover:bg-emerald-50/20 dark:hover:bg-white/5">
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-4">
                           <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-base font-black shadow-lg shadow-black/5 group-hover:scale-110 transition-transform duration-300 shrink-0`}>
@@ -637,6 +658,9 @@ export default function FollowUp() {
                               <a href={`https://shiprocket.co/tracking/${o.awb_code}`} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest text-gray-400 py-0.5 px-1.5 bg-gray-50 rounded-lg border border-gray-100 hover:text-blue-600 transition-colors">
                                 {o.awb_code}
                               </a>
+                              {o.lead_id?.department && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 uppercase">{o.lead_id.department}</span>
+                              )}
                             </div>
                           </div>
                         </div>

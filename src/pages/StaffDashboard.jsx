@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import API from '../api';
 import StatCard from '../components/ui/StatCard';
 import { 
   fetchStats, 
@@ -15,6 +16,12 @@ import { useToast } from '../context/ToastContext';
 const cardCls = "bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow";
 const cardStyle = { border: '1px solid rgba(0,0,0,0.05)' };
 
+const DEPT_COLOR = {
+  migraine: 'bg-purple-50 text-purple-600 border-purple-100',
+  piles: 'bg-amber-50 text-amber-600 border-amber-100',
+  logistics: 'bg-blue-50 text-blue-600 border-blue-100',
+};
+
 const icons = {
   cnp: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M16.5 1.5a4.5 4.5 0 0 1 4.5 4.5v12a4.5 4.5 0 0 1-4.5 4.5h-9A4.5 4.5 0 0 1 3 18V6a4.5 4.5 0 0 1 4.5-4.5h9z"/><line x1="4" y1="4" x2="20" y2="20"/></svg>,
   callAgain: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 11.61 19a19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 3.09 4.18 2 2 0 0 1 5.07 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L9.91 9.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>,
@@ -27,7 +34,7 @@ const icons = {
 };
 
 export default function StaffDashboard() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { success, error, info } = useToast();
   const [stats, setStats] = useState(null);
   const [verifications, setVerifications] = useState([]);
@@ -46,6 +53,13 @@ export default function StaffDashboard() {
 
   const load = useCallback(async () => {
     try {
+      // Sync fresh user profile from DB to dynamically reflect any department changes by Admin in real-time
+      API.get('/users/me').then(res => {
+        if (res.data && res.data.data) {
+          updateUser(res.data.data);
+        }
+      }).catch(() => {});
+
       const [s, vData, lists, chart, att] = await Promise.allSettled([
         fetchStats(), 
         fetchStaffVerifications(), 
@@ -173,7 +187,16 @@ export default function StaffDashboard() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-2xl font-bold text-gray-800 tracking-tight">My Dashboard</h2>
-          <p className="text-sm text-gray-400 mt-0.5">Welcome back, {user?.name}! · {today}</p>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <p className="text-sm text-gray-400">Welcome back, {user?.name}! · {today}</p>
+            {user?.departments?.length > 0 && (
+              <div className="flex gap-1">
+                {user.departments.map(d => (
+                  <span key={d} className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase border ${DEPT_COLOR[d] || 'bg-blue-50 text-blue-600 border-blue-100'}`}>{d}</span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -461,8 +484,9 @@ export default function StaffDashboard() {
                     <div className={`w-7 h-7 rounded-lg ${bg} flex items-center justify-center text-[10px] font-bold ${color} shrink-0`}>{i + 1}</div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-gray-800 truncate">{item.title || item.lead?.name || '—'}</p>
-                      <div className="flex gap-3 mt-0.5">
+                      <div className="flex gap-3 mt-0.5 items-center">
                         {item.lead?.phone && <span className="text-[10px] text-gray-400 flex items-center gap-1">{icons.phone}{item.lead.phone}</span>}
+                        {item.department && <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 uppercase">{item.department}</span>}
                       </div>
                     </div>
                     <span className="text-[9px] text-gray-400 shrink-0">
@@ -509,6 +533,7 @@ export default function StaffDashboard() {
                     {v.lead?.phone && <p className="text-[10px] text-gray-500 flex items-center gap-1">{icons.phone}{v.lead.phone}</p>}
                     {v.cityVillage && <p className="text-[10px] text-gray-400 flex items-center gap-1">{icons.location}{v.cityVillage}</p>}
                     {v.price && <p className="text-[10px] text-green-600 font-bold">₹{v.price}</p>}
+                    {v.department && <p className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 uppercase">{v.department}</p>}
                   </div>
                 </div>
               </div>

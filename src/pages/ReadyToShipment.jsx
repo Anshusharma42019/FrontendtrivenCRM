@@ -1,7 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import API from '../api';
 import Modal from '../components/ui/Modal';
+
+const DEPARTMENTS = ['migraine', 'piles'];
 
 const TruckIcon = ({ className = 'w-4 h-4' }) => (
   <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -36,10 +39,13 @@ const SectionHead = ({ label }) => (
 );
 
 export default function ReadyToShipment() {
+  const { user } = useAuth();
+  const canManage = user?.role === 'admin' || user?.role === 'manager';
   const [searchParams] = useSearchParams();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
+  const [department, setDepartment] = useState('');
   const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('phone') || '');
   const [dayFilter, setDayFilter] = useState(() => new URLSearchParams(window.location.search).get('phone') ? 'all' : 'today');
   const [customDate, setCustomDate] = useState('');
@@ -48,24 +54,26 @@ export default function ReadyToShipment() {
 
   const load = useCallback(async () => {
     try {
-      const res = await API.get('/ready-to-shipment');
+      const params = department ? { department } : {};
+      const res = await API.get('/ready-to-shipment', { params });
       const data = res.data.data;
       setRecords(Array.isArray(data) ? data : []);
     } catch { /* ignore */ }
     finally { setLoading(false); }
-  }, []);
+  }, [department]);
 
   const handleRepair = async () => {
     setRepairing(true);
     try {
-      const res = await API.post('/ready-to-shipment/sync');
+      const params = department ? { department } : {};
+      const res = await API.post('/ready-to-shipment/sync', null, { params });
       const data = res.data.data;
       setRecords(Array.isArray(data) ? data : []);
     } catch { /* ignore */ }
     finally { setRepairing(false); }
   };
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, department]);
 
   const handleDelete = async (record) => {
     if (!window.confirm('Delete this record? The task will be marked as cancelled.')) return;
@@ -134,6 +142,16 @@ export default function ReadyToShipment() {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, phone, location..."
               className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-100 bg-white text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-300/50 focus:border-amber-400 transition shadow-sm" />
           </div>
+          {canManage && (
+            <select
+              value={department}
+              onChange={e => setDepartment(e.target.value)}
+              className="w-auto border border-gray-200 rounded-xl px-3 py-2.5 text-xs font-bold bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 transition shrink-0"
+            >
+              <option value="">All Depts</option>
+              {DEPARTMENTS.map(d => <option key={d} value={d}>{d.toUpperCase()}</option>)}
+            </select>
+          )}
           <button onClick={handleRepair} disabled={repairing}
             className="px-3 py-2 rounded-xl text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 transition disabled:opacity-50 whitespace-nowrap shrink-0">
             {repairing ? 'Syncing...' : '🔄 Sync Verified'}
@@ -160,6 +178,7 @@ export default function ReadyToShipment() {
               {filtered.map((r, i) => {
                 const color = PIN_COLORS[i % PIN_COLORS.length];
                 const isActive = selected?._id === r._id;
+                const dept = r.department || r.lead?.department || r.task?.department;
                 return (
                   <div
                     key={r._id}
@@ -201,6 +220,11 @@ export default function ReadyToShipment() {
                     {/* Desktop Status/Price */}
                     <div className="flex items-center justify-between sm:flex-col sm:items-end gap-1 shrink-0 mt-1 sm:mt-0 pt-2 sm:pt-0 border-t border-gray-50 sm:border-0">
                       <div className="flex items-center gap-2">
+                        {dept && (
+                          <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100 uppercase tracking-wide">
+                            {dept}
+                          </span>
+                        )}
                         {r.price && (
                           <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg">
                             ₹{r.price}
@@ -256,6 +280,7 @@ export default function ReadyToShipment() {
             <SectionHead label="Customer" />
             <DetailRow label="Task" value={selected.title} />
             <DetailRow label="Assigned To" value={selected.assignedTo?.name} />
+            <DetailRow label="Department" value={selected.department || selected.lead?.department || selected.task?.department} />
             <DetailRow label="Description" value={selected.description} />
 
             <SectionHead label="Health Info" />
@@ -329,6 +354,7 @@ export default function ReadyToShipment() {
               <SectionHead label="Customer Info" />
               <DetailRow label="Task" value={selected.title} />
               <DetailRow label="Assigned To" value={selected.assignedTo?.name} />
+              <DetailRow label="Department" value={selected.department || selected.lead?.department || selected.task?.department} />
               <DetailRow label="Description" value={selected.description} />
               
               <SectionHead label="Health Info" />

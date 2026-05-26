@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../context/LanguageContext';
 import * as srSvc from '../services/shiprocket.service';
 
 const cardCls = 'bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow';
@@ -116,6 +117,7 @@ export default function OrderStatusBoard({
   onStatsChange,
   filterParams,
 }) {
+  const { t } = useLanguage();
   const [deliveredStats, setDeliveredStats] = useState({ count: 0, revenue: 0, statusBreakdown: [] });
   const [datePreset, setDatePreset] = useState(defaultPreset);
   const [filterFrom, setFilterFrom] = useState('');
@@ -267,8 +269,10 @@ export default function OrderStatusBoard({
     <div className={cardCls} style={cardStyle}>
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-6">
         <div>
-          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-widest">{title}</h3>
-          <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 mt-1 uppercase">{subtitle || `${orderTotal} ORDERS TOTAL`}</p>
+          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-widest">{t(title)}</h3>
+          <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 mt-1 uppercase">
+            {subtitle || `${orderTotal} ${t('ORDERS TOTAL')}`}
+          </p>
         </div>
         <div className="w-full lg:w-auto flex flex-col gap-3">
           {!filterParams && (
@@ -279,7 +283,7 @@ export default function OrderStatusBoard({
                     className={`h-8 px-3 rounded-lg text-[10px] sm:text-[11px] font-black transition-all whitespace-nowrap ${
                       datePreset === filter.id ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                     }`}>
-                    {filter.label.toUpperCase()}
+                    {t(filter.label).toUpperCase()}
                   </button>
                 ))}
               </div>
@@ -298,7 +302,7 @@ export default function OrderStatusBoard({
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
                   <path d="M3 4h18M6 12h12M10 20h4"/>
                 </svg>
-                <span className="hidden sm:inline">APPLY</span>
+                <span className="hidden sm:inline">{t('APPLY')}</span>
                 <span className="sm:hidden">GO</span>
               </button>
             )}
@@ -311,7 +315,7 @@ export default function OrderStatusBoard({
                 <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
               </svg>
-              {syncing ? '...' : 'SYNC'}
+              {syncing ? '...' : t('SYNC')}
             </button>
           </div>
           {syncMsg && (
@@ -334,7 +338,7 @@ export default function OrderStatusBoard({
                   selected ? 'ring-2 ring-green-500 border-green-300 bg-green-50' : STATUS_STYLES[normalizeStatus(status)] || 'border-gray-200 bg-gray-50 text-gray-700'
                 }`}>
                 <div className="flex items-start justify-between gap-3">
-                  <span className="text-[10px] sm:text-[11px] font-black uppercase leading-4 break-words tracking-tight">{formatStatusLabel(status)}</span>
+                  <span className="text-[10px] sm:text-[11px] font-black uppercase leading-4 break-words tracking-tight">{t(formatStatusLabel(status))}</span>
                   <svg className="w-3.5 h-3.5 shrink-0 opacity-60" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                     <path d="M9 18l6-6-6-6"/>
                   </svg>

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useToast } from '../context/ToastContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { getLeads, getLead, createLead, updateLead, deleteLead, assignLead, addLeadNote, markCNP, createCallAgain } from '../services/lead.service';
 import { getUsers } from '../services/user.service';
 import Modal from '../components/ui/Modal';
@@ -11,7 +12,8 @@ const STATUSES = ['new', 'old'];
 const HIDDEN_LEAD_LIST_STATUSES = new Set(['follow_up', 'on_hold']);
 const SOURCES = ['website', 'referral', 'social_media', 'cold_call', 'email', 'walk_in', 'other'];
 const TYPES = ['general', 'ayurveda', 'panchakarma', 'consultation', 'product', 'other'];
-const EMPTY = { name: '', phone: '', email: '', address: '', houseNo: '', cityVillage: '', cityVillageType: 'city', postOffice: '', landmark: '', district: '', state: '', pincode: '', source: 'other', status: 'new', type: 'general', problem: '', note: '', revenue: '' };
+const DEPARTMENTS = ['migraine', 'piles'];
+const EMPTY = { name: '', phone: '', email: '', address: '', houseNo: '', cityVillage: '', cityVillageType: 'city', postOffice: '', landmark: '', district: '', state: '', pincode: '', source: 'other', status: 'new', type: 'general', problem: '', note: '', revenue: '', department: '' };
 
 const PIN_COLORS = [
   'bg-emerald-500', 'bg-blue-500', 'bg-indigo-500',
@@ -40,9 +42,10 @@ const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm b
 
 export default function Leads() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [data, setData] = useState({ leads: [], total: 0, totalPages: 1 });
   const today = new Date().toISOString().split('T')[0];
-  const [filters, setFilters] = useState({ search: '', dateFrom: today, dateTo: today, status: 'new', datePreset: 'today', page: 1 });
+  const [filters, setFilters] = useState({ search: '', dateFrom: today, dateTo: today, status: 'new', datePreset: 'today', page: 1, department: '' });
   const [highlightId, setHighlightId] = useState(null);
   const [salesUsers, setSalesUsers] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -70,6 +73,7 @@ export default function Leads() {
       if (filters.dateFrom) params.dateFrom = filters.dateFrom;
       if (filters.dateTo) params.dateTo = filters.dateTo;
       if (filters.status) params.status = filters.status;
+      if (filters.department) params.department = filters.department;
 
       const res = await getLeads(params);
       const nextData = res || { leads: [], total: 0, totalPages: 1 };
@@ -110,6 +114,7 @@ export default function Leads() {
     setLoading(true); setError('');
     try {
       const payload = { ...form, revenue: form.revenue ? Number(form.revenue) : 0 };
+      if (!payload.department) delete payload.department;
       const lead = await createLead(payload);
       if (action === 'cnp') { await markCNP(lead._id).catch(() => {}); }
       else if (action === 'callAgain') { await createCallAgain(lead._id).catch(() => {}); }
@@ -146,6 +151,7 @@ export default function Leads() {
         problem: form.problem || '',
         revenue: form.revenue ? Number(form.revenue) : 0,
       };
+      if (form.department) payload.department = form.department;
       await updateLead(selected._id, payload);
       setSelected(null);
       await load();
@@ -203,7 +209,7 @@ export default function Leads() {
                     className={`px-3.5 py-2 rounded-lg text-[10px] font-black transition-all whitespace-nowrap ${filters.datePreset === key
                       ? 'bg-emerald-600 text-white shadow-sm'
                       : 'text-gray-500 hover:text-emerald-600'
-                    }`}>{label.toUpperCase()}</button>
+                    }`}>{t(label).toUpperCase()}</button>
                 ))}
               </div>
             </div>
@@ -214,14 +220,24 @@ export default function Leads() {
               <input
                 value={filters.search}
                 onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-                placeholder="Search name, phone..."
+                placeholder={t('Search name, phone...')}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-100 bg-white text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 transition shadow-sm"
               />
             </div>
+            {canManage && (
+              <select
+                value={filters.department}
+                onChange={e => setFilters(f => ({ ...f, department: e.target.value, page: 1 }))}
+                className="w-full md:w-auto px-4 py-2.5 rounded-xl border border-gray-100 bg-white text-xs font-bold text-gray-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-400 transition shadow-sm shrink-0"
+              >
+                <option value="">{t('All Departments')}</option>
+                {DEPARTMENTS.map(d => <option key={d} value={d}>{d.toUpperCase()}</option>)}
+              </select>
+            )}
             <button onClick={() => { setIsCreating(true); setSelected(null); setForm(EMPTY); }}
               className="w-full md:w-auto px-5 py-2.5 rounded-xl text-[10px] font-black text-white shadow-lg hover:shadow-emerald-200 transition-all flex items-center justify-center gap-2 shrink-0 active:scale-95"
               style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
-              <span className="text-sm leading-none">+</span> ADD NEW LEAD
+              <span className="text-sm leading-none">+</span> {t('ADD NEW LEAD')}
             </button>
           </div>
         </div>
@@ -230,7 +246,7 @@ export default function Leads() {
         <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
           {data.leads.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
-               <p className="text-gray-400 text-sm font-medium">No leads found</p>
+               <p className="text-gray-400 text-sm font-medium">{t('No leads found')}</p>
             </div>
           ) : (
             <div className="space-y-2 pb-4">
@@ -261,6 +277,11 @@ export default function Leads() {
 
                     <div className="hidden sm:flex flex-col items-end gap-1 shrink-0">
                       <Badge value={lead.status} />
+                      {lead.department && (
+                        <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-100">
+                          {lead.department.toUpperCase()}
+                        </span>
+                      )}
                       {lead.assignedTo?.name && <span className="text-[10px] text-gray-400">By {lead.assignedTo.name}</span>}
                     </div>
 
@@ -338,6 +359,15 @@ export default function Leads() {
                     {TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g,' ')}</option>)}
                   </select></div>
               </div>
+              
+              {canManage && (
+                <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Department</label>
+                  <select className={`${inputCls} mt-1`} value={form.department || ''} onChange={e => sf('department', e.target.value)}>
+                    <option value="">Select Department</option>
+                    {DEPARTMENTS.map(d => <option key={d} value={d}>{d.toUpperCase()}</option>)}
+                  </select>
+                </div>
+              )}
 
               <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Problem / Inquiry</label>
                 <textarea rows={2} className={`${inputCls} mt-1`} value={form.problem} onChange={e => sf('problem', e.target.value)} /></div>
@@ -422,6 +452,14 @@ export default function Leads() {
                 <select className={`${inputCls} mt-1.5`} value={form.status} onChange={e => sf('status', e.target.value)}>
                   {STATUSES.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
                 </select></div>
+                
+              {canManage && (
+                <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Department</label>
+                  <select className={`${inputCls} mt-1.5`} value={form.department || ''} onChange={e => sf('department', e.target.value)}>
+                    <option value="">Select Department</option>
+                    {DEPARTMENTS.map(d => <option key={d} value={d}>{d.toUpperCase()}</option>)}
+                  </select></div>
+              )}
 
               <div className="pt-6 grid grid-cols-5 gap-3">
                  <button type="submit" disabled={loading}
