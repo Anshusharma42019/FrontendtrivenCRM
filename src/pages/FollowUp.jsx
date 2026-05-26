@@ -79,7 +79,7 @@ const SectionHead = ({ label }) => (
 
 export default function FollowUp() {
   const { user } = useAuth();
-  const canManage = user?.role === 'admin' || user?.role === 'manager';
+  const canManage = user?.role === 'admin' || user?.role === 'manager' || user?.role === 'support';
   const [searchParams, setSearchParams] = useSearchParams();
   const [department, setDepartment] = useState('');
   const [all, setAll] = useState([]);
@@ -489,11 +489,24 @@ export default function FollowUp() {
                         <div className={`w-10 h-10 rounded-xl bg-gradient-to-br from-gray-500 to-gray-600 flex items-center justify-center text-white text-sm font-black shadow-lg shadow-black/5 shrink-0`}>{initials(o.billing_customer_name)}</div>
                         <div className="min-w-0">
                           <p className="font-bold text-gray-800 text-sm truncate">{o.billing_customer_name || '—'}</p>
-                          <div className="flex items-center gap-2 mt-1">
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
                             <a href={`https://shiprocket.co/tracking/${o.awb_code}`} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest text-gray-400 py-0.5 px-1.5 bg-gray-50 rounded-lg border border-gray-100 hover:text-blue-600 transition-colors">
                               {o.awb_code}
                             </a>
                             <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded uppercase">✓ All Done</span>
+                            {(!!o.source_order_id || o.lead_id?.status === 'old') && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase">
+                                2nd Kit
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-gray-400 mt-1 flex flex-col gap-0.5">
+                            <>
+                              <span>Added: <strong className="text-gray-600">{o.lead_id?.createdBy?.name || o.lead_id?.assignedTo?.name || o.created_by?.name || '—'}</strong></span>
+                              {(o.source_order_id || o.lead_id?.status === 'old') && (
+                                <span>Verifier: <strong className="text-gray-600">{o.verified_by?.name || '—'}</strong></span>
+                              )}
+                            </>
                           </div>
                         </div>
                       </div>
@@ -654,13 +667,26 @@ export default function FollowUp() {
                           </div>
                           <div className="min-w-0">
                             <p className="font-bold text-gray-800 text-sm truncate">{o.billing_customer_name || '—'}</p>
-                            <div className="flex items-center gap-2 mt-1">
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
                               <a href={`https://shiprocket.co/tracking/${o.awb_code}`} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest text-gray-400 py-0.5 px-1.5 bg-gray-50 rounded-lg border border-gray-100 hover:text-blue-600 transition-colors">
                                 {o.awb_code}
                               </a>
                               {o.lead_id?.department && (
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 uppercase">{o.lead_id.department}</span>
                               )}
+                              {(!!o.source_order_id || o.lead_id?.status === 'old') && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase">
+                                  2nd Kit
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-gray-400 mt-1 flex flex-col gap-0.5">
+                              <>
+                                <span>Added: <strong className="text-gray-600">{o.lead_id?.createdBy?.name || o.lead_id?.assignedTo?.name || o.created_by?.name || '—'}</strong></span>
+                                {(o.source_order_id || o.lead_id?.status === 'old') && (
+                                  <span>Verifier: <strong className="text-gray-600">{o.verified_by?.name || '—'}</strong></span>
+                                )}
+                              </>
                             </div>
                           </div>
                         </div>
@@ -872,6 +898,9 @@ export default function FollowUp() {
                 <div>
                   <SectionHead label="Order Details" />
                   <DetailRow label="Staff / Agent" value={selected.lead_id?.assignedTo?.name ? `👤 ${selected.lead_id.assignedTo.name}` : (selected.lead_id?.createdBy?.name ? `👤 ${selected.lead_id.createdBy.name}` : 'Unknown / System')} />
+                  {(selected.source_order_id || selected.lead_id?.status === 'old') && (
+                    <DetailRow label="Verifier" value={selected.verified_by?.name ? `👤 ${selected.verified_by.name}` : '—'} />
+                  )}
                   <DetailRow label="Order ID" value={selected.order_id || selected.shiprocket_order_id} />
                   <DetailRow label="Courier" value={selected.courier_name} />
                   <DetailRow label="Payment" value={selected.payment_method} />

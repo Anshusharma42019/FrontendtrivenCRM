@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getVerificationRecords, syncVerificationRecords, updateVerificationStatus, updateVerificationRecord, updateTask, deleteVerificationRecord, getOnHoldVerificationRecords } from '../services/task.service';
 import { updateLead, markCNP, createCallAgain } from '../services/lead.service';
+import { getUsers } from '../services/user.service';
 import API from '../api';
 import Modal from '../components/ui/Modal';
 
@@ -65,6 +66,10 @@ export default function Verification() {
   const [ohDayFilter, setOhDayFilter] = useState('all');
   const [ohCustomDate, setOhCustomDate] = useState('');
   const [ohSearch, setOhSearch] = useState('');
+  const [allUsers, setAllUsers] = useState([]);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignTo, setAssignTo] = useState('');
+
 
   const load = useCallback(async () => {
     try {
@@ -95,6 +100,22 @@ export default function Verification() {
       })
       .catch(() => { });
   }, [load, loadOnHold, department]);
+
+  useEffect(() => {
+    if (canManage) {
+      Promise.all([
+        getUsers({ role: 'sales' }),
+        getUsers({ role: 'support' }),
+        getUsers({ role: 'manager' }),
+        getUsers({ role: 'admin' })
+      ]).then(results => {
+        const combined = results.flatMap(r => r.users || []);
+        const unique = Array.from(new Map(combined.map(u => [u._id, u])).values());
+        setAllUsers(unique);
+      }).catch(() => {});
+    }
+  }, [canManage]);
+
 
   // Handle openId from search navigation — runs after records are populated
   useEffect(() => {
@@ -316,6 +337,16 @@ export default function Verification() {
     } catch { }
   };
 
+  const handleSelect = async (r) => {
+    const isActive = selected?._id === r._id;
+    if (isActive) {
+      setSelected(null);
+      return;
+    }
+    const flattened = flattenRecord(r);
+    setSelected(flattened);
+  };
+
   const sf = (k, v) => setEditForm(f => ({ ...f, [k]: v }));
 
   const handlePincodeChange = async (val) => {
@@ -448,7 +479,7 @@ export default function Verification() {
                   const isActive = selected?._id === r._id;
                   const flattened = flattenRecord(r);
                   return (
-                    <div key={r._id} onClick={() => setSelected(isActive ? null : flattened)} className={`relative flex items-center gap-4 px-4 py-3.5 rounded-2xl cursor-pointer transition-all duration-200 border ${isActive ? 'bg-gray-50 border-gray-300 shadow-sm' : 'bg-white border-gray-100 hover:border-gray-300 hover:bg-gray-50/50 hover:shadow-sm'}`}>
+                    <div key={r._id} onClick={() => handleSelect(r)} className={`relative flex items-center gap-4 px-4 py-3.5 rounded-2xl cursor-pointer transition-all duration-200 border ${isActive ? 'bg-gray-50 border-gray-300 shadow-sm' : 'bg-white border-gray-100 hover:border-gray-300 hover:bg-gray-50/50 hover:shadow-sm'}`}>
                       <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${color}`} />
                       <span className="text-[11px] font-bold text-gray-300 w-5 text-center shrink-0 ml-2">{i + 1}</span>
                       <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0 ${color}`}>
@@ -498,7 +529,7 @@ export default function Verification() {
                 return (
                   <div
                     key={r._id}
-                    onClick={() => setSelected(isActive ? null : flattened)}
+                    onClick={() => handleSelect(r)}
                     className={`relative flex items-center gap-4 px-4 py-3.5 rounded-2xl cursor-pointer transition-all duration-200 border
                       ${isActive
                         ? 'bg-green-50 border-green-200 shadow-sm'
@@ -643,7 +674,17 @@ export default function Verification() {
               <>
                 <SectionHead label="Customer" />
                 <DetailRow label="Task" value={selected.title} />
-                <DetailRow label="Assigned To" value={selected.assignedTo?.name} />
+                <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">Assigned To (Verifier)</span>
+                  <span className="text-sm text-gray-800 font-medium capitalize flex-1">{selected.assignedTo?.name || '—'}</span>
+                  {canManage && (
+                    <button type="button" onClick={() => { setAssignTo(selected.assignedTo?._id || selected.assignedTo || ''); setShowAssignModal(true); }}
+                      className="text-[10px] font-bold text-green-600 hover:bg-green-50 px-2 py-0.5 rounded border border-green-200 transition">
+                      Change
+                    </button>
+                  )}
+                </div>
+                <DetailRow label="Added By" value={selected.lead?.createdBy?.name || '—'} />
                 <DetailRow label="Description" value={selected.description} />
 
                 <SectionHead label="Health Info" />
@@ -854,6 +895,35 @@ export default function Verification() {
             </div>
           </Modal>
         </div>
+      )}
+
+      {showAssignModal && (
+        <Modal title="Assign Verification Task" onClose={() => setShowAssignModal(false)}>
+           <form onSubmit={async (e) => {
+             e.preventDefault();
+             setSaving(true);
+             try {
+               await updateVerificationRecord(selected._id, { assignedTo: assignTo });
+               await load();
+               await loadOnHold();
+               setSelected(prev => ({ ...prev, assignedTo: allUsers.find(u => u._id === assignTo) || prev.assignedTo }));
+               setShowAssignModal(false);
+             } catch (err) {
+               alert('Assignment failed: ' + (err.response?.data?.message || err.message));
+             } finally {
+               setSaving(false);
+             }
+           }} className="space-y-4">
+             <div>
+               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">Select Verifier</label>
+               <select required className={inputCls} value={assignTo} onChange={e => setAssignTo(e.target.value)}>
+                 <option value="">Select staff</option>
+                 {allUsers.map(u => <option key={u._id} value={u._id}>{u.name} ({u.role?.toUpperCase()})</option>)}
+               </select>
+             </div>
+             <button type="submit" disabled={saving} className="w-full py-3 bg-green-600 text-white text-xs font-bold rounded-xl shadow-md transition-all">Assign Now</button>
+           </form>
+        </Modal>
       )}
     </div>
   );

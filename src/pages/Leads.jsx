@@ -62,7 +62,7 @@ export default function Leads() {
 
   const { error: toastError } = useToast();
   const navigate = useNavigate();
-  const canManage = user?.role === 'admin' || user?.role === 'manager';
+  const canManage = user?.role === 'admin' || user?.role === 'manager' || user?.role === 'support';
   const canEdit = canManage || user?.role === 'sales';
 
   const load = useCallback(async () => {
