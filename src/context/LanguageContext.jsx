@@ -101,7 +101,7 @@ const translations = {
     'ADD NEW LEAD': 'ADD NEW LEAD',
     'No leads found': 'No leads found',
   },
-  hi: {
+  hi_disabled: {
     // Sidebar / Navigation
     'Dashboard': 'डैशबोर्ड',
     'Leads': 'लीड्स',
@@ -202,7 +202,7 @@ const translations = {
 };
 
 export const LanguageProvider = ({ children }) => {
-  const [lang, setLangState] = useState(() => localStorage.getItem('lang') || 'hi');
+  const [lang, setLangState] = useState(() => localStorage.getItem('lang') || 'en');
 
   const setLang = (newLang) => {
     setLangState(newLang);
