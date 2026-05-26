@@ -137,7 +137,7 @@ export default function Verification() {
       lead: r.lead,
       assignedTo: r.assignedTo || r.task?.assignedTo,
       title: r.title || r.task?.title,
-      department: r.department || r.lead?.department || r.task?.department,
+      department: r.department || r.task?.department || r.lead?.department,
       task: r.task,
       _isPipelineOnly: r._isPipelineOnly,
     };
@@ -180,14 +180,14 @@ export default function Verification() {
     const startOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const today = startOf(new Date());
     let filtered = [...onHoldRecords];
-    if (ohDayFilter === 'today') filtered = filtered.filter(r => new Date(r.createdAt) >= today);
+    if (ohDayFilter === 'today') filtered = filtered.filter(r => new Date(r.onHoldAt || r.updatedAt || r.createdAt) >= today);
     else if (ohDayFilter === 'yesterday') {
       const y = new Date(today); y.setDate(y.getDate() - 1);
-      filtered = filtered.filter(r => { const d = new Date(r.createdAt); return d >= y && d < today; });
+      filtered = filtered.filter(r => { const d = new Date(r.onHoldAt || r.updatedAt || r.createdAt); return d >= y && d < today; });
     } else if (ohDayFilter === 'custom' && ohCustomDate) {
       const from = new Date(ohCustomDate);
       const to = new Date(from); to.setDate(to.getDate() + 1);
-      filtered = filtered.filter(r => { const d = new Date(r.createdAt); return d >= from && d < to; });
+      filtered = filtered.filter(r => { const d = new Date(r.onHoldAt || r.updatedAt || r.createdAt); return d >= from && d < to; });
     }
     if (ohSearch) {
       const q = ohSearch.toLowerCase();
@@ -536,8 +536,8 @@ export default function Verification() {
                       {flattened.assignedTo?.name && (
                         <span className="text-[10px] text-gray-400 hidden sm:block">Assigned: {flattened.assignedTo.name}</span>
                       )}
-                      {flattened.department && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 uppercase">{flattened.department}</span>
+                      {(flattened.department || flattened.lead?.department || flattened.task?.department) && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 uppercase">{flattened.department || flattened.lead?.department || flattened.task?.department}</span>
                       )}
                     </div>
 
