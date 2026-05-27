@@ -4,11 +4,13 @@ import API from '../api';
 import StatCard from '../components/ui/StatCard';
 import { 
   fetchStats, 
+  fetchStaffStats,
   saveStaffTarget, 
   fetchStaffVerifications, 
   fetchStaffTodayLists, 
   fetchStaffMonthlyChart, 
-  fetchStaffCommission 
+  fetchStaffCommission,
+  fetchTargetHistory 
 } from '../services/dashboard.service';
 import * as attendanceSvc from '../services/attendance.service';
 import { useToast } from '../context/ToastContext';
@@ -50,6 +52,11 @@ export default function StaffDashboard() {
   const [commMonth, setCommMonth] = useState(() => { const n = new Date(); return { month: n.getMonth(), year: n.getFullYear() }; });
   const [commLoading, setCommLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [targetHistory, setTargetHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyMode, setHistoryMode] = useState('days'); // 'days' or 'month'
+  const [historyDays, setHistoryDays] = useState(7);
+  const [historyMonth, setHistoryMonth] = useState(() => { const n = new Date(); return { month: n.getMonth(), year: n.getFullYear() }; });
 
   const load = useCallback(async () => {
     try {
@@ -60,15 +67,21 @@ export default function StaffDashboard() {
         }
       }).catch(() => {});
 
-      const [s, vData, lists, chart, att] = await Promise.allSettled([
+      const [s, staffS, vData, lists, chart, att] = await Promise.allSettled([
         fetchStats(), 
+        fetchStaffStats(),
         fetchStaffVerifications(), 
         fetchStaffTodayLists(), 
         fetchStaffMonthlyChart(), 
         attendanceSvc.getTodayStatus()
       ]);
       
-      if (s.status === 'fulfilled') setStats(s.value);
+      if (s.status === 'fulfilled' || staffS.status === 'fulfilled') {
+        setStats({
+          ...(s.status === 'fulfilled' ? s.value : {}),
+          ...(staffS.status === 'fulfilled' ? staffS.value : {})
+        });
+      }
       if (vData.status === 'fulfilled') setVerifications(Array.isArray(vData.value) ? vData.value : []);
       if (lists.status === 'fulfilled') setTodayLists(lists.value || { cnpList: [], callAgainList: [], interestedList: [], notInterestedList: [] });
       if (chart.status === 'fulfilled') setMonthlyChart(Array.isArray(chart.value) ? chart.value : []);
@@ -108,6 +121,20 @@ export default function StaffDashboard() {
     return () => { cancelled = true; };
   }, [commMonth]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setHistoryLoading(true);
+    const promise = historyMode === 'days' 
+      ? fetchTargetHistory(null, null, historyDays)
+      : fetchTargetHistory(historyMonth.month, historyMonth.year, null);
+      
+    promise
+      .then(d => { if (!cancelled) setTargetHistory(Array.isArray(d) ? d : []); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setHistoryLoading(false); });
+    return () => { cancelled = true; };
+  }, [historyMode, historyDays, historyMonth]);
+
   const handleSaveTarget = async (e) => {
     e.preventDefault();
     if (!targetInput || Number(targetInput) < 1) return;
@@ -119,6 +146,10 @@ export default function StaffDashboard() {
       setTargetInput('');
       success(`Today's target set to ${data.todayTarget} verifications.`, 'Target Set');
       load();
+      const promise = historyMode === 'days' 
+        ? fetchTargetHistory(null, null, historyDays)
+        : fetchTargetHistory(historyMonth.month, historyMonth.year, null);
+      promise.then(d => setTargetHistory(Array.isArray(d) ? d : [])).catch(() => {});
     } catch (err) {
       error(err.response?.data?.message || 'Save failed');
     } finally { setSaving(false); }
@@ -202,9 +233,9 @@ export default function StaffDashboard() {
 
       {/* Main Stats Row - Styled like Manager Dashboard */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-        <StatCard label="Today's Done" value={stats?.todayVerifications} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>} color="border-green-500" />
+        <StatCard label="Today's Done" value={stats?.activity?.todayVerifications ?? stats?.todayVerifications} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>} color="border-green-500" />
         <StatCard label="Pending Tasks" value={stats?.tasks?.pending} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>} color="border-orange-500" />
-        <StatCard label="Month Verifications" value={stats?.monthVerifications} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>} color="border-blue-500" />
+        <StatCard label="Month Verifications" value={stats?.activity?.monthVerifications ?? stats?.monthVerifications} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>} color="border-blue-500" />
         <StatCard label="Total Leads" value={stats?.totalLeads} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>} color="border-purple-500" />
       </div>
 
@@ -313,6 +344,148 @@ export default function StaffDashboard() {
               <p className="text-2xl font-bold text-blue-600">{target}</p>
               <p className="text-[10px] text-blue-700 font-semibold uppercase mt-1">Target</p>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Target History */}
+      <div className={cardCls} style={cardStyle}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center">
+              <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+            </div>
+            <h3 className="text-sm font-semibold text-gray-700">Target History</h3>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              {[7, 15].map(d => (
+                <button key={d} onClick={() => { setHistoryMode('days'); setHistoryDays(d); }}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                    historyMode === 'days' && historyDays === d ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                  }`}>{d}D</button>
+              ))}
+            </div>
+            <div className="w-px h-6 bg-gray-200" />
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => {
+                setHistoryMode('month');
+                setHistoryMonth(p => {
+                  const m = p.month - 1;
+                  return m < 0 ? { month: 11, year: p.year - 1 } : { month: m, year: p.year };
+                });
+              }} className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${historyMode === 'month' ? 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}><svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+              <span className={`text-[10px] font-bold min-w-[70px] text-center uppercase tracking-tight ${historyMode === 'month' ? 'text-indigo-600' : 'text-gray-600'}`}>
+                {new Date(historyMonth.year, historyMonth.month).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+              </span>
+              <button onClick={() => {
+                setHistoryMode('month');
+                setHistoryMonth(p => {
+                  const m = p.month + 1;
+                  return m > 11 ? { month: 0, year: p.year + 1 } : { month: m, year: p.year };
+                });
+              }} className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${historyMode === 'month' ? 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}><svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
+            </div>
+          </div>
+        </div>
+        {historyLoading ? (
+          <div className="flex items-center justify-center py-10">
+            <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : targetHistory.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-8">No target history found</p>
+        ) : (
+          <div className="overflow-x-auto -mx-2 px-2">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="py-3 px-3 text-left text-[10px] font-black uppercase tracking-widest text-gray-400">Date</th>
+                  <th className="py-3 px-3 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">Target</th>
+                  <th className="py-3 px-3 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">Done</th>
+                  <th className="py-3 px-3 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">Remaining</th>
+                  <th className="py-3 px-3 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {targetHistory.map((row, i) => {
+                  const rem = row.target > 0 ? Math.max(row.target - row.completed, 0) : 0;
+                  const pct = row.target > 0 ? Math.min(Math.round((row.completed / row.target) * 100), 100) : 0;
+                  const isToday = row.date === new Date().toISOString().slice(0, 10);
+                  return (
+                    <tr key={row.date} className={`transition-colors ${isToday ? 'bg-indigo-50/40' : 'hover:bg-gray-50/50'}`}>
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2">
+                          {isToday && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />}
+                          <div>
+                            <span className={`text-xs font-bold ${isToday ? 'text-indigo-700' : 'text-gray-700'}`}>
+                              {new Date(row.date + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </span>
+                            <span className="text-[9px] text-gray-400 ml-1.5">
+                              {new Date(row.date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short' })}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <span className={`text-sm font-black ${row.target > 0 ? 'text-blue-600' : 'text-gray-300'}`}>{row.target || '—'}</span>
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <span className={`text-sm font-black ${row.completed > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>{row.completed}</span>
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        {row.target > 0 ? (
+                          <span className={`text-sm font-black ${rem === 0 ? 'text-emerald-500' : 'text-orange-500'}`}>{rem === 0 ? '✓' : rem}</span>
+                        ) : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        {row.target > 0 ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="w-full max-w-[80px] h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                              <div className={`h-full rounded-full transition-all duration-500 ${row.achieved ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-400'}`}
+                                style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className={`text-[9px] font-black uppercase tracking-widest ${
+                              row.achieved ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-red-500'
+                            }`}>
+                              {row.achieved ? '✓ Done' : `${pct}%`}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[9px] font-bold text-gray-300 uppercase">No Target</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {/* Summary row */}
+            {(() => {
+              const withTarget = targetHistory.filter(r => r.target > 0);
+              const totalTarget = withTarget.reduce((s, r) => s + r.target, 0);
+              const totalDone = withTarget.reduce((s, r) => s + r.completed, 0);
+              const achievedDays = withTarget.filter(r => r.achieved).length;
+              return withTarget.length > 0 ? (
+                <div className="flex items-center justify-between mt-4 px-3 py-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <div className="flex items-center gap-4">
+                    <div className="text-center">
+                      <p className="text-lg font-black text-gray-800">{totalDone}<span className="text-gray-400 font-bold">/{totalTarget}</span></p>
+                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Total Done</p>
+                    </div>
+                    <div className="w-px h-8 bg-gray-200" />
+                    <div className="text-center">
+                      <p className="text-lg font-black text-emerald-600">{achievedDays}<span className="text-gray-400 font-bold">/{withTarget.length}</span></p>
+                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Days Achieved</p>
+                    </div>
+                    <div className="w-px h-8 bg-gray-200" />
+                    <div className="text-center">
+                      <p className={`text-lg font-black ${totalTarget > 0 && Math.round((totalDone / totalTarget) * 100) >= 80 ? 'text-emerald-600' : 'text-orange-500'}`}>{totalTarget > 0 ? Math.round((totalDone / totalTarget) * 100) : 0}%</p>
+                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Overall</p>
+                    </div>
+                  </div>
+                </div>
+              ) : null;
+            })()}
           </div>
         )}
       </div>

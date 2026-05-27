@@ -446,7 +446,7 @@ export default function Users() {
             {/* Body */}
             <div className="px-6 py-5 max-h-[80vh] overflow-y-auto">
               {/* Staff stats if sales role */}
-              {viewUser.role === 'sales' && staffStats[viewUser._id] && (() => {
+              {(viewUser.role === 'sales' || viewUser.role === 'support') && staffStats[viewUser._id] && (() => {
                 const s = staffStats[viewUser._id];
                 const done = s.verifiedCount || 0;
                 const target = s.todayTarget || 0;

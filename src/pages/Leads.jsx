@@ -102,7 +102,7 @@ export default function Leads() {
   }, [pendingOpenId, setSearchParams]);
 
   useEffect(() => {
-    if (canManage) getUsers({ role: 'sales' }).then(r => setSalesUsers(r.users || [])).catch(() => {});
+    if (canManage) getUsers({ role: 'sales' }).then(r => setSalesUsers(r.results || [])).catch(() => {});
   }, [canManage]);
 
   const handleCreate = async (e, action) => {

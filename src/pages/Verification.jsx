@@ -109,7 +109,7 @@ export default function Verification() {
         getUsers({ role: 'manager' }),
         getUsers({ role: 'admin' })
       ]).then(results => {
-        const combined = results.flatMap(r => r.users || []);
+        const combined = results.flatMap(r => r.results || []);
         const unique = Array.from(new Map(combined.map(u => [u._id, u])).values());
         setAllUsers(unique);
       }).catch(() => {});
@@ -677,7 +677,7 @@ export default function Verification() {
                 <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">Assigned To (Verifier)</span>
                   <span className="text-sm text-gray-800 font-medium capitalize flex-1">{selected.assignedTo?.name || '—'}</span>
-                  {canManage && (
+                  {user?.role === 'admin' && (
                     <button type="button" onClick={() => { setAssignTo(selected.assignedTo?._id || selected.assignedTo || ''); setShowAssignModal(true); }}
                       className="text-[10px] font-bold text-green-600 hover:bg-green-50 px-2 py-0.5 rounded border border-green-200 transition">
                       Change
