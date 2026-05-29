@@ -72,7 +72,7 @@ API.interceptors.response.use(
         return Promise.reject(refreshError);
       }
     }
-    if (error.response?.status === 403 && error.response?.data?.message?.toLowerCase().includes('check in')) {
+    if (error.response?.status === 403 && (error.response?.data?.message?.toLowerCase().includes('check in') || error.response?.data?.message?.toLowerCase().includes('target'))) {
       // Dispatch a custom event that ToastContext can listen to
       window.dispatchEvent(new CustomEvent('api-error', { 
         detail: { message: error.response.data.message, title: 'Action Blocked' } 

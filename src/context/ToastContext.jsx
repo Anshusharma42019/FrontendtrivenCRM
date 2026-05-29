@@ -33,12 +33,20 @@ export function ToastProvider({ children }) {
     const handleApiError = (e) => {
       const { message, title } = e.detail;
       const isCheckIn = message.toLowerCase().includes('check in');
+      const isTarget = message.toLowerCase().includes('target');
       
+      let action = null;
+      if (isCheckIn) {
+        action = { label: 'Clock In Now', onClick: () => window.location.href = '/attendance' };
+      } else if (isTarget) {
+        action = { label: 'Set Target Now', onClick: () => window.location.href = '/' };
+      }
+
       toast(
         message, 
         'error', 
         title,
-        isCheckIn ? { label: 'Clock In Now', onClick: () => window.location.href = '/attendance' } : null
+        action
       );
     };
     window.addEventListener('api-error', handleApiError);
