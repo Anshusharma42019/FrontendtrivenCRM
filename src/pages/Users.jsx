@@ -260,15 +260,13 @@ export default function Users() {
               <thead>
                 <tr className="text-gray-400 border-b border-gray-100 text-left">
                   <th className="py-5 px-6 font-black uppercase tracking-[0.15em] text-[10px]">Staff Identity</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Work</th>
                   <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Leads</th>
                   <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Calls</th>
-                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Assigned</th>
-                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Verified</th>
-                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Hold</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Verify / Hold</th>
                   <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Target</th>
-                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Ready</th>
-                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Delivered</th>
-                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">RTO</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Shipment</th>
+                  <th className="py-5 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Rates (%)</th>
                   <th className="py-5 px-6 font-black uppercase tracking-[0.15em] text-[10px] text-right">Controls</th>
                 </tr>
               </thead>
@@ -294,7 +292,7 @@ export default function Users() {
                   return sortedRoles.map(role => (
                     <tbody key={role} className="divide-y divide-gray-50/50">
                       <tr className="">
-                        <td colSpan={11} className="py-2 px-6 border-b border-white/5">
+                        <td colSpan={9} className="py-2 px-6 border-b border-white/5">
                           <div className="flex items-center gap-2">
                             <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
                             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">{role} DIVISION</span>
@@ -328,7 +326,7 @@ export default function Users() {
                         </div>
                       </td>
                       {u.role === 'doctor' ? (
-                        <td className="py-4 px-2 text-center" colSpan={9}>
+                        <td className="py-4 px-2 text-center" colSpan={7}>
                           <div className="flex items-center justify-center gap-10 bg-gray-50/50 rounded-2xl py-2 px-6 w-max mx-auto border border-gray-100/50">
                             <div className="flex flex-col items-center">
                               <span className="text-xl font-black text-blue-500 leading-none">{s.totalAppointments || 0}</span>
@@ -350,6 +348,14 @@ export default function Users() {
                         <>
                           <td className="py-4 px-2 text-center">
                             <div className="flex flex-col gap-1 items-center">
+                              <div className="w-full bg-gray-100 rounded-full h-1.5 max-w-[40px]">
+                                <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${s.workingPercentage || 0}%` }}></div>
+                              </div>
+                              <span className="text-[9px] font-bold text-gray-500">{s.workingHours ? s.workingHours.toFixed(1) + 'h' : '0h'}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-2 text-center">
+                            <div className="flex flex-col gap-1 items-center">
                               <span className="text-[11px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">
                                 {s.leadsAdded || 0} LEADS
                               </span>
@@ -359,41 +365,43 @@ export default function Users() {
                             <div className="flex flex-col gap-1 items-center">
                               <span className="text-[11px] font-black text-red-500 bg-red-50 px-2 py-0.5 rounded-full">{s.todayCnp || 0} CNP</span>
                               <span className="text-[9px] font-bold text-yellow-600 opacity-80">{s.todayCallAgain || 0} CALL</span>
-                              <span className="text-[9px] font-bold text-gray-500 opacity-80">{s.todayClosedLost || 0} LOST</span>
                             </div>
                           </td>
                           <td className="py-4 px-2 text-center">
-                            <span className="text-sm font-black text-gray-500 bg-gray-50 px-2 py-1 rounded-xl">{s.assignedVerifications || 0}</span>
-                          </td>
-                          <td className="py-4 px-2 text-center">
-                             <div className="inline-flex flex-col items-center justify-center w-12 h-12 rounded-2xl bg-emerald-50/50 border border-emerald-100">
-                               <span className="text-sm font-black text-emerald-600 leading-none">{s.verifiedCount || 0}</span>
-                               <span className="text-[8px] font-black text-emerald-400 uppercase mt-0.5">OK</span>
+                             <div className="flex flex-col gap-1 items-center justify-center">
+                               <div className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full border border-emerald-100">
+                                 <span className="text-sm font-black">{s.todayVerifications || 0}</span>
+                                 <span className="text-[8px] font-black uppercase">VRF</span>
+                               </div>
+                               <span className={`text-[10px] font-black ${s.onHoldCount > 0 ? 'text-amber-500' : 'text-gray-300'}`}>{s.onHoldCount || 0} HOLD</span>
                              </div>
-                          </td>
-                          <td className="py-4 px-2 text-center">
-                             <span className={`text-sm font-black ${s.onHoldCount > 0 ? 'text-amber-500' : 'text-gray-300'}`}>{s.onHoldCount || 0}</span>
                           </td>
                           <td className="py-4 px-2 text-center">
                              <div className="inline-flex flex-col items-center">
-                               <span className={`text-xs font-black ${s.assignedVerifications > 0 ? 'text-blue-600' : 'text-gray-500'}`}>{s.assignedVerifications || 0}</span>
-                               <div className="w-6 h-0.5 bg-gray-100 my-1" />
-                               <span className={`text-[10px] font-bold ${s.todayTarget > 0 ? 'text-blue-500' : 'text-gray-400'}`}>{s.todayTarget || 0}</span>
+                               <span className={`text-xs font-black ${s.todayTarget > 0 ? 'text-blue-500' : 'text-gray-400'}`}>{s.todayTarget || 0}</span>
                              </div>
                           </td>
                           <td className="py-4 px-2 text-center">
-                            <div className={`inline-flex items-center justify-center w-8 h-8 rounded-xl ${readyCount > 0 ? 'bg-purple-100 text-purple-600' : 'bg-gray-50 text-gray-300'} font-black text-sm transition-all group-hover:rotate-12`}>
-                              {readyCount}
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="flex items-center gap-1">
+                                <span className="text-[9px] font-bold text-gray-400">RDY</span>
+                                <span className={`text-xs font-black ${readyCount > 0 ? 'text-purple-600' : 'text-gray-300'}`}>{readyCount}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[9px] font-bold text-gray-400">DEL</span>
+                                <span className={`text-xs font-black ${s.deliveredCount > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>{s.deliveredCount || 0}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[9px] font-bold text-gray-400">RTO</span>
+                                <span className={`text-xs font-black ${s.rtoCount > 0 ? 'text-orange-600' : 'text-gray-300'}`}>{s.rtoCount || 0}</span>
+                              </div>
                             </div>
                           </td>
                           <td className="py-4 px-2 text-center">
-                            <div className={`inline-flex items-center justify-center w-8 h-8 rounded-xl ${s.deliveredCount > 0 ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-50 text-gray-300'} font-black text-sm transition-all group-hover:-rotate-12`}>
-                              {s.deliveredCount || 0}
-                            </div>
-                          </td>
-                          <td className="py-4 px-2 text-center">
-                            <div className={`inline-flex items-center justify-center w-8 h-8 rounded-xl ${s.rtoCount > 0 ? 'bg-orange-100 text-orange-600' : 'bg-gray-50 text-gray-300'} font-black text-sm transition-all group-hover:rotate-12`}>
-                              {s.rtoCount || 0}
+                            <div className="flex flex-col items-center gap-1">
+                              <span className="text-[9px] font-bold text-gray-500 bg-gray-50 px-1.5 rounded" title="Verify Rate (Verified/Target)">VR: {s.todayTarget > 0 ? Math.min(Math.round(((s.todayVerifications || 0) / s.todayTarget) * 100), 100) : 0}%</span>
+                              <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 rounded" title="Monthly Delivery Rate (Month Delivered/Month Dispatched)">DR: {s.monthDispatchedCount > 0 ? Math.min(Math.round(((s.monthDeliveredCount || 0) / s.monthDispatchedCount) * 100), 100) : 0}%</span>
+                              <span className="text-[9px] font-bold text-orange-600 bg-orange-50 px-1.5 rounded" title="Monthly RTO Rate (Month RTO/Month Dispatched)">RTO: {s.monthDispatchedCount > 0 ? Math.min(Math.round(((s.monthRtoCount || 0) / s.monthDispatchedCount) * 100), 100) : 0}%</span>
                             </div>
                           </td>
                         </>

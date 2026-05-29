@@ -91,6 +91,8 @@ export default function Dashboard() {
   const [commMonth, setCommMonth] = useState(() => { const n = new Date(); return { month: n.getMonth(), year: n.getFullYear() }; });
   const [commLoading, setCommLoading] = useState(false);
   const [openSection, setOpenSection] = useState(null);
+  const [allStaffStats, setAllStaffStats] = useState([]);
+  const [teamOverviewPeriod, setTeamOverviewPeriod] = useState('today');
   
   const [datePreset, setDatePreset] = useState('today');
   const [filterFrom, setFilterFrom] = useState('');
@@ -148,10 +150,41 @@ export default function Dashboard() {
           }
         } 
       })
-      .catch(() => {})
+      .catch(e => { if(!cancelled) console.error(e); })
       .finally(() => { if (!cancelled) setCommLoading(false); });
     return () => { cancelled = true; };
   }, [commMonth, user?.role]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (canManage) {
+      let from, to;
+      const today = new Date();
+      if (teamOverviewPeriod === '7d') {
+        const past = new Date(today);
+        past.setDate(past.getDate() - 6);
+        from = past.toISOString().split('T')[0];
+        to = today.toISOString().split('T')[0];
+      } else if (teamOverviewPeriod === '15d') {
+        const past = new Date(today);
+        past.setDate(past.getDate() - 14);
+        from = past.toISOString().split('T')[0];
+        to = today.toISOString().split('T')[0];
+      } else if (teamOverviewPeriod === 'month') {
+        const past = new Date(today.getFullYear(), today.getMonth(), 1);
+        from = past.toISOString().split('T')[0];
+        to = today.toISOString().split('T')[0];
+      } else {
+        from = today.toISOString().split('T')[0];
+        to = from;
+      }
+      
+      fetchAllStaffStats(null, from, to).then(data => {
+        if (!cancelled) setAllStaffStats(data || []);
+      }).catch(e => console.error(e));
+    }
+    return () => { cancelled = true; };
+  }, [teamOverviewPeriod, canManage]);
 
   const [csvLoading, setCsvLoading] = useState(false);
 
@@ -544,6 +577,77 @@ export default function Dashboard() {
         <StatCard label="Pending Tasks" value={stats?.tasks?.pending} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>} color="border-orange-400" />
         <StatCard label="Overdue Tasks" value={stats?.tasks?.overdue} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>} color="border-red-500" />
       </div>
+
+      {/* Admin Monitoring Staff Overview */}
+      {canManage && (
+        <div className={cardCls} style={cardStyle}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-700">Team Performance Overview</h3>
+            <div className="flex bg-gray-100/80 p-0.5 rounded-lg border border-gray-200/50">
+              {['today', '7d', '15d', 'month'].map(period => (
+                <button
+                  key={period}
+                  onClick={() => setTeamOverviewPeriod(period)}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md transition-all ${
+                    teamOverviewPeriod === period 
+                      ? 'bg-white text-blue-600 shadow-sm border border-gray-200/50' 
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+                  }`}
+                >
+                  {period === 'today' ? 'Today' : period === 'month' ? 'Monthly' : period.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="table-responsive no-scrollbar max-h-[400px] overflow-y-auto">
+            <table className="w-full text-xs min-w-[700px]">
+              <thead className="sticky top-0 bg-white z-10">
+                <tr className="text-gray-400 border-b border-gray-100 text-left">
+                  <th className="py-3 px-4 font-black uppercase tracking-[0.15em] text-[10px] w-12 text-center">#</th>
+                  <th className="py-3 px-4 font-black uppercase tracking-[0.15em] text-[10px]">Staff</th>
+                  <th className="py-3 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Work</th>
+                  <th className="py-3 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Leads</th>
+                  <th className="py-3 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">Calls</th>
+                  <th className="py-3 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">VR %</th>
+                  <th className="py-3 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">DR %</th>
+                  <th className="py-3 px-2 font-black uppercase tracking-[0.15em] text-[10px] text-center">RTO %</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50/50">
+                {allStaffStats.filter(s => s.user?.role !== 'doctor').map((s, i) => {
+                  const readyCount = s.readyToShipmentCount || 0;
+                  const vrBase = s.todayTarget || 0;
+                  const vr = vrBase > 0 ? Math.min(Math.round(((s.todayVerifications || 0) / vrBase) * 100), 100) : 0;
+                  const dr = s.monthDispatchedCount > 0 ? Math.min(Math.round(((s.monthDeliveredCount || 0) / s.monthDispatchedCount) * 100), 100) : 0;
+                  const rto = s.monthDispatchedCount > 0 ? Math.min(Math.round(((s.monthRtoCount || 0) / s.monthDispatchedCount) * 100), 100) : 0;
+                  return (
+                    <tr key={s.user?._id || i} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="py-3 px-4 text-center font-bold text-gray-400">{i + 1}</td>
+                      <td className="py-3 px-4">
+                        <p className="font-bold text-gray-800 text-sm">{s.user?.name}</p>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase">{s.user?.role}</span>
+                      </td>
+                      <td className="py-3 px-2 text-center">
+                        <div className="flex flex-col gap-1 items-center">
+                          <div className="w-full bg-gray-100 rounded-full h-1.5 max-w-[40px]">
+                            <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${s.workingPercentage || 0}%` }}></div>
+                          </div>
+                          <span className="text-[9px] font-bold text-gray-500">{s.workingHours ? s.workingHours.toFixed(1) + 'h' : '0h'}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-2 text-center font-bold text-blue-600">{s.leadsAdded || 0}</td>
+                      <td className="py-3 px-2 text-center font-bold text-red-500">{s.todayCallAgain > 0 ? `${s.todayCallAgain} CNP` : '0 CNP'}</td>
+                      <td className="py-3 px-2 text-center font-black text-emerald-600" title={`${s.todayVerifications || 0} Added / ${vrBase} Target`}>{vr}%</td>
+                      <td className="py-3 px-2 text-center font-black text-blue-600">{dr}%</td>
+                      <td className="py-3 px-2 text-center font-black text-orange-600">{rto}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

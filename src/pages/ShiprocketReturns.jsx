@@ -140,6 +140,24 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
   const [selectedNdr, setSelectedNdr] = useState(null);
   const [ndrDetailOpen, setNdrDetailOpen] = useState(false);
 
+  // Notes
+  const [ndrNotes, setNdrNotes] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ndr_notes');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [noteForm, setNoteForm] = useState({ name: '', phone: '', reason: '', awb: '', date: new Date().toISOString().split('T')[0] });
+  const [editingNoteId, setEditingNoteId] = useState(null);
+  const [noteError, setNoteError] = useState('');
+  const [notesFilterDate, setNotesFilterDate] = useState('');
+
+  useEffect(() => {
+    localStorage.setItem('ndr_notes', JSON.stringify(ndrNotes));
+  }, [ndrNotes]);
+
   const fetchTransactions = (from = txFrom, to = txTo, status = txStatus, page = txPage) => {
     const params = { per_page: TX_PER_PAGE, page };
     if (from) params.from = from;
@@ -264,6 +282,7 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
     { id: 'create_return', label: <><svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> Create Return</> },
     { id: 'wallet', label: <><svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Wallet</> },
     { id: 'ndr', label: <><svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> NDR</> },
+    { id: 'ndr_notes', label: <><svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> Note</> },
   ];
 
   return (
@@ -811,6 +830,143 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
             )}
           </div>
           )}
+        </div>
+      )}
+
+      {tab === 'ndr_notes' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
+            <div className="h-1 bg-yellow-500" />
+            <div className="px-5 py-3 border-b border-gray-50"><span className="font-semibold text-gray-700 text-sm">Add New Note</span></div>
+            <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              <Field label="Date"><input type="date" className={inp} value={noteForm.date} onChange={e => setNoteForm(p => ({ ...p, date: e.target.value }))} /></Field>
+              <Field label="Name"><input className={inp} value={noteForm.name} onChange={e => setNoteForm(p => ({ ...p, name: e.target.value }))} placeholder="Customer Name" /></Field>
+              <Field label="Phone Number"><input className={inp} value={noteForm.phone} onChange={e => setNoteForm(p => ({ ...p, phone: e.target.value }))} placeholder="Phone Number" /></Field>
+              <Field label="AWB Number"><input className={inp} value={noteForm.awb} onChange={e => setNoteForm(p => ({ ...p, awb: e.target.value }))} placeholder="AWB Number" /></Field>
+              <Field label="Reason"><input className={inp} value={noteForm.reason} onChange={e => setNoteForm(p => ({ ...p, reason: e.target.value }))} placeholder="Reason for note" /></Field>
+            </div>
+            <div className="px-5 pb-4 flex justify-end items-center">
+              {noteError && <span className="text-red-500 text-xs font-semibold mr-4">{noteError}</span>}
+              <button 
+                onClick={() => {
+                  if (!noteForm.date || !noteForm.name || !noteForm.phone || !noteForm.reason || !noteForm.awb) {
+                    setNoteError('Please fill all fields to add a note.');
+                    return;
+                  }
+                  if (editingNoteId) {
+                    setNdrNotes(prev => prev.map(n => n.id === editingNoteId ? { ...n, ...noteForm } : n));
+                    setEditingNoteId(null);
+                  } else {
+                    setNdrNotes(prev => [{ ...noteForm, id: Date.now(), createdAt: new Date().toISOString() }, ...prev]);
+                  }
+                  setNoteForm({ name: '', phone: '', reason: '', awb: '', date: new Date().toISOString().split('T')[0] });
+                  setNoteError('');
+                }} 
+                className="px-6 py-2 bg-yellow-500 text-white font-bold rounded-xl shadow hover:bg-yellow-600 transition active:scale-95 text-sm"
+              >
+                {editingNoteId ? 'Update Note' : '+ Add Note'}
+              </button>
+              {editingNoteId && (
+                <button
+                  onClick={() => {
+                    setEditingNoteId(null);
+                    setNoteForm({ name: '', phone: '', reason: '', awb: '', date: new Date().toISOString().split('T')[0] });
+                    setNoteError('');
+                  }}
+                  className="ml-3 px-6 py-2 bg-gray-200 text-gray-700 font-bold rounded-xl shadow hover:bg-gray-300 transition active:scale-95 text-sm"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
+            <div className="h-1 bg-yellow-500" />
+            <div className="px-5 py-3 border-b border-gray-50 flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-4">
+                <span className="font-semibold text-gray-700 text-sm">Notes List {ndrNotes.length > 0 && <span className="text-xs text-gray-400 font-normal ml-1">({ndrNotes.length})</span>}</span>
+                {ndrNotes.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-gray-500 uppercase">Filter:</span>
+                    <input 
+                      type="date" 
+                      className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 bg-white" 
+                      value={notesFilterDate} 
+                      onChange={(e) => setNotesFilterDate(e.target.value)} 
+                    />
+                    {notesFilterDate && (
+                      <button onClick={() => setNotesFilterDate('')} className="text-xs text-gray-400 hover:text-gray-600">Clear</button>
+                    )}
+                  </div>
+                )}
+              </div>
+              {ndrNotes.length > 0 && (
+                <button onClick={() => { if(window.confirm('Clear all notes?')) setNdrNotes([]); }} className="text-[10px] text-red-500 hover:text-red-600 font-bold uppercase tracking-wider">
+                  Clear All
+                </button>
+              )}
+            </div>
+            {ndrNotes.length === 0 ? (
+              <div className="px-5 py-8 text-center text-gray-400 text-sm">No notes added yet.</div>
+            ) : (notesFilterDate ? ndrNotes.filter(n => n.date === notesFilterDate) : ndrNotes).length === 0 ? (
+              <div className="px-5 py-8 text-center text-gray-400 text-sm">No notes found for this date.</div>
+            ) : (
+              <div className="divide-y divide-gray-50 max-h-[400px] overflow-y-auto custom-scrollbar">
+                {(notesFilterDate ? ndrNotes.filter(n => n.date === notesFilterDate) : ndrNotes).map((note) => (
+                  <div key={note.id} className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:bg-yellow-50/30 transition">
+                    <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 w-full">
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Date</p>
+                        <p className="font-semibold text-gray-800 text-sm truncate">{note.date || new Date(note.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Name</p>
+                        <p className="font-semibold text-gray-800 text-sm truncate">{note.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Phone</p>
+                        <p className="font-mono text-gray-600 text-sm">{note.phone}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">AWB Number</p>
+                        <p className="font-mono text-blue-600 font-bold text-sm">
+                          <a href={`https://shiprocket.co/tracking/${note.awb}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{note.awb}</a>
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Reason / Note</p>
+                        <p className="text-sm text-gray-700 font-medium break-words">{note.reason}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between w-full sm:w-auto mt-2 sm:mt-0 gap-3">
+                      <span className="text-[10px] font-medium text-gray-400 sm:hidden">{new Date(note.createdAt).toLocaleString()}</span>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => {
+                            setEditingNoteId(note.id);
+                            setNoteForm({ name: note.name, phone: note.phone, reason: note.reason, awb: note.awb, date: note.date });
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="w-8 h-8 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center hover:bg-blue-500 hover:text-white transition shadow-sm border border-blue-100"
+                          title="Edit Note"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        </button>
+                        <button 
+                          onClick={() => setNdrNotes(prev => prev.filter(n => n.id !== note.id))}
+                          className="w-8 h-8 rounded-xl bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition shadow-sm border border-red-100"
+                          title="Delete Note"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

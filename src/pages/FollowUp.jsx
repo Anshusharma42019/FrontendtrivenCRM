@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../api';
 
 const PER_PAGE = 20;
-const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition";
+const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition";
 const ordinal = n => {
   const value = Number(n) + 1;
   const suffix = value % 10 === 1 && value % 100 !== 11 ? 'st' : value % 10 === 2 && value % 100 !== 12 ? 'nd' : value % 10 === 3 && value % 100 !== 13 ? 'rd' : 'th';
@@ -111,6 +111,15 @@ export default function FollowUp() {
   const [editFields, setEditFields] = useState({});
   const [editSaving, setEditSaving] = useState(false);
   const followupNumbers = Array.from({ length: Number(settings.total_followups) || 5 }, (_, i) => i + 1);
+
+  const [manualModalOpen, setManualModalOpen] = useState(false);
+  const [manualForm, setManualForm] = useState({ 
+    name: '', phone: '', city: '', state: '', medicine: '', problem: '',
+    delivered_date: '', amount: '', order_id: '', courier_name: '', 
+    payment_method: '', pincode: '', address: '' 
+  });
+  const [manualSaving, setManualSaving] = useState(false);
+  const [autofilling, setAutofilling] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -288,6 +297,61 @@ export default function FollowUp() {
     } finally { setEditSaving(false); }
   };
 
+  const handleManualSubmit = async (e) => {
+    e.preventDefault();
+    setManualSaving(true);
+    try {
+      await api.post('/shiprocket/orders/manual-followup', manualForm);
+      setManualModalOpen(false);
+      setManualForm({ 
+        name: '', phone: '', city: '', state: '', medicine: '', problem: '',
+        delivered_date: '', amount: '', order_id: '', courier_name: '', 
+        payment_method: '', pincode: '', address: '' 
+      });
+      await syncAndLoad();
+    } catch (err) {
+      alert(err?.response?.data?.message || err.message);
+    } finally {
+      setManualSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    let phoneDigits = manualForm.phone.replace(/\D/g, '');
+    if (phoneDigits.length >= 10 && manualModalOpen) {
+      const last10 = phoneDigits.slice(-10);
+      const autofill = async () => {
+        setAutofilling(true);
+        try {
+          const res = await api.get(`/shiprocket/orders/search-by-phone?phone=${last10}`);
+          if (res.data?.data) {
+            const data = res.data.data;
+            setManualForm(prev => ({
+              ...prev,
+              name: data.billing_customer_name || data.name || prev.name || '',
+              city: data.billing_city || data.city || prev.city || '',
+              state: data.billing_state || data.state || prev.state || '',
+              medicine: data.order_items?.[0]?.name || data.products?.map(p=>p.name).join(', ') || prev.medicine || '',
+              problem: data.problem || data.notes || prev.problem || '',
+              amount: data.sub_total || data.total_amount || prev.amount || '',
+              delivered_date: data.delivered_at ? toDateInputValue(data.delivered_at) : (data.createdAt ? toDateInputValue(data.createdAt) : prev.delivered_date || ''),
+              order_id: data.order_id || data.shiprocket_order_id || prev.order_id || '',
+              courier_name: data.courier_name || prev.courier_name || '',
+              payment_method: data.payment_method || prev.payment_method || '',
+              pincode: data.billing_pincode || prev.pincode || '',
+              address: data.billing_address || prev.address || '',
+            }));
+          }
+        } catch (e) {
+          // silent error on autofill
+        } finally {
+          setAutofilling(false);
+        }
+      };
+      autofill();
+    }
+  }, [manualForm.phone, manualModalOpen]);
+
   const dueCounts = followupNumbers.reduce((acc, n) => {
     acc[n] = all.filter(o => {
       const fu = getFollowup(o, n);
@@ -435,6 +499,13 @@ export default function FollowUp() {
                  placeholder="Search name, phone, awb..."
                  className="w-full pl-11 pr-5 py-3 rounded-2xl border border-gray-100 bg-white text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-emerald-400/20 transition shadow-sm" />
             </div>
+
+            <button onClick={() => setManualModalOpen(true)}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-[10px] font-black text-white shadow-xl hover:-translate-y-1 transition-all uppercase tracking-widest active:scale-95"
+              style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+              <span>Manual Add</span>
+            </button>
 
             <button onClick={syncAndLoad} disabled={syncing || loading}
               className="w-full sm:w-auto flex items-center justify-center gap-3 px-6 py-3 rounded-2xl text-[10px] font-black text-white shadow-xl hover:-translate-y-1 transition-all uppercase tracking-widest active:scale-95 disabled:opacity-50"
@@ -1135,6 +1206,104 @@ export default function FollowUp() {
           </div>
         </div>
       )})()}
+      {/* Manual Add Followup Modal */}
+      {manualModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-[2rem] w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-blue-50">
+              <h3 className="text-lg font-black text-blue-900 tracking-tight flex items-center gap-2">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                Manually Add Followup
+              </h3>
+              <button onClick={() => setManualModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-100/50 text-blue-600 hover:bg-blue-200 transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <form id="manual-form" onSubmit={handleManualSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 block">Customer Name</label>
+                    <input required className={inputCls} value={manualForm.name} onChange={e => setManualForm({...manualForm, name: e.target.value})} placeholder="e.g. John Doe" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 flex items-center gap-2">
+                      Phone
+                      {autofilling && <div className="w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />}
+                    </label>
+                    <input required className={inputCls} value={manualForm.phone} onChange={e => setManualForm({...manualForm, phone: e.target.value})} placeholder="e.g. 9876543210" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 block">City</label>
+                    <input className={inputCls} value={manualForm.city} onChange={e => setManualForm({...manualForm, city: e.target.value})} placeholder="e.g. Mumbai" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 block">State</label>
+                    <input className={inputCls} value={manualForm.state} onChange={e => setManualForm({...manualForm, state: e.target.value})} placeholder="e.g. Maharashtra" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 block">Medicine / Product</label>
+                    <input required className={inputCls} value={manualForm.medicine} onChange={e => setManualForm({...manualForm, medicine: e.target.value})} placeholder="e.g. Migraine Kit" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 block">Problem</label>
+                    <input className={inputCls} value={manualForm.problem} onChange={e => setManualForm({...manualForm, problem: e.target.value})} placeholder="e.g. Headache" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 block">Order ID</label>
+                    <input className={inputCls} value={manualForm.order_id} onChange={e => setManualForm({...manualForm, order_id: e.target.value})} placeholder="e.g. ORD-123" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 block">Courier</label>
+                    <input className={inputCls} value={manualForm.courier_name} onChange={e => setManualForm({...manualForm, courier_name: e.target.value})} placeholder="e.g. Blue Dart" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 block">Payment Method</label>
+                    <input className={inputCls} value={manualForm.payment_method} onChange={e => setManualForm({...manualForm, payment_method: e.target.value})} placeholder="e.g. cod" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 block">Pincode</label>
+                    <input className={inputCls} value={manualForm.pincode} onChange={e => setManualForm({...manualForm, pincode: e.target.value})} placeholder="e.g. 400001" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 block">Address</label>
+                  <textarea className={inputCls} value={manualForm.address} onChange={e => setManualForm({...manualForm, address: e.target.value})} placeholder="e.g. Flat 101, Building 2" rows="2" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 block">Delivered Date</label>
+                    <input required type="date" className={inputCls} value={manualForm.delivered_date} onChange={e => setManualForm({...manualForm, delivered_date: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 block">Amount (₹)</label>
+                    <input type="number" className={inputCls} value={manualForm.amount} onChange={e => setManualForm({...manualForm, amount: e.target.value})} placeholder="e.g. 2000" />
+                  </div>
+                </div>
+              </form>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex gap-3">
+              <button type="button" onClick={() => setManualModalOpen(false)} className="flex-1 py-3.5 rounded-xl text-sm font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+              <button type="submit" form="manual-form" disabled={manualSaving} className="flex-1 py-3.5 rounded-xl text-sm font-bold text-white shadow-md transition-all active:scale-95 disabled:opacity-50" style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)' }}>
+                {manualSaving ? 'Saving...' : 'Add Followup'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

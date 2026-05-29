@@ -35,7 +35,13 @@ export const fetchStaffTodayLists = (date, staffId, from, to, department) => {
   return API.get(url).then(r => r.data.data);
 };
 export const fetchStaffMonthlyChart = () => API.get('/dashboard/staff-monthly-chart').then(r => r.data.data);
-export const fetchAllStaffStats = (date) => API.get(`/dashboard/all-staff-stats${date ? `?date=${date}` : ''}`).then(r => r.data.data);
+export const fetchAllStaffStats = (date, from, to) => {
+  const params = new URLSearchParams();
+  if (date) params.append('date', date);
+  if (from) params.append('from', from);
+  if (to) params.append('to', to);
+  return API.get(`/dashboard/all-staff-stats?${params.toString()}`).then(r => r.data.data);
+};
 export const fetchStaffCommission = (month, year) => API.get(`/dashboard/staff-commission?month=${month}&year=${year}`).then(r => r.data.data);
 export const fetchAllStaffCommissions = (month, year) => API.get(`/dashboard/all-staff-commissions?month=${month}&year=${year}`).then(r => r.data.data);
 export const saveCommissionOverride = (data) => API.post('/dashboard/save-commission-override', data).then(r => r.data.data);
