@@ -80,6 +80,8 @@ const translations = {
     'New Leads (Total)': 'New Leads (Total)',
     'Ready to Shipment': 'Ready to Shipment',
     'Revenue': 'Revenue',
+    'New Order Delivered': 'New Order Delivered',
+    'Old Order Delivered': 'Old Order Delivered',
     'Personal Attendance': 'Personal Attendance',
     'Not checked in yet': 'Not checked in yet',
     'Day Complete': 'Day Complete',

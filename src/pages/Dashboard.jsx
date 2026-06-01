@@ -39,7 +39,7 @@ const formatDateInput = (date) => {
 };
 
 const getDateParams = (preset, customFrom, customTo) => {
-  if (preset === 'all') return {};
+  if (preset === 'all') return { filterType: 'all', from: 'all', to: 'all' };
   const today = new Date();
   const to = formatDateInput(today);
   if (preset === 'today') return { filterType: 'range', from: to, to };
@@ -103,7 +103,7 @@ export default function Dashboard() {
   const load = useCallback(async () => {
     const params = getDateParams(datePreset, filterFrom, filterTo);
     const { from, to } = params;
-    const selectedDate = (datePreset === 'today' || !from) ? new Date().toISOString().split('T')[0] : from;
+    const selectedDate = (datePreset === 'today' || datePreset === 'all' || !from) ? new Date().toISOString().split('T')[0] : from;
 
     try {
       const [s, lists, personal, chart, att] = await Promise.allSettled([
@@ -336,15 +336,134 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
-        <div onClick={() => downloadLeadsCSV(true)} className="cursor-pointer relative" title="Download all leads as CSV">
-          <StatCard label={t('Total Leads')} value={stats?.totalLeads} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} color="border-green-500" sub={csvLoading === 'all' ? `⏳ ${t('Downloading...')}` : `⬇ ${t('Click to download CSV')}`} />
+      {/* Stat Cards Grouped Logically by Rows */}
+      <div className="space-y-6 sm:space-y-8">
+        
+        {/* Row 1: Lead Pipeline */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e] animate-pulse" />
+            <span className="text-[10px] font-black tracking-widest text-gray-400 dark:text-slate-400 uppercase select-none">{t('Lead Pipeline')}</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+            <div onClick={() => downloadLeadsCSV(true)} className="cursor-pointer relative" title="Download all leads as CSV">
+              <StatCard 
+                label={t('Total Leads')} 
+                value={stats?.totalLeads} 
+                icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} 
+                color="border-green-500" 
+                sub={csvLoading === 'all' ? `⏳ ${t('Downloading...')}` : `⬇ ${t('Click to download CSV')}`} 
+                trend="+4.8%"
+              />
+            </div>
+            <StatCard 
+              label={datePreset === 'all' ? t('New Leads (Total)') : `${t('New Leads')} (${getPeriodLabel()})`} 
+              value={stats?.newLeadsToday} 
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>} 
+              color="border-blue-500" 
+              trend="+12.5%"
+            />
+            <StatCard 
+              label={t('Ready to Shipment')} 
+              value={stats?.readyToShipmentCount} 
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>} 
+              color="border-purple-500" 
+            />
+          </div>
         </div>
-        <StatCard label={datePreset === 'all' ? t('New Leads (Total)') : `${t('New Leads (Today)')}`} value={stats?.newLeadsToday} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>} color="border-blue-500" />
-        <StatCard label={t('Ready to Shipment')} value={stats?.readyToShipmentCount} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>} color="border-purple-500" />
-        <StatCard label={`${t('Delivered')} (${getPeriodLabel()})`} value={deliveredStats.count} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>} color="border-emerald-500" />
-        <StatCard label={`${t('Revenue')} (${getPeriodLabel()})`} value={`₹${deliveredStats.revenue.toLocaleString()}`} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>} color="border-teal-500" />
+
+        {/* Row 2: Shipping Preparation */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_#6366f1] animate-pulse" />
+            <span className="text-[10px] font-black tracking-widest text-gray-400 dark:text-slate-400 uppercase select-none">{t('Shipping Preparation')}</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+            <StatCard 
+              label={t('New Ready to Ship')} 
+              value={stats?.newReadyToShipCount || 0} 
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>} 
+              color="border-indigo-500" 
+              progress={stats?.readyToShipmentCount ? Math.round(((stats?.newReadyToShipCount || 0) / stats?.readyToShipmentCount) * 100) : 0}
+              progressLabel={t('Share of Backlog')}
+            />
+            <StatCard 
+              label={t('Old Ready to Ship')} 
+              value={stats?.oldReadyToShipCount || 0} 
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M2.5 2v6h6M21.5 22v-6h-6"/><path d="M22 11.5A10 10 0 0 0 3.2 7.2M2 12.5a10 10 0 0 0 18.8 4.2"/></svg>} 
+              color="border-pink-500" 
+              progress={stats?.readyToShipmentCount ? Math.round(((stats?.oldReadyToShipCount || 0) / stats?.readyToShipmentCount) * 100) : 0}
+              progressLabel={t('Share of Backlog')}
+            />
+          </div>
+        </div>
+
+        {/* Row 3: Orders Intake */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_#06b6d4] animate-pulse" />
+            <span className="text-[10px] font-black tracking-widest text-gray-400 dark:text-slate-400 uppercase select-none">{t('Orders Intake')}</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+            <StatCard 
+              label={t('New Orders')} 
+              value={stats?.newOrdersCount || 0} 
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>} 
+              color="border-cyan-500" 
+              progress={((stats?.newOrdersCount || 0) + (stats?.oldOrdersCount || 0)) ? Math.round(((stats?.newOrdersCount || 0) / ((stats?.newOrdersCount || 0) + (stats?.oldOrdersCount || 0))) * 100) : 0}
+              progressLabel={t('Share of Orders')}
+            />
+            <StatCard 
+              label={t('Old Orders')} 
+              value={stats?.oldOrdersCount || 0} 
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M2.5 2v6h6M21.5 22v-6h-6"/><path d="M22 11.5A10 10 0 0 0 3.2 7.2M2 12.5a10 10 0 0 0 18.8 4.2"/></svg>} 
+              color="border-amber-500" 
+              progress={((stats?.newOrdersCount || 0) + (stats?.oldOrdersCount || 0)) ? Math.round(((stats?.oldOrdersCount || 0) / ((stats?.newOrdersCount || 0) + (stats?.oldOrdersCount || 0))) * 100) : 0}
+              progressLabel={t('Share of Orders')}
+            />
+          </div>
+        </div>
+
+        {/* Row 4: Fulfillment & Revenue */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse" />
+            <span className="text-[10px] font-black tracking-widest text-gray-400 dark:text-slate-400 uppercase select-none">{t('Fulfillment & Revenue')}</span>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <StatCard 
+              label={`${t('Delivered')} (${getPeriodLabel()})`} 
+              value={stats?.deliveredCount || 0} 
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>} 
+              color="border-emerald-500" 
+              trend="+6.2%"
+            />
+            <StatCard 
+              label={`${t('New Order Delivered')} (${getPeriodLabel()})`} 
+              value={stats?.newDeliveredCount || 0} 
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>} 
+              color="border-emerald-400" 
+              progress={stats?.deliveredCount ? Math.round(((stats?.newDeliveredCount || 0) / stats?.deliveredCount) * 100) : 0}
+              progressLabel={t('Share of Deliveries')}
+            />
+            <StatCard 
+              label={`${t('Old Order Delivered')} (${getPeriodLabel()})`} 
+              value={stats?.oldDeliveredCount || 0} 
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>} 
+              color="border-teal-400" 
+              progress={stats?.deliveredCount ? Math.round(((stats?.oldDeliveredCount || 0) / stats?.deliveredCount) * 100) : 0}
+              progressLabel={t('Share of Deliveries')}
+            />
+            <StatCard 
+              label={`${t('Revenue')} (${getPeriodLabel()})`} 
+              value={`₹${(stats?.deliveredRevenue || 0).toLocaleString()}`} 
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>} 
+              color="border-teal-500" 
+              trend="+18.4%"
+            />
+          </div>
+        </div>
+
       </div>
 
       {/* Attendance Quick Card (Managers Only) */}

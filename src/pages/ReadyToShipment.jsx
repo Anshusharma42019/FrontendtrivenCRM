@@ -48,6 +48,7 @@ export default function ReadyToShipment() {
   const [department, setDepartment] = useState('');
   const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('phone') || '');
   const [dayFilter, setDayFilter] = useState(() => new URLSearchParams(window.location.search).get('phone') ? 'all' : 'today');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [customDate, setCustomDate] = useState('');
   const [repairing, setRepairing] = useState(false);
   const navigate = useNavigate();
@@ -101,6 +102,11 @@ export default function ReadyToShipment() {
       const d = new Date(r.createdAt);
       if (d < from || d >= to) return false;
     }
+    
+    const isOld = r.lead?.status === 'old' || !!r.lead?.pending_reorder_source;
+    if (typeFilter === 'new' && isOld) return false;
+    if (typeFilter === 'old' && !isOld) return false;
+    
     const q = search.toLowerCase();
     return !q ||
       r.title?.toLowerCase().includes(q) ||
@@ -142,6 +148,15 @@ export default function ReadyToShipment() {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, phone, location..."
               className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-100 bg-white text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-300/50 focus:border-amber-400 transition shadow-sm" />
           </div>
+          <select
+            value={typeFilter}
+            onChange={e => setTypeFilter(e.target.value)}
+            className="w-auto border border-gray-200 rounded-xl px-3 py-2.5 text-xs font-bold bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 transition shrink-0"
+          >
+            <option value="all">All Types</option>
+            <option value="new">New Orders</option>
+            <option value="old">Old Orders</option>
+          </select>
           {canManage && (
             <select
               value={department}
@@ -228,6 +243,15 @@ export default function ReadyToShipment() {
                         {r.price && (
                           <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg">
                             ₹{r.price}
+                          </span>
+                        )}
+                        {(r.lead?.status === 'old' || !!r.lead?.pending_reorder_source) ? (
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg uppercase">
+                            Old
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-lg uppercase">
+                            New
                           </span>
                         )}
                         <span className="sm:hidden text-[10px] font-bold text-gray-400">Order #{i + 1}</span>

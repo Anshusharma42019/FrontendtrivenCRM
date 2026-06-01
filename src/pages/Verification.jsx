@@ -24,6 +24,15 @@ const DEPARTMENTS = ['migraine', 'piles'];
 const initials = (name = '') =>
   name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
 
+const isOldPatientVerification = (record) =>
+  !!(record.lead?.status === 'old' || record.lead?.pending_reorder_source);
+
+const getKitText = (num) => {
+  if (!num || num <= 2) return '2nd Kit';
+  if (num === 3) return '3rd Kit';
+  return `${num}th Kit`;
+};
+
 const DetailRow = ({ label, value }) =>
   value ? (
     <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
@@ -486,7 +495,18 @@ export default function Verification() {
                         {initials(flattened.lead?.name || flattened.title)}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-800 truncate">{flattened.title}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-gray-800 truncate">{flattened.title}</p>
+                          {isOldPatientVerification(flattened) ? (
+                            <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200 uppercase shrink-0 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />{getKitText(flattened.kit_number)}
+                            </span>
+                          ) : (
+                            <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-700 border border-blue-200 uppercase shrink-0 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />NEW
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                           {flattened.lead?.name && <span className="text-xs text-gray-500">{flattened.lead.name}</span>}
                           {flattened.lead?.phone && <span className="text-xs text-gray-400">{flattened.lead.phone}</span>}
@@ -543,7 +563,18 @@ export default function Verification() {
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">{flattened.title}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-gray-800 truncate">{flattened.title}</p>
+                        {isOldPatientVerification(flattened) ? (
+                          <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200 uppercase shrink-0 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />{getKitText(flattened.kit_number)}
+                          </span>
+                        ) : (
+                          <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-700 border border-blue-200 uppercase shrink-0 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />NEW
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         {flattened.lead?.name && <span className="text-xs text-gray-500">{flattened.lead.name}</span>}
                         {flattened.lead?.phone && (
@@ -674,6 +705,11 @@ export default function Verification() {
               <>
                 <SectionHead label="Customer" />
                 <DetailRow label="Task" value={selected.title} />
+                <DetailRow label="Patient Type" value={
+                  isOldPatientVerification(selected)
+                    ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />{getKitText(selected.kit_number)} (Returning)</span>
+                    : <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-blue-500" />New Patient</span>
+                } />
                 <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">Assigned To (Verifier)</span>
                   <span className="text-sm text-gray-800 font-medium capitalize flex-1">{selected.assignedTo?.name || '—'}</span>
@@ -843,6 +879,11 @@ export default function Verification() {
                 <>
                   <SectionHead label="Customer Info" />
                   <DetailRow label="Task" value={selected.title} />
+                  <DetailRow label="Patient Type" value={
+                    isOldPatientVerification(selected)
+                      ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />{getKitText(selected.kit_number)} (Returning)</span>
+                      : <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-blue-500" />New Patient</span>
+                  } />
                   <DetailRow label="Assigned" value={selected.assignedTo?.name} />
                   <DetailRow label="Problem" value={selected.problem} />
                   <DetailRow label="Duration" value={selected.problemDuration} />

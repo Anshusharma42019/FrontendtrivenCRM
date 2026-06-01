@@ -43,6 +43,16 @@ const toDateInputValue = (value = new Date()) => {
   return offsetDate.toISOString().slice(0, 10);
 };
 
+const isOldPatient = (order) =>
+  (order.kit_number || 1) > 1 || !!(order.source_order_id || order.lead_id?.status === 'old');
+
+const getKitText = (num) => {
+  if (!num || num === 1) return '1st Kit';
+  if (num === 2) return '2nd Kit';
+  if (num === 3) return '3rd Kit';
+  return `${num}th Kit`;
+};
+
 const getFollowup = (order, followupNumber) =>
   (order.followups || []).find(f => f.followup_number === Number(followupNumber));
 
@@ -105,6 +115,7 @@ export default function FollowUp() {
   const [completedLoading, setCompletedLoading] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
   const [settings, setSettings] = useState({ total_followups: 5, followup_gap_days: 6 });
+  const [filterPatientType, setFilterPatientType] = useState('all'); // 'all' | 'old' | 'new'
   const [activity, setActivity] = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -360,6 +371,12 @@ export default function FollowUp() {
     return acc;
   }, {});
 
+  // Patient type counts (for all active orders)
+  const patientTypeCounts = {
+    old: all.filter(o => isOldPatient(o)).length,
+    new: all.filter(o => !isOldPatient(o)).length,
+  };
+
   const filtered = all.filter(o => {
     // Exclude orders that are fully done or sent to verification
     const allFUs = (o.followups || []).sort((a, b) => a.followup_number - b.followup_number);
@@ -370,6 +387,9 @@ export default function FollowUp() {
       const fu = getFollowup(o, filterFollowupNum);
       if (!fu || fu.completed || !previousFollowupsDone(o, filterFollowupNum) || !isDue(fu.scheduled_date, filterDelivered)) return false;
     }
+    // Patient type filter
+    if (filterPatientType === 'old' && !isOldPatient(o)) return false;
+    if (filterPatientType === 'new' && isOldPatient(o)) return false;
     if (search) {
       const q = search.toLowerCase();
       return (
@@ -481,6 +501,39 @@ export default function FollowUp() {
             )}
           </div>
 
+          {/* Patient Type Filter (Old / New) */}
+          <div className="flex items-center bg-white rounded-2xl border border-gray-100 p-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => { setFilterPatientType('all'); setPage(1); }}
+              className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition whitespace-nowrap ${
+                filterPatientType === 'all' ? 'bg-gray-800 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              All Patients
+            </button>
+            <button
+              type="button"
+              onClick={() => { setFilterPatientType('new'); setPage(1); }}
+              className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition whitespace-nowrap flex items-center gap-1.5 ${
+                filterPatientType === 'new' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0" style={filterPatientType !== 'new' ? {background:'#93c5fd'} : {}} />
+              New ({patientTypeCounts.new})
+            </button>
+            <button
+              type="button"
+              onClick={() => { setFilterPatientType('old'); setPage(1); }}
+              className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition whitespace-nowrap flex items-center gap-1.5 ${
+                filterPatientType === 'old' ? 'bg-amber-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" style={filterPatientType !== 'old' ? {background:'#fcd34d'} : {}} />
+              Old ({patientTypeCounts.old})
+            </button>
+          </div>
+
           <div className="flex flex-col sm:flex-row flex-1 items-center gap-3 w-full">
             <div className="relative group w-full sm:w-auto sm:min-w-[160px]">
               <input 
@@ -565,16 +618,20 @@ export default function FollowUp() {
                               {o.awb_code}
                             </a>
                             <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded uppercase">✓ All Done</span>
-                            {(!!o.source_order_id || o.lead_id?.status === 'old') && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase">
-                                2nd Kit
+                            {isOldPatient(o) ? (
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 uppercase tracking-wider flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />{getKitText(o.kit_number || 1)}
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wider flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />1st Kit (NEW)
                               </span>
                             )}
                           </div>
                           <div className="text-[10px] text-gray-400 mt-1 flex flex-col gap-0.5">
                             <>
                               <span>Added: <strong className="text-gray-600">{o.lead_id?.createdBy?.name || o.lead_id?.assignedTo?.name || o.created_by?.name || '—'}</strong></span>
-                              {(o.source_order_id || o.lead_id?.status === 'old') && (
+                              {isOldPatient(o) && (
                                 <span>Verifier: <strong className="text-gray-600">{o.verified_by?.name || '—'}</strong></span>
                               )}
                             </>
@@ -634,7 +691,14 @@ export default function FollowUp() {
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-500 font-black shrink-0 shadow-sm">{initials(o.billing_customer_name)}</div>
                       <div className="min-w-0">
-                        <p className="font-bold text-gray-900 text-sm truncate">{o.billing_customer_name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-gray-900 text-sm truncate">{o.billing_customer_name}</p>
+                          {isOldPatient(o) ? (
+                            <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200 uppercase shrink-0">{getKitText(o.kit_number || 1)}</span>
+                          ) : (
+                            <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-700 border border-blue-200 uppercase shrink-0">1st Kit (NEW)</span>
+                          )}
+                        </div>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{o.billing_phone} • {o.billing_city}</p>
                       </div>
                     </div>
@@ -745,16 +809,20 @@ export default function FollowUp() {
                               {o.lead_id?.department && (
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 uppercase">{o.lead_id.department}</span>
                               )}
-                              {(!!o.source_order_id || o.lead_id?.status === 'old') && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase">
-                                  2nd Kit
+                              {isOldPatient(o) ? (
+                                <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 uppercase tracking-wider flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />{getKitText(o.kit_number || 1)}
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wider flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />1st Kit (NEW)
                                 </span>
                               )}
                             </div>
                             <div className="text-[10px] text-gray-400 mt-1 flex flex-col gap-0.5">
                               <>
                                 <span>Added: <strong className="text-gray-600">{o.lead_id?.createdBy?.name || o.lead_id?.assignedTo?.name || o.created_by?.name || '—'}</strong></span>
-                                {(o.source_order_id || o.lead_id?.status === 'old') && (
+                                {isOldPatient(o) && (
                                   <span>Verifier: <strong className="text-gray-600">{o.verified_by?.name || '—'}</strong></span>
                                 )}
                               </>
@@ -846,7 +914,10 @@ export default function FollowUp() {
                       <div className="flex items-center gap-3 min-w-0">
                         <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-base font-black shrink-0 shadow-lg shadow-black/5`}>{initials(o.billing_customer_name)}</div>
                         <div className="min-w-0">
-                          <p className="font-bold text-gray-900 text-sm truncate">{o.billing_customer_name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-gray-900 text-sm truncate">{o.billing_customer_name}</p>
+                            <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200 uppercase shrink-0">{getKitText(o.kit_number || 1)}</span>
+                          </div>
                           <div className="flex items-center gap-2 mt-0.5">
                              <span className="text-[10px] font-bold text-gray-400 uppercase">{o.billing_phone}</span>
                              <span className="w-1 h-1 rounded-full bg-gray-200" />
@@ -969,7 +1040,12 @@ export default function FollowUp() {
                 <div>
                   <SectionHead label="Order Details" />
                   <DetailRow label="Staff / Agent" value={selected.lead_id?.assignedTo?.name ? `👤 ${selected.lead_id.assignedTo.name}` : (selected.lead_id?.createdBy?.name ? `👤 ${selected.lead_id.createdBy.name}` : 'Unknown / System')} />
-                  {(selected.source_order_id || selected.lead_id?.status === 'old') && (
+                  <DetailRow label="Patient Type" value={
+                    isOldPatient(selected)
+                      ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />{getKitText(selected.kit_number || 1)} (Returning)</span>
+                      : <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-blue-500" />1st Kit (New Patient)</span>
+                  } />
+                  {isOldPatient(selected) && (
                     <DetailRow label="Verifier" value={selected.verified_by?.name ? `👤 ${selected.verified_by.name}` : '—'} />
                   )}
                   <DetailRow label="Order ID" value={selected.order_id || selected.shiprocket_order_id} />
