@@ -51,6 +51,12 @@ export default function ReadyToShipment() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [customDate, setCustomDate] = useState('');
   const [repairing, setRepairing] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsTab, setStatsTab] = useState('state');
+  const [drillState, setDrillState] = useState(null);
+  const [drillPincode, setDrillPincode] = useState(null);
   const navigate = useNavigate();
 
   const load = useCallback(async () => {
@@ -62,6 +68,40 @@ export default function ReadyToShipment() {
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, [department]);
+
+  const loadStats = useCallback(async (filterState = null, filterPincode = null) => {
+    setStatsLoading(true);
+    try {
+      const params = {};
+      if (department) params.department = department;
+      if (filterState) params.filterState = filterState;
+      if (filterPincode) params.filterPincode = filterPincode;
+      const res = await API.get('/ready-to-shipment/stats', { params });
+      setStats(res.data.data);
+    } catch { /* ignore */ }
+    finally { setStatsLoading(false); }
+  }, [department]);
+
+  const handleDrillState = (stateName) => {
+    setDrillState(stateName);
+    setDrillPincode(null);
+    setStatsTab('monthly');
+    loadStats(stateName, null);
+  };
+
+  const handleDrillPincode = (pincode) => {
+    setDrillPincode(pincode);
+    setDrillState(null);
+    setStatsTab('monthly');
+    loadStats(null, pincode);
+  };
+
+  const handleDrillBack = () => {
+    setDrillState(null);
+    setDrillPincode(null);
+    setStatsTab('state');
+    loadStats(null, null);
+  };
 
   const handleRepair = async () => {
     setRepairing(true);
@@ -75,6 +115,7 @@ export default function ReadyToShipment() {
   };
 
   useEffect(() => { load(); }, [load, department]);
+  useEffect(() => { if (showStats) loadStats(drillState, drillPincode); }, [showStats, loadStats]); // eslint-disable-line
 
   const handleDelete = async (record) => {
     if (!window.confirm('Delete this record? The task will be marked as cancelled.')) return;
@@ -419,6 +460,315 @@ export default function ReadyToShipment() {
               </div>
             </div>
           </Modal>
+        </div>
+      )}
+
+      {/* ── ANALYTICS PANEL ── */}
+      {showStats && (
+        <div className="hidden lg:flex flex-col w-[360px] shrink-0 bg-white rounded-2xl border border-violet-100 shadow-sm overflow-hidden h-full">
+          <div className="h-1.5 shrink-0" style={{ background: 'linear-gradient(90deg,#7c3aed,#6d28d9,#7c3aed)' }} />
+
+          {/* Header */}
+          <div className="px-5 pt-4 pb-3 border-b border-gray-50 shrink-0">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 min-w-0">
+                {(drillState || drillPincode) && (
+                  <button
+                    onClick={handleDrillBack}
+                    className="w-6 h-6 flex items-center justify-center rounded-lg bg-violet-100 text-violet-600 hover:bg-violet-200 transition shrink-0 text-sm"
+                  >←</button>
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-gray-800 truncate">
+                    {drillState ? `📍 ${drillState}` : drillPincode ? `📮 ${drillPincode}` : '📊 Shipment Analytics'}
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5 truncate">
+                    {drillState
+                      ? `${stats?.drillTotal ?? '—'} pending · Click pincode for more detail`
+                      : drillPincode
+                        ? `${stats?.drillTotal ?? '—'} pending · Pincode drill-down`
+                        : 'Click any state or pincode to drill in'}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setShowStats(false)} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition text-lg shrink-0">×</button>
+            </div>
+
+            {/* Tabs — context-aware */}
+            <div className="flex gap-1">
+              {(drillState || drillPincode
+                ? [['monthly', '📅 Monthly'], ['weekly', '📆 Weekly'], ...(drillState ? [['pincode', '📍 Pincodes']] : [])]
+                : [['state', '🗺️ States'], ['pincode', '📍 Pincodes'], ['monthly', '📅 Monthly'], ['weekly', '📆 Weekly']]
+              ).map(([tab, label]) => (
+                <button
+                  key={tab}
+                  onClick={() => setStatsTab(tab)}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                    statsTab === tab
+                      ? 'bg-violet-600 text-white shadow-sm'
+                      : 'text-gray-400 hover:text-violet-600 hover:bg-violet-50'
+                  }`}
+                >{label}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-3">
+            {statsLoading ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <div className="w-7 h-7 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-xs text-gray-400">Loading analytics…</p>
+              </div>
+            ) : stats ? (
+              <div className="space-y-5">
+
+                {/* ── STATES LIST (clickable) ── */}
+                {statsTab === 'state' && (
+                  <div>
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-amber-500 mb-2">🗺️ State-wise Orders — Click to drill in</p>
+                    {stats.byState.length === 0 ? (
+                      <p className="text-xs text-gray-400">No state data found</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {stats.byState.map((item, idx) => {
+                          const max = stats.byState[0]?.count || 1;
+                          const pct = Math.round((item.count / max) * 100);
+                          const isTop = idx === 0;
+                          const stateColors = ['from-amber-500 to-orange-400','from-emerald-500 to-teal-400','from-blue-500 to-cyan-400','from-rose-500 to-pink-400','from-purple-500 to-violet-400'];
+                          const gradient = stateColors[idx % stateColors.length];
+                          const isActive = drillState === item.state;
+                          return (
+                            <button
+                              key={item.state}
+                              onClick={() => handleDrillState(item.state)}
+                              className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all group ${
+                                isActive
+                                  ? 'bg-violet-50 border-violet-300 shadow-sm'
+                                  : 'bg-gray-50 border-transparent hover:bg-amber-50 hover:border-amber-200'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center gap-1.5">
+                                  {isTop && <span className="text-[10px]">🥇</span>}
+                                  <span className={`text-xs font-bold capitalize ${isActive ? 'text-violet-700' : isTop ? 'text-amber-700' : 'text-gray-700'}`}>
+                                    {item.state}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] text-gray-400">{item.pincodes?.filter(Boolean).length || 0} pincodes</span>
+                                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-lg ${isActive ? 'bg-violet-100 text-violet-700' : isTop ? 'bg-amber-100 text-amber-700' : 'bg-white text-gray-600 border border-gray-200'}`}>
+                                    {item.count}
+                                  </span>
+                                  <span className="text-[9px] text-gray-300 group-hover:text-violet-400 transition">›</span>
+                                </div>
+                              </div>
+                              <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width: `${pct}%` }}>
+                                  <div className={`h-full w-full bg-gradient-to-r ${gradient}`} />
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── PINCODES LIST (clickable) ── */}
+                {statsTab === 'pincode' && (
+                  <div>
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-violet-500 mb-2">
+                      📍 {drillState ? `Pincodes in ${drillState}` : 'Top Pincodes'} — Click to drill in
+                    </p>
+                    {stats.byPincode.length === 0 ? (
+                      <p className="text-xs text-gray-400">No pincode data found</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {stats.byPincode.map((item, idx) => {
+                          const max = stats.byPincode[0]?.count || 1;
+                          const pct = Math.round((item.count / max) * 100);
+                          const isTop = idx === 0;
+                          const isActive = drillPincode === item.pincode;
+                          return (
+                            <button
+                              key={item.pincode}
+                              onClick={() => handleDrillPincode(item.pincode)}
+                              className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all group ${
+                                isActive
+                                  ? 'bg-violet-50 border-violet-300 shadow-sm'
+                                  : 'bg-gray-50 border-transparent hover:bg-violet-50 hover:border-violet-200'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center gap-1.5">
+                                  {isTop && <span className="text-[10px]">🏆</span>}
+                                  <span className={`text-xs font-bold font-mono ${isActive ? 'text-violet-700' : isTop ? 'text-violet-600' : 'text-gray-700'}`}>
+                                    {item.pincode}
+                                  </span>
+                                  {item.states?.filter(Boolean).length > 0 && (
+                                    <span className="text-[9px] text-gray-400 truncate max-w-[80px]">
+                                      {item.states.filter(Boolean).join(', ')}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-lg ${isActive ? 'bg-violet-100 text-violet-700' : isTop ? 'bg-violet-100 text-violet-700' : 'bg-white text-gray-600 border border-gray-200'}`}>
+                                    {item.count}
+                                  </span>
+                                  <span className="text-[9px] text-gray-300 group-hover:text-violet-400 transition">›</span>
+                                </div>
+                              </div>
+                              <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all"
+                                  style={{ width: `${pct}%`, background: isTop ? 'linear-gradient(90deg,#7c3aed,#6d28d9)' : 'linear-gradient(90deg,#a78bfa,#c4b5fd)' }}
+                                />
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── MONTHLY CHART ── */}
+                {statsTab === 'monthly' && (() => {
+                  const maxM = Math.max(...(stats.byMonth || []).map(m => m.count), 1);
+                  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                  return (
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-blue-500 mb-3">
+                        📅 Monthly Orders (12 Months){drillState ? ` — ${drillState}` : drillPincode ? ` — ${drillPincode}` : ''}
+                      </p>
+                      {(!stats.byMonth || stats.byMonth.length === 0) ? (
+                        <p className="text-xs text-gray-400">No monthly data found</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {stats.byMonth.map(item => {
+                            const [yr, mo] = item.month.split('-');
+                            const label = `${monthNames[parseInt(mo, 10) - 1]} '${yr.slice(2)}`;
+                            const pct = Math.round((item.count / maxM) * 100);
+                            const isMax = item.count === maxM;
+                            return (
+                              <div key={item.month}>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className={`text-xs font-bold ${isMax ? 'text-blue-700' : 'text-gray-600'}`}>{label}</span>
+                                  <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${isMax ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+                                    {item.count}{isMax ? ' 🔥' : ''}
+                                  </span>
+                                </div>
+                                <div className="h-5 bg-gray-100 rounded-lg overflow-hidden">
+                                  <div
+                                    className="h-full rounded-lg transition-all duration-700 flex items-center justify-end pr-2"
+                                    style={{
+                                      width: `${pct}%`,
+                                      minWidth: item.count > 0 ? '20px' : '0',
+                                      background: isMax ? 'linear-gradient(90deg,#3b82f6,#1d4ed8)' : 'linear-gradient(90deg,#93c5fd,#bfdbfe)',
+                                    }}
+                                  >
+                                    {pct > 25 && <span className="text-[9px] font-bold text-white">{item.count}</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          <div className="mt-1 p-2.5 bg-blue-50 rounded-xl border border-blue-100 flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wide">Total (12 months)</span>
+                            <span className="text-sm font-extrabold text-blue-700">{stats.byMonth.reduce((s, m) => s + m.count, 0)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* ── WEEKLY CHART ── */}
+                {statsTab === 'weekly' && (() => {
+                  const maxW = Math.max(...(stats.byWeek || []).map(w => w.count), 1);
+                  return (
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-500 mb-3">
+                        📆 Weekly Orders (8 Weeks){drillState ? ` — ${drillState}` : drillPincode ? ` — ${drillPincode}` : ''}
+                      </p>
+                      {(!stats.byWeek || stats.byWeek.length === 0) ? (
+                        <p className="text-xs text-gray-400">No weekly data found</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {stats.byWeek.map((item, idx) => {
+                            const pct = Math.round((item.count / maxW) * 100);
+                            const isMax = item.count === maxW;
+                            const weekStart = item.weekStart ? new Date(item.weekStart) : null;
+                            const weekLabel = weekStart
+                              ? weekStart.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                              : item.week;
+                            const isThisWeek = idx === stats.byWeek.length - 1;
+                            return (
+                              <div key={item.week}>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <div className="flex items-center gap-1">
+                                    <span className={`text-xs font-bold ${isMax ? 'text-emerald-700' : 'text-gray-600'}`}>
+                                      {weekLabel}
+                                    </span>
+                                    {isThisWeek && <span className="text-[9px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-bold">Now</span>}
+                                  </div>
+                                  <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${isMax ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                                    {item.count}{isMax ? ' 🔥' : ''}
+                                  </span>
+                                </div>
+                                <div className="h-5 bg-gray-100 rounded-lg overflow-hidden">
+                                  <div
+                                    className="h-full rounded-lg transition-all duration-700 flex items-center justify-end pr-2"
+                                    style={{
+                                      width: `${pct}%`,
+                                      minWidth: item.count > 0 ? '20px' : '0',
+                                      background: isMax ? 'linear-gradient(90deg,#10b981,#059669)' : 'linear-gradient(90deg,#6ee7b7,#a7f3d0)',
+                                    }}
+                                  >
+                                    {pct > 25 && <span className="text-[9px] font-bold text-white">{item.count}</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          <div className="mt-1 p-2.5 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wide">Total (8 weeks)</span>
+                            <span className="text-sm font-extrabold text-emerald-700">{stats.byWeek.reduce((s, w) => s + w.count, 0)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Summary Footer */}
+                <div className="p-3 rounded-xl border" style={{ background: 'linear-gradient(135deg,#f5f3ff,#ede9fe)', borderColor: '#ddd6fe' }}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-violet-400">
+                        {drillState ? drillState : drillPincode ? drillPincode : 'All India'}
+                      </p>
+                      <p className="text-sm font-bold text-violet-800 mt-0.5">
+                        {(drillState || drillPincode) ? stats.drillTotal : stats.total} pending
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-violet-500">{stats.byMonth?.reduce((s,m)=>s+m.count,0)||0} added (12mo)</p>
+                      <p className="text-[10px] text-violet-400 mt-0.5">{stats.byWeek?.reduce((s,w)=>s+w.count,0)||0} added (8wk)</p>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <p className="text-3xl mb-2">📊</p>
+                <p className="text-xs text-gray-400 font-medium">Analytics loading…</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

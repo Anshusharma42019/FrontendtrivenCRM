@@ -15,6 +15,7 @@ import { useToast } from '../context/ToastContext';
 import { useLanguage } from '../context/LanguageContext';
 import OrderStatusBoard from '../components/OrderStatusBoard';
 import { getLeads, exportLeads } from '../services/lead.service';
+import ShipmentAnalyticsPanel from '../components/ShipmentAnalyticsPanel';
 
 const cardCls = "bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow";
 const cardStyle = { border: '1px solid rgba(0,0,0,0.05)' };
@@ -717,6 +718,11 @@ export default function Dashboard() {
         <StatCard label="Pending Tasks" value={stats?.tasks?.pending} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>} color="border-orange-400" />
         <StatCard label="Overdue Tasks" value={stats?.tasks?.overdue} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>} color="border-red-500" />
       </div>
+
+      {/* Shipment Analytics — Admin/Manager only */}
+      {canManage && (
+        <ShipmentAnalyticsPanel department={department} />
+      )}
 
       {/* Admin Monitoring Staff Overview */}
       {canManage && (
