@@ -453,13 +453,12 @@ export default function Leads() {
                   {STATUSES.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
                 </select></div>
                 
-              {canManage && (
-                <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Department</label>
-                  <select className={`${inputCls} mt-1.5`} value={form.department || ''} onChange={e => sf('department', e.target.value)}>
-                    <option value="">Select Department</option>
-                    {DEPARTMENTS.map(d => <option key={d} value={d}>{d.toUpperCase()}</option>)}
-                  </select></div>
-              )}
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Department</label>
+                <select className={`${inputCls} mt-1.5`} value={form.department || ''} onChange={e => sf('department', e.target.value)}>
+                  <option value="">Select Department</option>
+                  {DEPARTMENTS.map(d => <option key={d} value={d}>{d.toUpperCase()}</option>)}
+                </select>
+              </div>
 
               <div className="pt-6 grid grid-cols-5 gap-3">
                  <button type="submit" disabled={loading}
