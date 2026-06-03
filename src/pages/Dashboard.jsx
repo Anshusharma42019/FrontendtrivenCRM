@@ -283,6 +283,11 @@ export default function Dashboard() {
     if (datePreset === 'all') return t('All Time');
     return `${filterFrom} to ${filterTo}`;
   };
+  const departmentLeadTotal = stats?.departmentLeads?.total || 0;
+  const migraineLeadCount = stats?.departmentLeads?.migraine || 0;
+  const pilesLeadCount = stats?.departmentLeads?.piles || 0;
+  const migraineLeadPercent = departmentLeadTotal ? Math.round((migraineLeadCount / departmentLeadTotal) * 100) : 0;
+  const pilesLeadPercent = departmentLeadTotal ? Math.round((pilesLeadCount / departmentLeadTotal) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -345,7 +350,7 @@ export default function Dashboard() {
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e] animate-pulse" />
             <span className="text-[10px] font-black tracking-widest text-gray-400 dark:text-slate-400 uppercase select-none">{t('Lead Pipeline')}</span>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 sm:gap-4">
             <div onClick={() => downloadLeadsCSV(true)} className="cursor-pointer relative" title="Download all leads as CSV">
               <StatCard 
                 label={t('Total Leads')} 
@@ -362,6 +367,22 @@ export default function Dashboard() {
               icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>} 
               color="border-blue-500" 
               trend="+12.5%"
+            />
+            <StatCard
+              label={`${t('Migraine')} ${t('Leads')}`}
+              value={migraineLeadCount}
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 4.5c-2.5 0-4.5 2-4.5 4.5v1.25A3.25 3.25 0 0 0 5 13.4c0 1.8 1.45 3.25 3.25 3.25h.25V19h7v-2.35h.25A3.25 3.25 0 0 0 19 13.4a3.25 3.25 0 0 0-2.5-3.15V9c0-2.5-2-4.5-4.5-4.5z"/><path d="M10 9.25h4M9.5 12h5M10 14.75h4"/></svg>}
+              color="border-pink-500"
+              sub={`${getPeriodLabel()} ${t('lead count')}`}
+              progress={migraineLeadPercent}
+            />
+            <StatCard
+              label={`${t('Piles')} ${t('Leads')}`}
+              value={pilesLeadCount}
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 21s6-5.3 6-11a6 6 0 1 0-12 0c0 5.7 6 11 6 11z"/><circle cx="12" cy="10" r="2.5"/></svg>}
+              color="border-amber-500"
+              sub={`${getPeriodLabel()} ${t('lead count')}`}
+              progress={pilesLeadPercent}
             />
             <StatCard 
               label={t('Ready to Shipment')} 
