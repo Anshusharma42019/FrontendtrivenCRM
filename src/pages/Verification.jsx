@@ -90,6 +90,8 @@ export default function Verification() {
   const [allUsers, setAllUsers] = useState([]);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignTo, setAssignTo] = useState('');
+  const [showPatientTypeModal, setShowPatientTypeModal] = useState(false);
+  const [selectedPatientType, setSelectedPatientType] = useState('new');
 
 
   const load = useCallback(async () => {
@@ -717,11 +719,22 @@ export default function Verification() {
               <>
                 <SectionHead label="Customer" />
                 <DetailRow label="Task" value={selected.title} />
-                <DetailRow label="Patient Type" value={
-                  isOldPatientVerification(selected)
-                    ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />{getKitText(getDisplayKit(selected))} (Returning)</span>
-                    : <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-blue-500" />New Patient</span>
-                } />
+                <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">Patient Type</span>
+                  <span className="text-sm text-gray-800 font-medium capitalize flex-1">
+                    {isOldPatientVerification(selected)
+                      ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />{getKitText(getDisplayKit(selected))} (Returning)</span>
+                      : <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-blue-500" />New Patient</span>
+                    }
+                  </span>
+                  <button type="button" onClick={() => {
+                    setSelectedPatientType(isOldPatientVerification(selected) ? String(getDisplayKit(selected) || 2) : 'new');
+                    setShowPatientTypeModal(true);
+                  }}
+                    className="text-[10px] font-bold text-green-600 hover:bg-green-50 px-2 py-0.5 rounded border border-green-200 transition">
+                    Change
+                  </button>
+                </div>
                 <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">Assigned To (Verifier)</span>
                   <span className="text-sm text-gray-800 font-medium capitalize flex-1">{selected.assignedTo?.name || '—'}</span>
@@ -891,11 +904,22 @@ export default function Verification() {
                 <>
                   <SectionHead label="Customer Info" />
                   <DetailRow label="Task" value={selected.title} />
-                  <DetailRow label="Patient Type" value={
-                    isOldPatientVerification(selected)
-                      ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />{getKitText(getDisplayKit(selected))} (Returning)</span>
-                      : <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-blue-500" />New Patient</span>
-                  } />
+                  <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-28 shrink-0 mt-0.5">Patient Type</span>
+                    <span className="text-sm text-gray-800 font-medium capitalize flex-1">
+                      {isOldPatientVerification(selected)
+                        ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />{getKitText(getDisplayKit(selected))} (Returning)</span>
+                        : <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-blue-500" />New Patient</span>
+                      }
+                    </span>
+                    <button type="button" onClick={() => {
+                      setSelectedPatientType(isOldPatientVerification(selected) ? String(getDisplayKit(selected) || 2) : 'new');
+                      setShowPatientTypeModal(true);
+                    }}
+                      className="text-[10px] font-bold text-green-600 hover:bg-green-50 px-2 py-0.5 rounded border border-green-200 transition">
+                      Change
+                    </button>
+                  </div>
                   <DetailRow label="Assigned" value={selected.assignedTo?.name} />
                   <DetailRow label="Problem" value={selected.problem} />
                   <DetailRow label="Duration" value={selected.problemDuration} />
@@ -976,6 +1000,74 @@ export default function Verification() {
              </div>
              <button type="submit" disabled={saving} className="w-full py-3 bg-green-600 text-white text-xs font-bold rounded-xl shadow-md transition-all">Assign Now</button>
            </form>
+        </Modal>
+      )}
+
+      {showPatientTypeModal && (
+        <Modal title="Change Patient Type" onClose={() => setShowPatientTypeModal(false)}>
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            setSaving(true);
+            try {
+              const leadId = selected.lead?._id || selected.lead;
+              if (selectedPatientType === 'new') {
+                if (leadId) await updateLead(leadId, { status: 'new', pending_reorder_source: null });
+              } else {
+                if (leadId) await updateLead(leadId, { status: 'old' });
+              }
+              await load();
+              await loadOnHold();
+              const freshData = await getVerificationRecords();
+              const freshRecords = Array.isArray(freshData) ? freshData : [];
+              setRecords(freshRecords);
+              const freshSelected = freshRecords.find(r => r._id === selected._id);
+              if (freshSelected) {
+                setSelected(flattenRecord(freshSelected));
+              }
+              setShowPatientTypeModal(false);
+            } catch (err) {
+              alert('Update failed: ' + (err.response?.data?.message || err.message));
+            } finally {
+              setSaving(false);
+            }
+          }} className="space-y-4">
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Select Patient Type</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: 'new', label: 'New Patient', color: 'blue' },
+                  { value: '2', label: '2nd Kit', color: 'amber' },
+                  { value: '3', label: '3rd Kit', color: 'amber' },
+                  { value: '4', label: '4th Kit', color: 'amber' },
+                  { value: '5', label: '5th Kit', color: 'amber' },
+                  { value: '6', label: '6th Kit', color: 'amber' },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setSelectedPatientType(opt.value)}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
+                      selectedPatientType === opt.value
+                        ? opt.color === 'blue'
+                          ? 'bg-blue-50 text-blue-700 border-blue-400 shadow-md'
+                          : 'bg-amber-50 text-amber-700 border-amber-400 shadow-md'
+                        : 'bg-white text-gray-500 border-gray-100 hover:border-gray-300'
+                    }`}>
+                    <span className={`w-2 h-2 rounded-full ${
+                      selectedPatientType === opt.value
+                        ? opt.color === 'blue' ? 'bg-blue-500' : 'bg-amber-500'
+                        : 'bg-gray-300'
+                    }`} />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button type="submit" disabled={saving}
+              className="w-full py-3 bg-green-600 text-white text-xs font-bold rounded-xl shadow-md transition-all hover:bg-green-700 disabled:opacity-50">
+              {saving ? 'Updating...' : 'Update Patient Type'}
+            </button>
+          </form>
         </Modal>
       )}
     </div>
