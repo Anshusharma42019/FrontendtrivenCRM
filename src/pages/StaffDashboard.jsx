@@ -718,24 +718,21 @@ export default function StaffDashboard() {
               </div>
               {/* Stats */}
               <div className="flex-1 grid grid-cols-3 gap-3">
-                <div className="rounded-2xl p-3 text-center" style={{ background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', border: '1.5px solid #bbf7d0' }}>
-                  <p className="text-2xl font-black text-emerald-600 leading-none">{done}</p>
-                  <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mt-1">Done</p>
+                <div className="rounded-2xl p-3 text-center bg-emerald-50 border border-emerald-200">
+                  <p className="text-2xl font-black text-emerald-700 leading-none">{done}</p>
+                  <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mt-1">Done</p>
                 </div>
-                <div className="rounded-2xl p-3 text-center" style={{
-                  background: achieved ? 'linear-gradient(135deg, #f0fdf4, #dcfce7)' : 'linear-gradient(135deg, #fff7ed, #ffedd5)',
-                  border: `1.5px solid ${achieved ? '#bbf7d0' : '#fed7aa'}`
-                }}>
-                  <p className={`text-2xl font-black leading-none ${achieved ? 'text-emerald-600' : 'text-orange-500'}`}>
+                <div className={`rounded-2xl p-3 text-center border ${achieved ? 'bg-emerald-50 border-emerald-200' : 'bg-orange-50 border-orange-200'}`}>
+                  <p className={`text-2xl font-black leading-none ${achieved ? 'text-emerald-700' : 'text-orange-700'}`}>
                     {achieved ? '✓' : remaining}
                   </p>
-                  <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${achieved ? 'text-emerald-500' : 'text-orange-400'}`}>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${achieved ? 'text-emerald-700' : 'text-orange-700'}`}>
                     {achieved ? 'Done!' : 'Left'}
                   </p>
                 </div>
-                <div className="rounded-2xl p-3 text-center" style={{ background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', border: '1.5px solid #bfdbfe' }}>
-                  <p className="text-2xl font-black text-blue-600 leading-none">{target}</p>
-                  <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-1">Target</p>
+                <div className="rounded-2xl p-3 text-center bg-blue-50 border border-blue-200">
+                  <p className="text-2xl font-black text-blue-700 leading-none">{target}</p>
+                  <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest mt-1">Target</p>
                 </div>
               </div>
             </div>
@@ -820,11 +817,11 @@ export default function StaffDashboard() {
               const achievedDays = withTarget.filter(r => r.achieved).length;
               const overallPct = totalTarget > 0 ? Math.round((totalDone / totalTarget) * 100) : 0;
               return withTarget.length > 0 ? (
-                <div className="grid grid-cols-3 divide-x divide-gray-100" style={{ background: '#fafafa', borderBottom: '1px solid #f3f4f6' }}>
+                <div className="grid grid-cols-3 divide-x divide-gray-100 bg-gray-50 border-b border-gray-100">
                   {[
                     { label: 'Total Done', value: `${totalDone}`, sub: `of ${totalTarget}`, color: 'text-gray-800' },
-                    { label: 'Days Achieved', value: `${achievedDays}`, sub: `of ${withTarget.length}`, color: 'text-emerald-600' },
-                    { label: 'Overall', value: `${overallPct}%`, sub: overallPct >= 80 ? '🎉 Great!' : overallPct >= 50 ? '📈 Keep going' : '💪 Push more', color: overallPct >= 80 ? 'text-emerald-600' : overallPct >= 50 ? 'text-amber-500' : 'text-rose-500' },
+                    { label: 'Days Achieved', value: `${achievedDays}`, sub: `of ${withTarget.length}`, color: 'text-emerald-700' },
+                    { label: 'Overall', value: `${overallPct}%`, sub: overallPct >= 80 ? '🎉 Great!' : overallPct >= 50 ? '📈 Keep going' : '💪 Push more', color: overallPct >= 80 ? 'text-emerald-700' : overallPct >= 50 ? 'text-amber-700' : 'text-rose-700' },
                   ].map((s, i) => (
                     <div key={i} className="px-5 py-3 text-center">
                       <p className={`text-xl font-black ${s.color}`}>{s.value} <span className="text-xs font-bold text-gray-400">{s.sub}</span></p>
@@ -839,7 +836,7 @@ export default function StaffDashboard() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr style={{ background: '#fafafa', borderBottom: '1px solid #f3f4f6' }}>
+                  <tr className="bg-gray-50 border-b border-gray-100">
                     {['Date', 'Target', 'Done', 'Remaining', 'Status'].map(h => (
                       <th key={h} className={`py-3 px-5 text-[10px] font-black uppercase tracking-widest text-gray-400 ${h === 'Date' ? 'text-left' : 'text-center'}`}>{h}</th>
                     ))}
@@ -872,20 +869,20 @@ export default function StaffDashboard() {
                         {/* Target */}
                         <td className="py-3.5 px-5 text-center">
                           {row.target > 0
-                            ? <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-blue-50 text-blue-600 text-xs font-black">{row.target}</span>
+                            ? <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-blue-50 text-blue-700 text-xs font-black">{row.target}</span>
                             : <span className="text-gray-300 font-bold">—</span>}
                         </td>
                         {/* Done */}
                         <td className="py-3.5 px-5 text-center">
                           <span className={`inline-flex items-center justify-center w-8 h-8 rounded-xl text-xs font-black ${
-                            row.completed > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-50 text-gray-300'
+                            row.completed > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-300'
                           }`}>{row.completed}</span>
                         </td>
                         {/* Remaining */}
                         <td className="py-3.5 px-5 text-center">
                           {row.target > 0
                             ? <span className={`inline-flex items-center justify-center w-8 h-8 rounded-xl text-xs font-black ${
-                                rem === 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-500'
+                                rem === 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'
                               }`}>{rem === 0 ? '✓' : rem}</span>
                             : <span className="text-gray-300 font-bold">—</span>}
                         </td>
