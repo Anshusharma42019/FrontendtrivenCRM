@@ -13,7 +13,8 @@ import * as attendanceSvc from '../services/attendance.service';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useLanguage } from '../context/LanguageContext';
-import OrderStatusBoard from '../components/OrderStatusBoard';
+import { useNavigate } from 'react-router-dom';
+
 import { getLeads, exportLeads } from '../services/lead.service';
 import ShipmentAnalyticsPanel from '../components/ShipmentAnalyticsPanel';
 
@@ -80,8 +81,10 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { success, error, info } = useToast();
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null);
   const [deliveredStats, setDeliveredStats] = useState({ count: 0, revenue: 0, statusBreakdown: [] });
   const [todayLists, setTodayLists] = useState({ cnpList: [], callAgainList: [], interestedList: [], notInterestedList: [], onHoldList: [] });
   const [staffStats, setStaffStats] = useState(null);
@@ -120,7 +123,7 @@ export default function Dashboard() {
       if (chart.status === 'fulfilled') setMonthlyChart(Array.isArray(chart.value) ? chart.value : []);
       if (att.status === 'fulfilled') setAttStatus(att.value);
     } catch (e) { console.error('Dashboard load error:', e); }
-    finally { setLoading(false); }
+    finally { setLoading(false); setLastUpdated(new Date()); }
   }, [datePreset, filterFrom, filterTo, department]);
 
   useEffect(() => {
@@ -287,8 +290,11 @@ export default function Dashboard() {
   const departmentLeadTotal = stats?.departmentLeads?.total || 0;
   const migraineLeadCount = stats?.departmentLeads?.migraine || 0;
   const pilesLeadCount = stats?.departmentLeads?.piles || 0;
-  const migraineLeadPercent = departmentLeadTotal ? Math.round((migraineLeadCount / departmentLeadTotal) * 100) : 0;
-  const pilesLeadPercent = departmentLeadTotal ? Math.round((pilesLeadCount / departmentLeadTotal) * 100) : 0;
+  const rawMigrainePercent = departmentLeadTotal ? Math.round((migraineLeadCount / departmentLeadTotal) * 100) : 0;
+  const rawPilesPercent = departmentLeadTotal ? Math.round((pilesLeadCount / departmentLeadTotal) * 100) : 0;
+  // Ensure non-zero counts never show 0% and don't misleadingly show 100%
+  const migraineLeadPercent = rawMigrainePercent === 100 && pilesLeadCount > 0 ? 99 : rawMigrainePercent;
+  const pilesLeadPercent = rawPilesPercent === 0 && pilesLeadCount > 0 ? 1 : rawPilesPercent;
 
   return (
     <div className="space-y-6">
@@ -300,7 +306,12 @@ export default function Dashboard() {
            </div>
            <div>
              <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wider">{t('Dashboard Overview')}</h2>
-             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{t('Filtering for')}: {getPeriodLabel().toUpperCase()}</p>
+             <div className="flex items-center gap-2">
+               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{t('Filtering for')}: {getPeriodLabel().toUpperCase()}</p>
+               {lastUpdated && (
+                 <span className="text-[9px] text-gray-300 font-medium">· Updated {lastUpdated.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+               )}
+             </div>
            </div>
         </div>
         
@@ -342,6 +353,59 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ═══ Today at a Glance ═══ */}
+      <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #064e3b 0%, #065f46 40%, #047857 100%)', boxShadow: '0 4px 20px rgba(5,150,105,0.15)' }}>
+        <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
+              <svg className="w-5 h-5 text-emerald-200" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <div>
+              <h2 className="text-white font-bold text-base">{t('Today at a Glance')}</h2>
+              <p className="text-emerald-200/60 text-xs">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-3 text-center">
+              <p className="text-xl font-black text-white">{stats?.newLeadsToday || 0}</p>
+              <p className="text-[9px] font-bold text-emerald-200/70 uppercase tracking-widest">{t('New Leads')}</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-3 text-center">
+              <p className="text-xl font-black text-white">{stats?.readyToShipmentCount || 0}</p>
+              <p className="text-[9px] font-bold text-emerald-200/70 uppercase tracking-widest">{t('Pending Ship')}</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-3 text-center">
+              <p className="text-xl font-black text-white">{stats?.deliveredCount || 0}</p>
+              <p className="text-[9px] font-bold text-emerald-200/70 uppercase tracking-widest">{t('Delivered')}</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-3 text-center">
+              <p className="text-xl font-black text-white">₹{(stats?.deliveredRevenue || 0).toLocaleString('en-IN')}</p>
+              <p className="text-[9px] font-bold text-emerald-200/70 uppercase tracking-widest">{t('Revenue')}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ Quick Actions ═══ */}
+      {canManage && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: t('Leads'), icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>, path: '/leads', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
+            { label: t('Verification'), icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>, path: '/verification', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+            { label: t('Ready to Ship'), icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>, path: '/ready-to-shipment', color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100' },
+            { label: t('Notifications'), icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>, path: '/notifications', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
+          ].map(action => (
+            <button key={action.path} onClick={() => navigate(action.path)}
+              className={`${cardCls} flex items-center gap-3 !py-3.5 !px-4 cursor-pointer border ${action.border} hover:shadow-md hover:-translate-y-0.5 transition-all active:scale-[0.98]`}
+              style={{ ...cardStyle, borderColor: undefined }}>
+              <div className={`w-10 h-10 rounded-xl ${action.bg} ${action.color} flex items-center justify-center shrink-0`}>{action.icon}</div>
+              <span className="text-sm font-bold text-gray-700">{action.label}</span>
+              <svg className="w-4 h-4 text-gray-300 ml-auto" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Stat Cards Grouped Logically by Rows */}
       <div className="space-y-6 sm:space-y-8">
         
@@ -359,7 +423,6 @@ export default function Dashboard() {
                 icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} 
                 color="border-green-500" 
                 sub={csvLoading === 'all' ? `⏳ ${t('Downloading...')}` : `⬇ ${t('Click to download CSV')}`} 
-                trend="+4.8%"
               />
             </div>
             <StatCard 
@@ -367,7 +430,6 @@ export default function Dashboard() {
               value={stats?.newLeadsToday} 
               icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>} 
               color="border-blue-500" 
-              trend="+12.5%"
             />
             <StatCard
               label={`${t('Migraine')} ${t('Leads')}`}
@@ -458,7 +520,6 @@ export default function Dashboard() {
               value={stats?.deliveredCount || 0} 
               icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>} 
               color="border-emerald-500" 
-              trend="+6.2%"
             />
             <StatCard 
               label={`${t('New Order Delivered')} (${getPeriodLabel()})`} 
@@ -481,7 +542,6 @@ export default function Dashboard() {
               value={`₹${(stats?.deliveredRevenue || 0).toLocaleString()}`} 
               icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>} 
               color="border-teal-500" 
-              trend="+18.4%"
             />
           </div>
         </div>
@@ -557,8 +617,7 @@ export default function Dashboard() {
         </>
       )}
 
-      {/* Order Status Cards */}
-      <OrderStatusBoard onStatsChange={setDeliveredStats} filterParams={filterParams} />
+
 
       {/* Earnings & Activity Chart Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -610,12 +669,20 @@ export default function Dashboard() {
         <div className={`lg:col-span-2 ${cardCls}`} style={cardStyle}>
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-sm font-semibold text-gray-700">Company Activity Trend</h3>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Verifications</span>
+            <div className="flex items-center gap-2">
+              {monthlyChart.length > 0 && (
+                <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg">
+                  {monthlyChart.reduce((s, d) => s + d.count, 0)} Total
+                </span>
+              )}
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Verifications</span>
+            </div>
           </div>
           {monthlyChart.length > 0 && (
             <div className="h-48 relative group px-2">
               {(() => {
                 const max = Math.max(...monthlyChart.map(d => d.count), 5);
+                const todayDay = new Date().getDate();
                 const points = monthlyChart.map((d, i) => {
                   const x = (i / (monthlyChart.length - 1)) * 100;
                   const y = 92 - (d.count / max) * 84;
@@ -624,6 +691,12 @@ export default function Dashboard() {
                 
                 return (
                   <>
+                    {/* Y-axis scale labels (HTML, outside SVG to avoid distortion) */}
+                    <div className="absolute left-0 top-0 bottom-0 w-8 flex flex-col justify-between py-[3%] pointer-events-none z-10" style={{ top: '0%', bottom: '8%' }}>
+                      <span className="text-[9px] font-bold text-gray-300 text-right pr-1 leading-none">{max}</span>
+                      <span className="text-[9px] font-bold text-gray-300 text-right pr-1 leading-none">{Math.round(max / 2)}</span>
+                      <span className="text-[9px] font-bold text-gray-300 text-right pr-1 leading-none">0</span>
+                    </div>
                     <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
                       <defs>
                         <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
@@ -637,14 +710,31 @@ export default function Dashboard() {
                       <path d={`M 0 100 L ${points} L 100 100 Z`} fill="url(#chartGrad)" />
                       <path d={`M ${points}`} fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
+                    {/* Today marker dot (HTML positioned, avoids SVG distortion) */}
+                    {monthlyChart.map((d, i) => {
+                      if (d.day === todayDay) {
+                        const leftPct = (i / (monthlyChart.length - 1)) * 100;
+                        const bottomPct = 8 + (d.count / max) * 84;
+                        return (
+                          <div key="today-marker" className="absolute w-3 h-3 rounded-full bg-emerald-500 border-2 border-white shadow-md z-10 pointer-events-none"
+                            style={{ left: `${leftPct}%`, bottom: `${bottomPct}%`, transform: 'translate(-50%, 50%)' }} />
+                        );
+                      }
+                      return null;
+                    })}
                     <div className="absolute inset-0 flex">
                       {monthlyChart.map((d, i) => (
                         <div key={i} className="flex-1 group/dot relative h-full">
-                          <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[9px] px-2 py-1.5 rounded opacity-0 group-hover/dot:opacity-100 transition-opacity z-20 whitespace-nowrap pointer-events-none shadow-xl">
-                            {new Date().toLocaleString('default', { month: 'short' })} {d.day}: <span className="font-bold">{d.count}</span>
+                          <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[9px] px-2.5 py-1.5 rounded-lg opacity-0 group-hover/dot:opacity-100 transition-opacity z-20 whitespace-nowrap pointer-events-none shadow-xl">
+                            <span className="text-gray-400">{new Date(new Date().getFullYear(), new Date().getMonth(), d.day).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>{' '}
+                            <span className="font-bold text-white">{d.count} {d.count === 1 ? 'verification' : 'verifications'}</span>
                           </div>
                           <div 
-                            className="absolute w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white shadow-sm opacity-0 group-hover/dot:opacity-100 transition-all scale-0 group-hover/dot:scale-110"
+                            className={`absolute w-2.5 h-2.5 rounded-full border-2 border-white shadow-sm transition-all ${
+                              d.day === todayDay 
+                                ? 'bg-emerald-500 opacity-100 scale-110' 
+                                : 'bg-green-500 opacity-0 group-hover/dot:opacity-100 scale-0 group-hover/dot:scale-110'
+                            }`}
                             style={{ 
                               left: '50%', 
                               bottom: `${8 + (d.count / max) * 84}%`,
@@ -660,9 +750,13 @@ export default function Dashboard() {
               })()}
             </div>
           )}
-          <div className="mt-4 flex items-center justify-between px-1 pt-4 border-t border-gray-50">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">01 {new Date().toLocaleString('default', { month: 'short' })}</span>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{monthlyChart.length} {new Date().toLocaleString('default', { month: 'short' })}</span>
+          {/* X-axis labels with week markers */}
+          <div className="mt-4 flex items-center justify-between px-2 pt-4 border-t border-gray-50 relative">
+            {[1, 7, 14, 21, 28].filter(d => d <= monthlyChart.length).map(d => (
+              <span key={d} className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">
+                {d} {new Date().toLocaleString('default', { month: 'short' })}
+              </span>
+            ))}
           </div>
         </div>
       </div>
@@ -715,8 +809,8 @@ export default function Dashboard() {
 
       {/* Tasks Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <StatCard label="Pending Tasks" value={stats?.tasks?.pending} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>} color="border-orange-400" />
-        <StatCard label="Overdue Tasks" value={stats?.tasks?.overdue} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>} color="border-red-500" />
+        
+        
       </div>
 
       {/* Shipment Analytics — Admin/Manager only */}
@@ -763,15 +857,24 @@ export default function Dashboard() {
                 {allStaffStats.filter(s => s.user?.role !== 'doctor').map((s, i) => {
                   const readyCount = s.readyToShipmentCount || 0;
                   const vrBase = s.todayTarget || 0;
+                  // Calculate VR% based on Daily Target for Verifications
                   const vr = vrBase > 0 ? Math.min(Math.round(((s.todayVerifications || 0) / vrBase) * 100), 100) : 0;
                   const dr = s.monthDispatchedCount > 0 ? Math.min(Math.round(((s.monthDeliveredCount || 0) / s.monthDispatchedCount) * 100), 100) : 0;
                   const rto = s.monthDispatchedCount > 0 ? Math.min(Math.round(((s.monthRtoCount || 0) / s.monthDispatchedCount) * 100), 100) : 0;
+                  const vrColor = vr >= 80 ? 'text-emerald-600 bg-emerald-50' : vr >= 50 ? 'text-amber-600 bg-amber-50' : vr > 0 ? 'text-red-500 bg-red-50' : 'text-gray-400 bg-gray-50';
+                  const drColor = dr >= 70 ? 'text-emerald-600 bg-emerald-50' : dr >= 40 ? 'text-amber-600 bg-amber-50' : dr > 0 ? 'text-red-500 bg-red-50' : 'text-gray-400 bg-gray-50';
+                  const rtoColor = rto === 0 ? 'text-emerald-600 bg-emerald-50' : rto <= 15 ? 'text-amber-600 bg-amber-50' : 'text-red-500 bg-red-50';
                   return (
                     <tr key={s.user?._id || i} className="hover:bg-gray-50/50 transition-colors">
                       <td className="py-3 px-4 text-center font-bold text-gray-400">{i + 1}</td>
                       <td className="py-3 px-4">
-                        <p className="font-bold text-gray-800 text-sm">{s.user?.name}</p>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase">{s.user?.role}</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${s.workingHours > 0 ? 'bg-emerald-500 shadow-[0_0_6px_#22c55e]' : 'bg-gray-300'}`} />
+                          <div>
+                            <p className="font-bold text-gray-800 text-sm">{s.user?.name}</p>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase">{s.user?.role}</span>
+                          </div>
+                        </div>
                       </td>
                       <td className="py-3 px-2 text-center">
                         <div className="flex flex-col gap-1 items-center">
@@ -782,10 +885,16 @@ export default function Dashboard() {
                         </div>
                       </td>
                       <td className="py-3 px-2 text-center font-bold text-blue-600">{s.leadsAdded || 0}</td>
-                      <td className="py-3 px-2 text-center font-bold text-red-500">{s.todayCallAgain > 0 ? `${s.todayCallAgain} CNP` : '0 CNP'}</td>
-                      <td className="py-3 px-2 text-center font-black text-emerald-600" title={`${s.todayVerifications || 0} Added / ${vrBase} Target`}>{vr}%</td>
-                      <td className="py-3 px-2 text-center font-black text-blue-600">{dr}%</td>
-                      <td className="py-3 px-2 text-center font-black text-orange-600">{rto}%</td>
+                      <td className="py-3 px-2 text-center font-bold text-red-500">{s.todayCnp > 0 ? `${s.todayCnp} CNP` : '0 CNP'}</td>
+                      <td className="py-3 px-2 text-center" title={`${s.todayVerifications || 0} Done / ${vrBase} Target`}>
+                        <span className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-black ${vrColor}`}>{vr}%</span>
+                      </td>
+                      <td className="py-3 px-2 text-center">
+                        <span className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-black ${drColor}`}>{dr}%</span>
+                      </td>
+                      <td className="py-3 px-2 text-center">
+                        <span className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-black ${rtoColor}`}>{rto}%</span>
+                      </td>
                     </tr>
                   );
                 })}

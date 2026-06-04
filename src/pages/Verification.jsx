@@ -28,9 +28,21 @@ const isOldPatientVerification = (record) =>
   !!(record.lead?.status === 'old' || record.lead?.pending_reorder_source);
 
 const getKitText = (num) => {
-  if (!num || num <= 2) return '2nd Kit';
+  if (!num) return '';
+  if (num === 1) return '1st Kit';
+  if (num === 2) return '2nd Kit';
   if (num === 3) return '3rd Kit';
   return `${num}th Kit`;
+};
+
+// Old-patient verification starts at the second kit, even if the backend sequence is 1.
+const getDisplayKit = (record) => {
+  const kit = record.kit_number;
+  if (!kit) return null;
+  if (isOldPatientVerification(record) && kit === 1) {
+    return 2;
+  }
+  return kit;
 };
 
 const DetailRow = ({ label, value }) =>
@@ -497,9 +509,9 @@ export default function Verification() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold text-gray-800 truncate">{flattened.title}</p>
-                          {isOldPatientVerification(flattened) ? (
+                          {getDisplayKit(flattened) ? (
                             <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200 uppercase shrink-0 flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />{getKitText(flattened.kit_number)}
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />{getKitText(getDisplayKit(flattened))}
                             </span>
                           ) : (
                             <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-700 border border-blue-200 uppercase shrink-0 flex items-center gap-1">
@@ -567,7 +579,7 @@ export default function Verification() {
                         <p className="text-sm font-semibold text-gray-800 truncate">{flattened.title}</p>
                         {isOldPatientVerification(flattened) ? (
                           <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200 uppercase shrink-0 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />{getKitText(flattened.kit_number)}
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />{getKitText(getDisplayKit(flattened))}
                           </span>
                         ) : (
                           <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-700 border border-blue-200 uppercase shrink-0 flex items-center gap-1">
@@ -707,7 +719,7 @@ export default function Verification() {
                 <DetailRow label="Task" value={selected.title} />
                 <DetailRow label="Patient Type" value={
                   isOldPatientVerification(selected)
-                    ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />{getKitText(selected.kit_number)} (Returning)</span>
+                    ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />{getKitText(getDisplayKit(selected))} (Returning)</span>
                     : <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-blue-500" />New Patient</span>
                 } />
                 <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
@@ -881,7 +893,7 @@ export default function Verification() {
                   <DetailRow label="Task" value={selected.title} />
                   <DetailRow label="Patient Type" value={
                     isOldPatientVerification(selected)
-                      ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />{getKitText(selected.kit_number)} (Returning)</span>
+                      ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />{getKitText(getDisplayKit(selected))} (Returning)</span>
                       : <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-xs font-black uppercase"><span className="w-2 h-2 rounded-full bg-blue-500" />New Patient</span>
                   } />
                   <DetailRow label="Assigned" value={selected.assignedTo?.name} />

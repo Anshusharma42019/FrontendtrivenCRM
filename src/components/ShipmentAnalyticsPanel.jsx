@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import API from '../api';
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -149,6 +149,11 @@ export default function ShipmentAnalyticsPanel({ department = '' }) {
   const handleDrillPincode    = p => { setDrillPincode(p); setDrillState(null); fetchStats(null, p, globalMonth); };
   const handleBack            = () => { setDrillState(null); setDrillPincode(null); fetchStats(null, null, globalMonth); };
   const handleGlobalMonthChange = m => { setGlobalMonth(m); fetchStats(drillState, drillPincode, m); };
+
+  // Auto-load analytics on mount
+  useEffect(() => {
+    fetchStats(null, null, currentMonth);
+  }, [fetchStats, currentMonth]);
 
   const isDrilled   = !!(drillState || drillPincode);
   const drillLabel  = drillState || drillPincode;

@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import API from '../api';
-import StatCard from '../components/ui/StatCard';
 import { 
   fetchStats, 
   fetchStaffStats,
@@ -15,14 +15,62 @@ import {
 import * as attendanceSvc from '../services/attendance.service';
 import { useToast } from '../context/ToastContext';
 
+/* ─── Live Working Timer Hook ──────────────────────────────────── */
+function useLiveTimer(checkInTime) {
+  const [elapsed, setElapsed] = useState('');
+  useEffect(() => {
+    if (!checkInTime) return;
+    const update = () => {
+      const diff = Math.floor((Date.now() - new Date(checkInTime)) / 1000);
+      const h = Math.floor(diff / 3600);
+      const m = Math.floor((diff % 3600) / 60);
+      const s = diff % 60;
+      setElapsed(`${h}h ${m}m ${String(s).padStart(2,'0')}s`);
+    };
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [checkInTime]);
+  return elapsed;
+}
+
+/* ─── Weekly Bar Chart ─────────────────────────────────────────── */
+function WeeklyBarChart({ monthlyChart }) {
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0=Sun
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  // Build last 7 days
+  const week = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (6 - i));
+    const dayNum = d.getDate();
+    const label = days[d.getDay()];
+    const found = monthlyChart?.find(c => c.day === dayNum);
+    return { label, day: dayNum, count: found?.count || 0, isToday: i === 6 };
+  });
+  const max = Math.max(...week.map(w => w.count), 1);
+  return (
+    <div className="flex items-end justify-between gap-1 h-24 px-1">
+      {week.map((w, i) => (
+        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+          <span className="text-[9px] font-black text-gray-500">{w.count > 0 ? w.count : ''}</span>
+          <div className="w-full flex items-end" style={{ height: 60 }}>
+            <div
+              className={`w-full rounded-t-lg transition-all duration-500 ${
+                w.isToday ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-gray-200 group-hover:bg-gray-300'
+              }`}
+              style={{ height: `${Math.max((w.count / max) * 60, w.count > 0 ? 8 : 3)}px` }}
+            />
+          </div>
+          <span className={`text-[9px] font-bold ${w.isToday ? 'text-emerald-600' : 'text-gray-400'}`}>{w.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const cardCls = "bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow";
 const cardStyle = { border: '1px solid rgba(0,0,0,0.05)' };
-
-const DEPT_COLOR = {
-  migraine: 'bg-purple-50 text-purple-600 border-purple-100',
-  piles: 'bg-amber-50 text-amber-600 border-amber-100',
-  logistics: 'bg-blue-50 text-blue-600 border-blue-100',
-};
 
 const icons = {
   cnp: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M16.5 1.5a4.5 4.5 0 0 1 4.5 4.5v12a4.5 4.5 0 0 1-4.5 4.5h-9A4.5 4.5 0 0 1 3 18V6a4.5 4.5 0 0 1 4.5-4.5h9z"/><line x1="4" y1="4" x2="20" y2="20"/></svg>,
@@ -37,6 +85,7 @@ const icons = {
 
 export default function StaffDashboard() {
   const { user, updateUser } = useAuth();
+  const navigate = useNavigate();
   const { success, error, info } = useToast();
   const [stats, setStats] = useState(null);
   const [verifications, setVerifications] = useState([]);
@@ -46,6 +95,7 @@ export default function StaffDashboard() {
   const [targetInput, setTargetInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [streak, setStreak] = useState(0);
   const [attStatus, setAttStatus] = useState(null);
   const [attLoading, setAttLoading] = useState(false);
   const [commission, setCommission] = useState(null);
@@ -57,6 +107,19 @@ export default function StaffDashboard() {
   const [historyMode, setHistoryMode] = useState('days'); // 'days' or 'month'
   const [historyDays, setHistoryDays] = useState(7);
   const [historyMonth, setHistoryMonth] = useState(() => { const n = new Date(); return { month: n.getMonth(), year: n.getFullYear() }; });
+
+  const workingTime = useLiveTimer(attStatus?.checkIn && !attStatus?.checkOut ? attStatus.checkIn : null);
+
+  const MOTIVATIONS = [
+    'Sunday warrior — legends don\'t take days off! 💪🔥',
+    'MONDAY BEAST MODE ON — Own the week before it owns you! ⚡🚀',
+    'Tuesday TAKEOVER — Every call is a chance to WIN! 🎯💥',
+    'Hump day HUSTLE — You\'re unstoppable, keep PUSHING! 🔥💪',
+    'Thursday THUNDER — Go harder than yesterday! ⚡🌩️',
+    'FRIDAY FIRE — Close strong, finish like a champion! 🔥🏆',
+    'Saturday GRIND — Champions are made when no one\'s watching! 🌟💼',
+  ];
+  const motiveLine = MOTIVATIONS[new Date().getDay()];
 
   const load = useCallback(async () => {
     try {
@@ -89,6 +152,21 @@ export default function StaffDashboard() {
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, []);
+
+  // Calculate streak from target history
+  useEffect(() => {
+    fetchTargetHistory(null, null, 30)
+      .then(history => {
+        if (!Array.isArray(history)) return;
+        const sorted = [...history].sort((a, b) => new Date(b.date) - new Date(a.date));
+        let s = 0;
+        for (const row of sorted) {
+          if (row.target > 0 && row.achieved) s++;
+          else if (row.target > 0) break;
+        }
+        setStreak(s);
+      }).catch(() => {});
+  }, [stats?.todayVerifications]);
 
   useEffect(() => {
     load();
@@ -155,10 +233,20 @@ export default function StaffDashboard() {
     } finally { setSaving(false); }
   };
 
+  const DEPT_COLOR = {
+    migraine: 'bg-purple-50 text-purple-600 border-purple-100',
+    piles: 'bg-amber-50 text-amber-600 border-amber-100',
+    logistics: 'bg-blue-50 text-blue-600 border-blue-100',
+  };
+
   const done = stats?.todayVerifications || 0;
   const target = stats?.todayTarget || 0;
   const remaining = target > 0 ? Math.max(target - done, 0) : 0;
   const achieved = target > 0 && done >= target;
+  const progressPct = target > 0 ? Math.min(Math.round((done / target) * 100), 100) : 0;
+  const progressTone = achieved ? 'emerald' : progressPct >= 60 ? 'amber' : 'rose';
+  const onHoldList = todayLists.onHoldList || [];
+  const dueWorkCount = verifications.filter(v => ['pending', 'on_hold'].includes(v.status)).length + (todayLists.callAgainList?.length || 0);
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   const checkedIn = !!attStatus?.checkIn;
@@ -184,6 +272,81 @@ export default function StaffDashboard() {
     }
     catch (e) { error(e.response?.data?.message || 'Check-out failed'); }
     setAttLoading(false);
+  };
+
+  const openByPhone = (path, item) => {
+    const phone = item?.lead?.phone || item?.phone || '';
+    navigate(phone ? `${path}?phone=${encodeURIComponent(phone)}` : path);
+  };
+
+  const [chartFilter, setChartFilter] = useState('month');
+  const [chartCustomFrom, setChartCustomFrom] = useState('');
+  const [chartCustomTo, setChartCustomTo] = useState('');
+
+  const filteredChartData = useMemo(() => {
+    if (!monthlyChart.length) return [];
+    const today = new Date();
+    const todayDay = today.getDate();
+    const yesterdayDay = new Date(today.getTime() - 86400000).getDate();
+    if (chartFilter === 'today') return monthlyChart.filter(d => d.day === todayDay);
+    if (chartFilter === 'yesterday') return monthlyChart.filter(d => d.day === yesterdayDay);
+    if (chartFilter === '7d') return monthlyChart.filter(d => d.day >= todayDay - 6);
+    if (chartFilter === 'custom' && chartCustomFrom && chartCustomTo) {
+      const from = new Date(chartCustomFrom).getDate();
+      const to = new Date(chartCustomTo).getDate();
+      return monthlyChart.filter(d => d.day >= from && d.day <= to);
+    }
+    return monthlyChart;
+  }, [monthlyChart, chartFilter, chartCustomFrom, chartCustomTo]);
+
+  const [workFilter, setWorkFilter] = useState('today');
+  const [workCustomDate, setWorkCustomDate] = useState('');
+  const [workLists, setWorkLists] = useState({ cnpList: [], callAgainList: [], interestedList: [], notInterestedList: [], onHoldList: [] });
+  const [workLoading, setWorkLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setWorkLoading(true);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const sevenDaysStr = new Date(Date.now() - 6 * 86400000).toISOString().split('T')[0];
+
+    let date, from, to;
+    if (workFilter === 'today') { date = todayStr; from = todayStr; to = todayStr; }
+    else if (workFilter === 'yesterday') { date = yesterdayStr; from = yesterdayStr; to = yesterdayStr; }
+    else if (workFilter === '7d') { from = sevenDaysStr; to = todayStr; }
+    else if (workFilter === 'custom' && workCustomDate) { date = workCustomDate; from = workCustomDate; to = workCustomDate; }
+
+    fetchStaffTodayLists(date, null, from, to)
+      .then(d => {
+        if (!cancelled) {
+          setWorkLists(d || { cnpList: [], callAgainList: [], interestedList: [], notInterestedList: [], onHoldList: [] });
+          setOpenSection(null); // reset open section on filter change
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setWorkLoading(false); });
+    return () => { cancelled = true; };
+  }, [workFilter, workCustomDate]);
+
+  const workQueues = [
+    { key: 'verifications', label: 'Verification Tasks', icon: icons.verification, color: 'text-blue-600', bg: 'bg-blue-50', list: verifications, path: '/verification' },
+    { key: 'callAgain', label: 'Call Again', icon: icons.callAgain, color: 'text-yellow-600', bg: 'bg-yellow-50', list: workLists.callAgainList || [], path: '/call-again' },
+    { key: 'cnp', label: 'CNP', icon: icons.cnp, color: 'text-red-500', bg: 'bg-red-50', list: workLists.cnpList || [], path: '/cnp' },
+    { key: 'interested', label: 'Interested', icon: icons.interested, color: 'text-green-600', bg: 'bg-green-50', list: workLists.interestedList || [], path: '/pipeline' },
+    { key: 'onHold', label: 'On Hold', icon: icons.callAgain, color: 'text-gray-600', bg: 'bg-gray-50', list: workLists.onHoldList || [], path: '/verification' },
+  ];
+
+  const openWorkItem = (queue, item) => {
+    if (queue.key === 'verifications' || queue.key === 'onHold') {
+      navigate(`/verification?openId=${item._id}`);
+      return;
+    }
+    if (queue.key === 'interested' && item?._id) {
+      navigate(`/tasks?openId=${item._id}`);
+      return;
+    }
+    openByPhone(queue.path, item);
   };
 
   if (loading && !stats) return (
@@ -231,262 +394,524 @@ export default function StaffDashboard() {
         </div>
       </div>
 
-      {/* Main Stats Row - Styled like Manager Dashboard */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-        <StatCard label="Today's Done" value={stats?.activity?.todayVerifications ?? stats?.todayVerifications} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>} color="border-green-500" />
-        <StatCard label="Pending Tasks" value={stats?.tasks?.pending} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>} color="border-orange-500" />
-        <StatCard label="Month Verifications" value={stats?.activity?.monthVerifications ?? stats?.monthVerifications} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>} color="border-blue-500" />
-        <StatCard label="Total Leads" value={stats?.totalLeads} icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>} color="border-purple-500" />
-      </div>
-
-      {/* Attendance Summary Row (Team) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white rounded-2xl shadow-sm p-4 border border-green-100 bg-green-50/30">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Team Present</p>
-          <p className="text-2xl font-bold text-green-600">{stats?.attendance?.present || 0}</p>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm p-4 border border-orange-100 bg-orange-50/30">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Checked Out</p>
-          <p className="text-2xl font-bold text-orange-600">{stats?.attendance?.checkedOut || 0}</p>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm p-4 border border-red-100 bg-red-50/30">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Team Absent</p>
-          <p className="text-2xl font-bold text-red-600">{stats?.attendance?.absent || 0}</p>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm p-4 border border-blue-100 bg-blue-50/30">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Total Team</p>
-          <p className="text-2xl font-bold text-blue-600">{stats?.attendance?.totalStaff || 0}</p>
-        </div>
-      </div>
-
-      {/* Attendance Quick Card */}
-      <div className={cardCls} style={{ ...cardStyle, background: 'linear-gradient(135deg, #0d1f0d, #1a3a1a)', border: 'none' }}>
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
-              <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      {/* ═══ PERSONAL ATTENDANCE CARD — TOP ═══ */}
+      <div className="relative rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #052e16 0%, #14532d 50%, #166534 100%)', boxShadow: '0 8px 32px rgba(5,150,105,0.2)' }}>
+        <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #4ade80, transparent)' }} />
+        <div className="absolute -bottom-6 -left-6 w-28 h-28 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #86efac, transparent)' }} />
+        <div className="relative px-6 py-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="relative w-14 h-14 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
+                {checkedIn && !checkedOut && (
+                  <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-emerald-900 animate-pulse" />
+                )}
+                <svg className="w-7 h-7 text-emerald-300" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400/70 mb-0.5">Personal Attendance</p>
+                <p className="text-white font-bold text-base leading-tight">
+                  {checkedIn && checkedOut ? 'Day Complete 🎉'
+                    : checkedIn ? `Working since ${fmtTime(attStatus.checkIn)}`
+                    : 'Not checked in yet'}
+                </p>
+                {checkedIn && checkedOut && (
+                  <p className="text-emerald-300/60 text-xs mt-0.5">In: {fmtTime(attStatus.checkIn)} · Out: {fmtTime(attStatus.checkOut)}</p>
+                )}
+                {workingTime && (
+                  <p className="text-emerald-300/80 text-xs font-mono mt-0.5">⏱ {workingTime}</p>
+                )}
+                {/* Day-based motivation line */}
+                <p className="text-amber-300/90 text-[11px] font-bold mt-1 tracking-wide">{motiveLine}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-white font-semibold text-sm">Personal Attendance</p>
-              <p className="text-green-300/60 text-xs mt-0.5">
-                {checkedIn && checkedOut ? `In: ${fmtTime(attStatus.checkIn)} · Out: ${fmtTime(attStatus.checkOut)}`
-                  : checkedIn ? `Checked in at ${fmtTime(attStatus.checkIn)}`
-                  : 'Not checked in yet'}
-              </p>
+            <div className="flex items-center gap-3">
+              {checkedIn && (
+                <div className="hidden sm:flex items-center gap-3">
+                  <div className="text-center px-4 py-2 rounded-xl" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                    <p className="text-lg font-black text-white">{done}</p>
+                    <p className="text-[9px] text-emerald-300/60 uppercase tracking-widest">Done</p>
+                  </div>
+                  <div className="text-center px-4 py-2 rounded-xl" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                    <p className="text-lg font-black text-white">{target || '—'}</p>
+                    <p className="text-[9px] text-emerald-300/60 uppercase tracking-widest">Target</p>
+                  </div>
+                  <div className="text-center px-4 py-2 rounded-xl" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                    <p className={`text-lg font-black ${achieved ? 'text-emerald-300' : 'text-amber-300'}`}>{progressPct}%</p>
+                    <p className="text-[9px] text-emerald-300/60 uppercase tracking-widest">Progress</p>
+                  </div>
+                </div>
+              )}
+              {!checkedIn ? (
+                <button onClick={handleCheckIn} disabled={attLoading}
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-black text-emerald-900 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg, #4ade80, #22c55e)' }}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                  {attLoading ? 'Processing...' : 'Clock In'}
+                </button>
+              ) : !checkedOut ? (
+                <button onClick={handleCheckOut} disabled={attLoading}
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-black text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                  {attLoading ? 'Processing...' : 'Clock Out'}
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 px-5 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(74,222,128,0.3)' }}>
+                  <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                  <span className="text-emerald-300 text-sm font-black">Day Complete</span>
+                </div>
+              )}
             </div>
           </div>
+          {checkedIn && target > 0 && (
+            <div className="mt-4 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold text-emerald-400/60 uppercase tracking-widest">Today's Target Progress</span>
+                <span className={`text-[10px] font-black ${achieved ? 'text-emerald-400' : 'text-amber-400'}`}>{done}/{target} · {progressPct}%</span>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
+                <div className={`h-full rounded-full transition-all duration-700 ${achieved ? 'bg-emerald-400' : progressPct >= 60 ? 'bg-amber-400' : 'bg-rose-400'}`}
+                  style={{ width: `${progressPct}%` }} />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ═══ STREAK BANNER (if streak > 2) ═══ */}
+      {streak >= 3 && (
+        <div className="rounded-2xl px-5 py-3 flex items-center gap-3" style={{ background: 'linear-gradient(135deg, #78350f, #92400e)', border: '1px solid #b45309' }}>
+          <span className="text-2xl">🔥</span>
           <div>
-            {!checkedIn ? (
-              <button onClick={handleCheckIn} disabled={attLoading}
-                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60"
-                style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
-                {attLoading ? 'Processing...' : <><svg className="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> Clock In</>}
-              </button>
-            ) : !checkedOut ? (
-              <button onClick={handleCheckOut} disabled={attLoading}
-                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60"
-                style={{ background: 'linear-gradient(135deg, #ea580c, #c2410c)' }}>
-                {attLoading ? 'Processing...' : <><svg className="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> Clock Out</>}
-              </button>
-            ) : (
-              <span className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-500/20 text-green-300 text-sm font-semibold">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/></svg>
-                Day Complete
-              </span>
-            )}
+            <p className="text-white font-black text-sm">{streak} Day Streak! Keep it up!</p>
+            <p className="text-amber-300/70 text-xs">You've hit your target {streak} days in a row. Amazing consistency!</p>
+          </div>
+        </div>
+      )}
+
+      {/* Today Command Center */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className={`${cardCls} xl:col-span-1`} style={cardStyle}>
+          <div className="flex items-start justify-between gap-3 mb-5">
+            <div>
+              <h3 className="text-sm font-bold text-gray-800">Today Progress</h3>
+              <p className="text-xs text-gray-400 mt-0.5">{target > 0 ? `${remaining} remaining from ${target}` : 'Set target to start tracking'}</p>
+            </div>
+            <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase ${
+              achieved ? 'bg-emerald-50 text-emerald-600' : target > 0 ? 'bg-amber-50 text-amber-600' : 'bg-gray-50 text-gray-500'
+            }`}>
+              {achieved ? 'Achieved' : target > 0 ? 'In Progress' : 'No Target'}
+            </span>
+          </div>
+          <div className="flex items-end justify-between gap-4 mb-3">
+            <div>
+              <p className="text-4xl font-black text-gray-900 leading-none">{done}<span className="text-xl text-gray-300">/{target || '-'}</span></p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mt-2">Verifications</p>
+            </div>
+            <div className={`text-3xl font-black ${
+              progressTone === 'emerald' ? 'text-emerald-600' : progressTone === 'amber' ? 'text-amber-500' : 'text-rose-500'
+            }`}>
+              {progressPct}%
+            </div>
+          </div>
+          <div className="h-3 rounded-full bg-gray-100 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${
+                progressTone === 'emerald' ? 'bg-emerald-500' : progressTone === 'amber' ? 'bg-amber-500' : 'bg-rose-500'
+              }`}
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-2 mt-5">
+            <div className="rounded-xl bg-blue-50 text-blue-700 px-3 py-3">
+              <p className="text-lg font-black">{stats?.activity?.monthVerifications ?? stats?.monthVerifications ?? 0}</p>
+              <p className="text-[9px] font-bold uppercase tracking-wider">Month</p>
+            </div>
+            <div className="rounded-xl bg-purple-50 text-purple-700 px-3 py-3">
+              <p className="text-lg font-black">{stats?.tasks?.pending ?? 0}</p>
+              <p className="text-[9px] font-bold uppercase tracking-wider">Tasks</p>
+            </div>
+            <div className="rounded-xl bg-amber-50 text-amber-700 px-3 py-3">
+              <p className="text-lg font-black">{stats?.totalLeads ?? 0}</p>
+              <p className="text-[9px] font-bold uppercase tracking-wider">Leads</p>
+            </div>
+          </div>
+        </div>
+
+        <div className={`${cardCls} xl:col-span-2`} style={cardStyle}>
+          <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+            <div>
+              <h3 className="text-sm font-bold text-gray-800">Today's Work</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Open the queue and continue from the exact customer.</p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center bg-gray-100 rounded-xl p-0.5">
+                {[{id:'today',label:'Today'},{id:'yesterday',label:'Yesterday'},{id:'7d',label:'7 Days'}].map(f => (
+                  <button key={f.id} onClick={() => setWorkFilter(f.id)}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${
+                      workFilter === f.id ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    }`}>{f.label}</button>
+                ))}
+                <button onClick={() => setWorkFilter('custom')}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${
+                    workFilter === 'custom' ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}>Date</button>
+              </div>
+              {workFilter === 'custom' && (
+                <input type="date" value={workCustomDate} onChange={e => setWorkCustomDate(e.target.value)}
+                  className="border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-green-400 bg-gray-50" />
+              )}
+              {workLoading
+                ? <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+                : <button onClick={() => setWorkFilter(prev => prev)} className="text-xs font-bold text-green-600 bg-green-50 hover:bg-green-100 px-3 py-2 rounded-xl transition">Refresh</button>
+              }
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {workQueues.map(queue => (
+              <div key={queue.key} className="rounded-2xl border border-gray-100 bg-gray-50/40 overflow-hidden">
+                <button className="w-full flex items-center justify-between gap-3 p-3"
+                  onClick={() => setOpenSection(openSection === queue.key ? null : queue.key)}>
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className={`w-8 h-8 rounded-xl ${queue.bg} ${queue.color} flex items-center justify-center shrink-0`}>{queue.icon}</span>
+                    <span className="text-sm font-bold text-gray-700 truncate">{queue.label}</span>
+                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className={`text-[10px] font-black px-2 py-1 rounded-full ${queue.bg} ${queue.color}`}>{queue.list.length}</span>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-lg ${
+                      workFilter === 'today' ? 'bg-green-50 text-green-600' :
+                      workFilter === 'yesterday' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'
+                    }`}>
+                      {workFilter === 'today' ? 'Today' : workFilter === 'yesterday' ? 'Yest.' : '7D'}
+                    </span>
+                  </div>
+                </button>
+                {(openSection === queue.key) && (
+                  <div className="px-3 pb-3 max-h-56 overflow-y-auto custom-scrollbar">
+                    {queue.list.length === 0 ? (
+                      <div className="rounded-xl bg-white border border-dashed border-gray-200 py-5 text-center">
+                        <p className="text-xs font-medium text-gray-400">No records right now</p>
+                      </div>
+                    ) : queue.list.slice(0, 50).map((item, i) => {
+                      const phone = item.lead?.phone || item.phone;
+                      return (
+                        <div key={item._id || i} className="rounded-xl bg-white border border-gray-100 p-3 mb-2 last:mb-0">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-gray-800 truncate">{item.title || item.lead?.name || 'Customer'}</p>
+                              <div className="flex items-center gap-2 flex-wrap mt-1">
+                                {item.lead?.name && <span className="text-[10px] text-gray-500">{item.lead.name}</span>}
+                                {phone && <span className="text-[10px] text-gray-400">{phone}</span>}
+                                {item.department && <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 uppercase">{item.department}</span>}
+                              </div>
+                            </div>
+                            {item.status && (
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 uppercase shrink-0">
+                                {item.status.replace(/_/g, ' ')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-3">
+                            <button onClick={() => openWorkItem(queue, item)} className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-[10px] font-bold hover:bg-gray-800 transition">
+                              Open
+                            </button>
+                            {phone && (
+                              <a href={`tel:${phone}`} className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 text-[10px] font-bold hover:bg-green-100 transition">
+                                Call
+                              </a>
+                            )}
+                            <button onClick={() => navigate('/verification')} className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-[10px] font-bold hover:bg-blue-100 transition">
+                              Verify
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
       {/* Target Setter */}
       <div className={cardCls} style={cardStyle}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-gray-700">Daily Target</h3>
-          {target > 0 && !editing && (
-            <button onClick={() => { setEditing(true); setTargetInput(String(target)); }}
-              className="text-xs text-green-600 font-semibold hover:underline">Change</button>
-          )}
-        </div>
-        {(!target || editing) ? (
-          <form onSubmit={handleSaveTarget} className="flex items-center gap-3">
-            <input type="number" min="1" max="500" value={targetInput}
-              onChange={e => setTargetInput(e.target.value)}
-              placeholder="Set today's verification target"
-              className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-green-500 bg-gray-50"
-              autoFocus />
-            <button type="submit" disabled={saving || !targetInput}
-              className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-60"
-              style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
-              {saving ? 'Saving...' : 'Set Target'}
-            </button>
-            {editing && target > 0 && (
-              <button type="button" onClick={() => setEditing(false)}
-                className="px-4 py-2.5 rounded-xl text-sm text-gray-500 border border-gray-200 hover:bg-gray-50">
-                Cancel
-              </button>
-            )}
-          </form>
-        ) : (
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-2xl p-4 text-center bg-green-50 border border-green-100">
-              <p className="text-2xl font-bold text-green-600">{done}</p>
-              <p className="text-[10px] text-green-700 font-semibold uppercase mt-1">Done</p>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center">
+              <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             </div>
-            <div className={`rounded-2xl p-4 text-center border ${achieved ? 'bg-green-50 border-green-100' : 'bg-orange-50 border-orange-100'}`}>
-              <p className={`text-2xl font-bold ${achieved ? 'text-green-600' : 'text-orange-500'}`}>
-                {achieved ? 'Done!' : remaining}
-              </p>
-              <p className={`text-[10px] font-semibold uppercase mt-1 ${achieved ? 'text-green-700' : 'text-orange-600'}`}>
-                {achieved ? 'Achieved' : 'Remaining'}
-              </p>
-            </div>
-            <div className="rounded-2xl p-4 text-center bg-blue-50 border border-blue-100">
-              <p className="text-2xl font-bold text-blue-600">{target}</p>
-              <p className="text-[10px] text-blue-700 font-semibold uppercase mt-1">Target</p>
+            <div>
+              <h3 className="text-sm font-black text-gray-800 tracking-tight">Daily Target</h3>
+              <p className="text-[10px] text-gray-400">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}</p>
             </div>
           </div>
+          {target > 0 && !editing && (
+            <button onClick={() => { setEditing(true); setTargetInput(String(target)); }}
+              className="text-[11px] font-black text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-xl transition-all border border-emerald-100">
+              ✏ Change
+            </button>
+          )}
+        </div>
+
+        {(!target || editing) ? (
+          <form onSubmit={handleSaveTarget} className="space-y-4">
+            <div>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Quick Select</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                {[5, 10, 15, 20, 25].map(q => (
+                  <button key={q} type="button"
+                    onClick={() => setTargetInput(String(q))}
+                    className={`w-12 h-12 rounded-2xl text-sm font-black border-2 transition-all ${
+                      targetInput === String(q)
+                        ? 'bg-emerald-600 text-white border-emerald-600 scale-105 shadow-lg shadow-emerald-100'
+                        : 'bg-gray-50 text-gray-600 border-gray-100 hover:border-emerald-300 hover:text-emerald-600'
+                    }`}>
+                    {q}
+                  </button>
+                ))}
+                <span className="text-gray-300 font-bold">|</span>
+                <input type="number" min="1" max="500" value={targetInput}
+                  onChange={e => setTargetInput(e.target.value)}
+                  placeholder="Custom"
+                  className="w-20 h-12 border-2 border-gray-100 rounded-2xl px-3 text-sm font-black text-center focus:outline-none focus:border-emerald-400 bg-gray-50" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="submit" disabled={saving || !targetInput}
+                className="flex-1 py-3 rounded-2xl text-sm font-black text-white disabled:opacity-50 transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
+                {saving ? 'Saving...' : '🎯 Set Target'}
+              </button>
+              {editing && target > 0 && (
+                <button type="button" onClick={() => setEditing(false)}
+                  className="px-5 py-3 rounded-2xl text-sm font-bold text-gray-500 border-2 border-gray-100 hover:bg-gray-50">
+                  Cancel
+                </button>
+              )}
+            </div>
+          </form>
+        ) : (
+          <>
+            {/* Progress ring + stats */}
+            <div className="flex items-center gap-5 mb-5">
+              {/* Circular progress */}
+              <div className="relative shrink-0" style={{ width: 80, height: 80 }}>
+                <svg width="80" height="80" viewBox="0 0 80 80">
+                  <circle cx="40" cy="40" r="32" fill="none" stroke="#f3f4f6" strokeWidth="8"/>
+                  <circle cx="40" cy="40" r="32" fill="none"
+                    stroke={achieved ? '#10b981' : progressPct >= 60 ? '#f59e0b' : '#f43f5e'}
+                    strokeWidth="8" strokeLinecap="round"
+                    strokeDasharray={`${2 * Math.PI * 32}`}
+                    strokeDashoffset={`${2 * Math.PI * 32 * (1 - progressPct / 100)}`}
+                    transform="rotate(-90 40 40)"
+                    style={{ transition: 'stroke-dashoffset 0.7s ease' }}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className={`text-lg font-black leading-none ${
+                    achieved ? 'text-emerald-600' : progressPct >= 60 ? 'text-amber-500' : 'text-rose-500'
+                  }`}>{progressPct}%</span>
+                </div>
+              </div>
+              {/* Stats */}
+              <div className="flex-1 grid grid-cols-3 gap-3">
+                <div className="rounded-2xl p-3 text-center" style={{ background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', border: '1.5px solid #bbf7d0' }}>
+                  <p className="text-2xl font-black text-emerald-600 leading-none">{done}</p>
+                  <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mt-1">Done</p>
+                </div>
+                <div className="rounded-2xl p-3 text-center" style={{
+                  background: achieved ? 'linear-gradient(135deg, #f0fdf4, #dcfce7)' : 'linear-gradient(135deg, #fff7ed, #ffedd5)',
+                  border: `1.5px solid ${achieved ? '#bbf7d0' : '#fed7aa'}`
+                }}>
+                  <p className={`text-2xl font-black leading-none ${achieved ? 'text-emerald-600' : 'text-orange-500'}`}>
+                    {achieved ? '✓' : remaining}
+                  </p>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${achieved ? 'text-emerald-500' : 'text-orange-400'}`}>
+                    {achieved ? 'Done!' : 'Left'}
+                  </p>
+                </div>
+                <div className="rounded-2xl p-3 text-center" style={{ background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', border: '1.5px solid #bfdbfe' }}>
+                  <p className="text-2xl font-black text-blue-600 leading-none">{target}</p>
+                  <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-1">Target</p>
+                </div>
+              </div>
+            </div>
+            {/* Progress bar */}
+            <div>
+              <div className="flex justify-between text-[10px] font-black uppercase tracking-widest mb-1.5">
+                <span className="text-gray-400">Progress</span>
+                <span className={achieved ? 'text-emerald-600' : progressPct >= 60 ? 'text-amber-500' : 'text-rose-500'}>
+                  {achieved ? '🎉 Target Achieved!' : `${done} of ${target} done`}
+                </span>
+              </div>
+              <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${
+                    achieved ? 'bg-emerald-500' : progressPct >= 60 ? 'bg-amber-500' : 'bg-rose-500'
+                  }`}
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+            </div>
+          </>
         )}
       </div>
 
       {/* Target History */}
-      <div className={cardCls} style={cardStyle}>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center">
-              <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      <div className="bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.05)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+        {/* Header */}
+        <div className="px-5 pt-5 pb-4 flex items-center justify-between" style={{ borderBottom: '1px solid #f3f4f6' }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-violet-50 flex items-center justify-center">
+              <svg className="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
             </div>
-            <h3 className="text-sm font-semibold text-gray-700">Target History</h3>
+            <h3 className="text-sm font-black text-gray-800">Target History</h3>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
+            {/* Days filter */}
+            <div className="flex items-center bg-gray-100 rounded-xl p-0.5">
               {[7, 15].map(d => (
                 <button key={d} onClick={() => { setHistoryMode('days'); setHistoryDays(d); }}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
-                    historyMode === 'days' && historyDays === d ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                    historyMode === 'days' && historyDays === d
+                      ? 'bg-violet-600 text-white shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
                   }`}>{d}D</button>
               ))}
             </div>
-            <div className="w-px h-6 bg-gray-200" />
-            <div className="flex items-center gap-1.5">
-              <button onClick={() => {
-                setHistoryMode('month');
-                setHistoryMonth(p => {
-                  const m = p.month - 1;
-                  return m < 0 ? { month: 11, year: p.year - 1 } : { month: m, year: p.year };
-                });
-              }} className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${historyMode === 'month' ? 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}><svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
-              <span className={`text-[10px] font-bold min-w-[70px] text-center uppercase tracking-tight ${historyMode === 'month' ? 'text-indigo-600' : 'text-gray-600'}`}>
+            {/* Month nav */}
+            <div className="flex items-center gap-1">
+              <button onClick={() => { setHistoryMode('month'); setHistoryMonth(p => { const m = p.month-1; return m<0?{month:11,year:p.year-1}:{month:m,year:p.year}; }); }}
+                className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <span className={`text-[11px] font-black min-w-[72px] text-center uppercase tracking-tight ${ historyMode === 'month' ? 'text-violet-600' : 'text-gray-500'}`}>
                 {new Date(historyMonth.year, historyMonth.month).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
               </span>
-              <button onClick={() => {
-                setHistoryMode('month');
-                setHistoryMonth(p => {
-                  const m = p.month + 1;
-                  return m > 11 ? { month: 0, year: p.year + 1 } : { month: m, year: p.year };
-                });
-              }} className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${historyMode === 'month' ? 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}><svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
+              <button onClick={() => { setHistoryMode('month'); setHistoryMonth(p => { const m = p.month+1; return m>11?{month:0,year:p.year+1}:{month:m,year:p.year}; }); }}
+                className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
             </div>
           </div>
         </div>
+
         {historyLoading ? (
-          <div className="flex items-center justify-center py-10">
-            <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <div className="flex items-center justify-center py-12">
+            <div className="w-5 h-5 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : targetHistory.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-8">No target history found</p>
+          <div className="flex flex-col items-center justify-center py-12 gap-2">
+            <div className="w-10 h-10 rounded-2xl bg-gray-50 flex items-center justify-center">
+              <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            </div>
+            <p className="text-xs font-bold text-gray-400">No target history found</p>
+          </div>
         ) : (
-          <div className="overflow-x-auto -mx-2 px-2">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="py-3 px-3 text-left text-[10px] font-black uppercase tracking-widest text-gray-400">Date</th>
-                  <th className="py-3 px-3 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">Target</th>
-                  <th className="py-3 px-3 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">Done</th>
-                  <th className="py-3 px-3 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">Remaining</th>
-                  <th className="py-3 px-3 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {targetHistory.map((row, i) => {
-                  const rem = row.target > 0 ? Math.max(row.target - row.completed, 0) : 0;
-                  const pct = row.target > 0 ? Math.min(Math.round((row.completed / row.target) * 100), 100) : 0;
-                  const isToday = row.date === new Date().toISOString().slice(0, 10);
-                  return (
-                    <tr key={row.date} className={`transition-colors ${isToday ? 'bg-indigo-50/40' : 'hover:bg-gray-50/50'}`}>
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-2">
-                          {isToday && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />}
-                          <div>
-                            <span className={`text-xs font-bold ${isToday ? 'text-indigo-700' : 'text-gray-700'}`}>
-                              {new Date(row.date + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            </span>
-                            <span className="text-[9px] text-gray-400 ml-1.5">
-                              {new Date(row.date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short' })}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        <span className={`text-sm font-black ${row.target > 0 ? 'text-blue-600' : 'text-gray-300'}`}>{row.target || '—'}</span>
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        <span className={`text-sm font-black ${row.completed > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>{row.completed}</span>
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        {row.target > 0 ? (
-                          <span className={`text-sm font-black ${rem === 0 ? 'text-emerald-500' : 'text-orange-500'}`}>{rem === 0 ? '✓' : rem}</span>
-                        ) : <span className="text-gray-300">—</span>}
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        {row.target > 0 ? (
-                          <div className="flex flex-col items-center gap-1">
-                            <div className="w-full max-w-[80px] h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                              <div className={`h-full rounded-full transition-all duration-500 ${row.achieved ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-400'}`}
-                                style={{ width: `${pct}%` }} />
-                            </div>
-                            <span className={`text-[9px] font-black uppercase tracking-widest ${
-                              row.achieved ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-red-500'
-                            }`}>
-                              {row.achieved ? '✓ Done' : `${pct}%`}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-[9px] font-bold text-gray-300 uppercase">No Target</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {/* Summary row */}
+          <>
+            {/* Summary strip */}
             {(() => {
               const withTarget = targetHistory.filter(r => r.target > 0);
               const totalTarget = withTarget.reduce((s, r) => s + r.target, 0);
               const totalDone = withTarget.reduce((s, r) => s + r.completed, 0);
               const achievedDays = withTarget.filter(r => r.achieved).length;
+              const overallPct = totalTarget > 0 ? Math.round((totalDone / totalTarget) * 100) : 0;
               return withTarget.length > 0 ? (
-                <div className="flex items-center justify-between mt-4 px-3 py-3 bg-gray-50 rounded-xl border border-gray-100">
-                  <div className="flex items-center gap-4">
-                    <div className="text-center">
-                      <p className="text-lg font-black text-gray-800">{totalDone}<span className="text-gray-400 font-bold">/{totalTarget}</span></p>
-                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Total Done</p>
+                <div className="grid grid-cols-3 divide-x divide-gray-100" style={{ background: '#fafafa', borderBottom: '1px solid #f3f4f6' }}>
+                  {[
+                    { label: 'Total Done', value: `${totalDone}`, sub: `of ${totalTarget}`, color: 'text-gray-800' },
+                    { label: 'Days Achieved', value: `${achievedDays}`, sub: `of ${withTarget.length}`, color: 'text-emerald-600' },
+                    { label: 'Overall', value: `${overallPct}%`, sub: overallPct >= 80 ? '🎉 Great!' : overallPct >= 50 ? '📈 Keep going' : '💪 Push more', color: overallPct >= 80 ? 'text-emerald-600' : overallPct >= 50 ? 'text-amber-500' : 'text-rose-500' },
+                  ].map((s, i) => (
+                    <div key={i} className="px-5 py-3 text-center">
+                      <p className={`text-xl font-black ${s.color}`}>{s.value} <span className="text-xs font-bold text-gray-400">{s.sub}</span></p>
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-0.5">{s.label}</p>
                     </div>
-                    <div className="w-px h-8 bg-gray-200" />
-                    <div className="text-center">
-                      <p className="text-lg font-black text-emerald-600">{achievedDays}<span className="text-gray-400 font-bold">/{withTarget.length}</span></p>
-                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Days Achieved</p>
-                    </div>
-                    <div className="w-px h-8 bg-gray-200" />
-                    <div className="text-center">
-                      <p className={`text-lg font-black ${totalTarget > 0 && Math.round((totalDone / totalTarget) * 100) >= 80 ? 'text-emerald-600' : 'text-orange-500'}`}>{totalTarget > 0 ? Math.round((totalDone / totalTarget) * 100) : 0}%</p>
-                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Overall</p>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               ) : null;
             })()}
-          </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr style={{ background: '#fafafa', borderBottom: '1px solid #f3f4f6' }}>
+                    {['Date', 'Target', 'Done', 'Remaining', 'Status'].map(h => (
+                      <th key={h} className={`py-3 px-5 text-[10px] font-black uppercase tracking-widest text-gray-400 ${h === 'Date' ? 'text-left' : 'text-center'}`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {targetHistory.map((row) => {
+                    const rem = row.target > 0 ? Math.max(row.target - row.completed, 0) : 0;
+                    const pct = row.target > 0 ? Math.min(Math.round((row.completed / row.target) * 100), 100) : 0;
+                    const isToday = row.date === new Date().toISOString().slice(0, 10);
+                    const barColor = row.achieved ? '#10b981' : pct >= 50 ? '#f59e0b' : '#f43f5e';
+                    return (
+                      <tr key={row.date}
+                        className="transition-colors hover:bg-violet-50/30"
+                        style={{ borderBottom: '1px solid #f9fafb', background: isToday ? 'rgba(124,58,237,0.03)' : undefined }}>
+                        {/* Date */}
+                        <td className="py-3.5 px-5">
+                          <div className="flex items-center gap-2">
+                            {isToday && <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse shrink-0" />}
+                            <div>
+                              <span className={`text-xs font-black ${isToday ? 'text-violet-700' : 'text-gray-700'}`}>
+                                {new Date(row.date + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </span>
+                              <span className="text-[10px] text-gray-400 font-bold ml-1.5">
+                                {new Date(row.date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short' })}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        {/* Target */}
+                        <td className="py-3.5 px-5 text-center">
+                          {row.target > 0
+                            ? <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-blue-50 text-blue-600 text-xs font-black">{row.target}</span>
+                            : <span className="text-gray-300 font-bold">—</span>}
+                        </td>
+                        {/* Done */}
+                        <td className="py-3.5 px-5 text-center">
+                          <span className={`inline-flex items-center justify-center w-8 h-8 rounded-xl text-xs font-black ${
+                            row.completed > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-50 text-gray-300'
+                          }`}>{row.completed}</span>
+                        </td>
+                        {/* Remaining */}
+                        <td className="py-3.5 px-5 text-center">
+                          {row.target > 0
+                            ? <span className={`inline-flex items-center justify-center w-8 h-8 rounded-xl text-xs font-black ${
+                                rem === 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-500'
+                              }`}>{rem === 0 ? '✓' : rem}</span>
+                            : <span className="text-gray-300 font-bold">—</span>}
+                        </td>
+                        {/* Status */}
+                        <td className="py-3.5 px-5">
+                          {row.target > 0 ? (
+                            <div className="flex flex-col items-center gap-1 min-w-[80px]">
+                              <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full transition-all duration-700"
+                                  style={{ width: `${pct}%`, background: barColor }} />
+                              </div>
+                              <span className="text-[10px] font-black" style={{ color: barColor }}>
+                                {row.achieved ? '✓ Done' : `${pct}%`}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-[9px] font-black text-gray-300 uppercase tracking-wide">No Target</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
@@ -553,167 +978,93 @@ export default function StaffDashboard() {
         </div>
 
         <div className={`lg:col-span-2 ${cardCls}`} style={cardStyle}>
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-sm font-semibold text-gray-700">Activity Chart</h3>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Monthly Trend</span>
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-gray-800">Activity Chart</h3>
+              <p className="text-[10px] text-gray-400 mt-0.5">Verifications done vs target</p>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {/* Filter pills */}
+              <div className="flex items-center bg-gray-100 rounded-xl p-0.5">
+                {[{id:'today',label:'Today'},{id:'yesterday',label:'Yest.'},{id:'7d',label:'7D'},{id:'month',label:'Month'}].map(f => (
+                  <button key={f.id} onClick={() => setChartFilter(f.id)}
+                    className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${
+                      chartFilter === f.id ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    }`}>{f.label}</button>
+                ))}
+                <button onClick={() => setChartFilter('custom')}
+                  className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${
+                    chartFilter === 'custom' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}>Custom</button>
+              </div>
+              {/* Legend */}
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"/><span className="text-[9px] font-bold text-gray-400">Done</span></span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-200"/><span className="text-[9px] font-bold text-gray-400">Target</span></span>
+              </div>
+            </div>
           </div>
-          {monthlyChart.length > 0 && (
-            <div className="h-48 relative group px-2">
-              {(() => {
-                const max = Math.max(...monthlyChart.map(d => d.count), 5);
-                const points = monthlyChart.map((d, i) => {
-                  const x = (i / (monthlyChart.length - 1)) * 100;
-                  const y = 92 - (d.count / max) * 84;
-                  return `${x},${y}`;
-                }).join(' L ');
-                
-                return (
-                  <>
-                    <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-                      <defs>
-                        <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#22c55e" stopOpacity="0.2" />
-                          <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
-                        </linearGradient>
-                      </defs>
-                      {[0, 25, 50, 75, 100].map(v => (
-                        <line key={v} x1="0" y1={v} x2="100" y2={v} stroke="#f3f4f6" strokeWidth="0.5" />
-                      ))}
-                      <path d={`M 0 100 L ${points} L 100 100 Z`} fill="url(#chartGrad)" />
-                      <path d={`M ${points}`} fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    <div className="absolute inset-0 flex">
-                      {monthlyChart.map((d, i) => (
-                        <div key={i} className="flex-1 group/dot relative h-full">
-                          <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[9px] px-2 py-1.5 rounded opacity-0 group-hover/dot:opacity-100 transition-opacity z-20 whitespace-nowrap pointer-events-none shadow-xl">
-                            {new Date().toLocaleString('default', { month: 'short' })} {d.day}: <span className="font-bold">{d.count}</span>
-                          </div>
-                          <div 
-                            className="absolute w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white shadow-sm opacity-0 group-hover/dot:opacity-100 transition-all scale-0 group-hover/dot:scale-110"
-                            style={{ 
-                              left: '50%', 
-                              bottom: `${8 + (d.count / max) * 84}%`,
-                              transform: 'translate(-50%, 50%)'
-                            }}
-                          />
-                          <div className="absolute inset-y-0 left-0 w-full cursor-crosshair" />
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                );
-              })()}
+          {/* Custom date inputs */}
+          {chartFilter === 'custom' && (
+            <div className="flex items-center gap-2 mb-3">
+              <input type="date" value={chartCustomFrom} onChange={e => setChartCustomFrom(e.target.value)}
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-emerald-400 bg-gray-50" />
+              <span className="text-gray-300 font-bold">—</span>
+              <input type="date" value={chartCustomTo} onChange={e => setChartCustomTo(e.target.value)}
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-emerald-400 bg-gray-50" />
             </div>
           )}
-          <div className="mt-4 flex items-center justify-between px-1">
-            <span className="text-[9px] font-bold text-gray-400">01 {new Date().toLocaleString('default', { month: 'short' })}</span>
-            <span className="text-[9px] font-bold text-gray-400">{monthlyChart.length} {new Date().toLocaleString('default', { month: 'short' })}</span>
-          </div>
+          {filteredChartData.length > 0 ? (
+            <>
+              <div className="flex items-end gap-0.5 px-1" style={{ height: 140 }}>
+                {filteredChartData.map((d, i) => {
+                  const maxVal = Math.max(...filteredChartData.map(x => Math.max(x.count, x.target || 0)), 1);
+                  const doneH = Math.max((d.count / maxVal) * 100, d.count > 0 ? 4 : 0);
+                  const targetH = Math.max(((d.target || 0) / maxVal) * 100, (d.target || 0) > 0 ? 4 : 0);
+                  const isToday = d.day === new Date().getDate();
+                  const achieved = d.target > 0 && d.count >= d.target;
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center group relative" style={{ height: 140 }}>
+                      <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[9px] px-2 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 z-20 whitespace-nowrap pointer-events-none shadow-xl">
+                        <p className="font-bold">{new Date(new Date().getFullYear(), new Date().getMonth(), d.day).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
+                        <p className="text-emerald-300">Done: {d.count}</p>
+                        {d.target > 0 && <p className="text-blue-300">Target: {d.target}</p>}
+                      </div>
+                      <div className="w-full flex items-end gap-px" style={{ height: 140 }}>
+                        {d.target > 0 && (
+                          <div className="flex-1 rounded-t-sm transition-all duration-500"
+                            style={{ height: `${targetH}%`, background: isToday ? '#93c5fd' : '#dbeafe', minHeight: 2 }} />
+                        )}
+                        <div className="flex-1 rounded-t-sm transition-all duration-500"
+                          style={{
+                            height: `${doneH}%`,
+                            background: achieved ? '#10b981' : isToday ? '#34d399' : d.count > 0 ? '#6ee7b7' : '#f3f4f6',
+                            minHeight: d.count > 0 ? 2 : 0,
+                            boxShadow: isToday && d.count > 0 ? '0 0 6px #10b981' : 'none'
+                          }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-between mt-2 px-1">
+                <span className="text-[9px] font-bold text-gray-400">
+                  {filteredChartData[0] ? `${filteredChartData[0].day} ${new Date().toLocaleString('default',{month:'short'})}` : ''}
+                </span>
+                <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg">
+                  {filteredChartData.reduce((s,d) => s+d.count, 0)} done
+                </span>
+                <span className="text-[9px] font-bold text-gray-400">
+                  {filteredChartData.at(-1) ? `${filteredChartData.at(-1).day} ${new Date().toLocaleString('default',{month:'short'})}` : ''}
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-40 text-gray-300 text-xs font-bold">No data for selected range</div>
+          )}
         </div>
       </div>
 
-      {/* Staff Activity Counts */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "CNP", value: stats?.activity?.todayCnp ?? 0, icon: icons.cnp, bg: "bg-red-50", text: "text-red-500" },
-          { label: "Call Again", value: stats?.activity?.todayCallAgain ?? 0, icon: icons.callAgain, bg: "bg-yellow-50", text: "text-yellow-600" },
-          { label: "Interested", value: stats?.activity?.todayInterested ?? 0, icon: icons.interested, bg: "bg-green-50", text: "text-green-600" },
-          { label: "Not Interested", value: stats?.activity?.todayNotInterested ?? 0, icon: icons.notInterested, bg: "bg-gray-50", text: "text-gray-500" },
-        ].map(({ label, value, icon, bg, text }) => (
-          <div key={label} className={`${cardCls} flex flex-col items-center justify-center text-center gap-2 py-6`} style={cardStyle}>
-            <div className={`w-12 h-12 rounded-2xl ${bg} flex items-center justify-center shrink-0`}>
-              <span className={text}>{icon}</span>
-            </div>
-            <p className={`text-3xl font-bold ${text}`}>{value}</p>
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Today's {label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Activity Detail Lists */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {[
-          { key: 'cnp', label: 'CNP List', icon: icons.cnp, color: 'text-red-500', bg: 'bg-red-50', list: todayLists.cnpList },
-          { key: 'callAgain', label: 'Call Again List', icon: icons.callAgain, color: 'text-yellow-600', bg: 'bg-yellow-50', list: todayLists.callAgainList },
-          { key: 'interested', label: 'Interested List', icon: icons.interested, color: 'text-green-600', bg: 'bg-green-50', list: todayLists.interestedList },
-          { key: 'notInterested', label: 'Not Interested List', icon: icons.notInterested, color: 'text-gray-500', bg: 'bg-gray-50', list: todayLists.notInterestedList },
-        ].map(({ key, label, icon, color, bg, list }) => (
-          <div key={key} className={cardCls} style={cardStyle}>
-            <button className="w-full flex items-center justify-between"
-              onClick={() => setOpenSection(openSection === key ? null : key)}>
-              <div className="flex items-center gap-2">
-                <span className={`w-8 h-8 rounded-xl ${bg} ${color} flex items-center justify-center`}>{icon}</span>
-                <span className="text-sm font-semibold text-gray-700">{label}</span>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${bg} ${color}`}>{list.length}</span>
-              </div>
-              <span className="text-gray-400 text-sm">{openSection === key ? '▲' : '▼'}</span>
-            </button>
-            {openSection === key && (
-              <div className="mt-4 divide-y divide-gray-50 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
-                {list.length === 0 ? (
-                  <p className="text-xs text-gray-400 text-center py-6">No records for today</p>
-                ) : list.map((item, i) => (
-                  <div key={item._id} className="py-3 flex items-center gap-3">
-                    <div className={`w-7 h-7 rounded-lg ${bg} flex items-center justify-center text-[10px] font-bold ${color} shrink-0`}>{i + 1}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-gray-800 truncate">{item.title || item.lead?.name || '—'}</p>
-                      <div className="flex gap-3 mt-0.5 items-center">
-                        {item.lead?.phone && <span className="text-[10px] text-gray-400 flex items-center gap-1">{icons.phone}{item.lead.phone}</span>}
-                        {item.department && <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 uppercase">{item.department}</span>}
-                      </div>
-                    </div>
-                    <span className="text-[9px] text-gray-400 shrink-0">
-                      {new Date(item.createdAt || item.updatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Today's Verification Tasks List */}
-      <div className={cardCls} style={cardStyle}>
-        <button className="w-full flex items-center justify-between"
-          onClick={() => setOpenSection(openSection === 'verifications' ? null : 'verifications')}>
-          <div className="flex items-center gap-2">
-            <span className={`w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center`}>{icons.verification}</span>
-            <span className="text-sm font-semibold text-gray-700">Verification Tasks</span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">{verifications.length}</span>
-          </div>
-          <span className="text-gray-400 text-sm">{openSection === 'verifications' ? '▲' : '▼'}</span>
-        </button>
-        {openSection === 'verifications' && (
-          <div className="mt-4 divide-y divide-gray-50">
-            {verifications.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-8">No tasks for today</p>
-            ) : verifications.map((v, i) => (
-              <div key={v._id} className="py-3 flex items-start gap-3">
-                <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 font-bold text-[10px] shrink-0">{i + 1}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-gray-800 text-xs">{v.title}</p>
-                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${
-                      v.status === 'verified' ? 'bg-green-100 text-green-700' :
-                      v.status === 'on_hold' ? 'bg-gray-100 text-gray-600' :
-                      v.status === 'rejected' ? 'bg-red-100 text-red-600' :
-                      'bg-amber-100 text-amber-700'
-                    }`}>{v.status?.replace(/_/g, ' ')}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
-                    {v.lead?.name && <p className="text-[10px] text-gray-600 flex items-center gap-1">{icons.user}{v.lead.name}</p>}
-                    {v.lead?.phone && <p className="text-[10px] text-gray-500 flex items-center gap-1">{icons.phone}{v.lead.phone}</p>}
-                    {v.cityVillage && <p className="text-[10px] text-gray-400 flex items-center gap-1">{icons.location}{v.cityVillage}</p>}
-                    {v.price && <p className="text-[10px] text-green-600 font-bold">₹{v.price}</p>}
-                    {v.department && <p className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 uppercase">{v.department}</p>}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
