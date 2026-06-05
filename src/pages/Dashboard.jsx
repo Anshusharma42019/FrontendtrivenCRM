@@ -1,13 +1,13 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import StatCard from '../components/ui/StatCard';
-import { 
-  fetchStats, 
-  fetchStaffTodayLists, 
-  fetchAllStaffStats, 
-  fetchStaffStats, 
-  fetchStaffMonthlyChart, 
+import {
+  fetchStats,
+  fetchStaffTodayLists,
+  fetchAllStaffStats,
+  fetchStaffStats,
+  fetchStaffMonthlyChart,
   fetchStaffCommission,
-  fetchAllStaffCommissions 
+  fetchAllStaffCommissions
 } from '../services/dashboard.service';
 import * as attendanceSvc from '../services/attendance.service';
 import { useAuth } from '../context/AuthContext';
@@ -67,14 +67,14 @@ const getDateParams = (preset, customFrom, customTo) => {
 };
 
 const icons = {
-  cnp: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M16.5 1.5a4.5 4.5 0 0 1 4.5 4.5v12a4.5 4.5 0 0 1-4.5 4.5h-9A4.5 4.5 0 0 1 3 18V6a4.5 4.5 0 0 1 4.5-4.5h9z"/><line x1="4" y1="4" x2="20" y2="20"/></svg>,
-  callAgain: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 11.61 19a19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 3.09 4.18 2 2 0 0 1 5.07 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L9.91 9.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>,
-  interested: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>,
-  notInterested: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>,
-  user: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
-  phone: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 11.61 19a19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 3.09 4.18 2 2 0 0 1 5.07 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L9.91 9.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>,
-  leadAdd: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>,
-  verify: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
+  cnp: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M16.5 1.5a4.5 4.5 0 0 1 4.5 4.5v12a4.5 4.5 0 0 1-4.5 4.5h-9A4.5 4.5 0 0 1 3 18V6a4.5 4.5 0 0 1 4.5-4.5h9z" /><line x1="4" y1="4" x2="20" y2="20" /></svg>,
+  callAgain: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 11.61 19a19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 3.09 4.18 2 2 0 0 1 5.07 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L9.91 9.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" /></svg>,
+  interested: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>,
+  notInterested: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>,
+  user: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>,
+  phone: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 11.61 19a19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 3.09 4.18 2 2 0 0 1 5.07 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L9.91 9.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" /></svg>,
+  leadAdd: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>,
+  verify: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
 };
 
 export default function Dashboard() {
@@ -97,7 +97,7 @@ export default function Dashboard() {
   const [openSection, setOpenSection] = useState(null);
   const [allStaffStats, setAllStaffStats] = useState([]);
   const [teamOverviewPeriod, setTeamOverviewPeriod] = useState('today');
-  
+
   const [datePreset, setDatePreset] = useState('today');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
@@ -135,12 +135,12 @@ export default function Dashboard() {
   useEffect(() => {
     let cancelled = false;
     setCommLoading(true);
-    
+
     const isPrivileged = user?.role === 'admin' || user?.role === 'manager';
     const fetchFunc = isPrivileged ? fetchAllStaffCommissions : fetchStaffCommission;
 
     fetchFunc(commMonth.month, commMonth.year)
-      .then(d => { 
+      .then(d => {
         if (!cancelled) {
           if (isPrivileged) {
             setCommission({
@@ -152,9 +152,9 @@ export default function Dashboard() {
           } else {
             setCommission(d);
           }
-        } 
+        }
       })
-      .catch(e => { if(!cancelled) console.error(e); })
+      .catch(e => { if (!cancelled) console.error(e); })
       .finally(() => { if (!cancelled) setCommLoading(false); });
     return () => { cancelled = true; };
   }, [commMonth, user?.role]);
@@ -182,7 +182,7 @@ export default function Dashboard() {
         from = today.toISOString().split('T')[0];
         to = from;
       }
-      
+
       fetchAllStaffStats(null, from, to).then(data => {
         if (!cancelled) setAllStaffStats(data || []);
       }).catch(e => console.error(e));
@@ -239,9 +239,9 @@ export default function Dashboard() {
 
   const handleCheckIn = async () => {
     setAttLoading(true);
-    try { 
-      const res = await attendanceSvc.checkIn(); 
-      setAttStatus(res); 
+    try {
+      const res = await attendanceSvc.checkIn();
+      setAttStatus(res);
       success('Good morning! You have checked in successfully.', 'Clock In');
     }
     catch (e) { error(e.response?.data?.message || 'Check-in failed'); }
@@ -249,9 +249,9 @@ export default function Dashboard() {
   };
   const handleCheckOut = async () => {
     setAttLoading(true);
-    try { 
-      const res = await attendanceSvc.checkOut(); 
-      setAttStatus(res); 
+    try {
+      const res = await attendanceSvc.checkOut();
+      setAttStatus(res);
       info('Work day finished. Take care!', 'Clock Out');
     }
     catch (e) { error(e.response?.data?.message || 'Check-out failed'); }
@@ -287,42 +287,45 @@ export default function Dashboard() {
     if (datePreset === 'all') return t('All Time');
     return `${filterFrom} to ${filterTo}`;
   };
-  const departmentLeadTotal = stats?.departmentLeads?.total || 0;
   const migraineLeadCount = stats?.departmentLeads?.migraine || 0;
   const pilesLeadCount = stats?.departmentLeads?.piles || 0;
-  const rawMigrainePercent = departmentLeadTotal ? Math.round((migraineLeadCount / departmentLeadTotal) * 100) : 0;
-  const rawPilesPercent = departmentLeadTotal ? Math.round((pilesLeadCount / departmentLeadTotal) * 100) : 0;
-  // Ensure non-zero counts never show 0% and don't misleadingly show 100%
-  const migraineLeadPercent = rawMigrainePercent === 100 && pilesLeadCount > 0 ? 99 : rawMigrainePercent;
-  const pilesLeadPercent = rawPilesPercent === 0 && pilesLeadCount > 0 ? 1 : rawPilesPercent;
+  const newLeadsTotal = stats?.newLeadsToday || 0;
+  // % of new leads in period that belong to each department (vs total new leads)
+  const migraineLeadPercent = newLeadsTotal > 0 ? Math.round((migraineLeadCount / newLeadsTotal) * 100) : 0;
+  const pilesLeadPercent = newLeadsTotal > 0 ? Math.round((pilesLeadCount / newLeadsTotal) * 100) : 0;
+  // Conversion rates from backend (closed_won / dept leads in period)
+  const overallConversionRate = stats?.conversionRate || 0;
+  const migraineConversionRate = stats?.migraineConversionRate || 0;
+  const pilesConversionRate = stats?.pilesConversionRate || 0;
+  const migraineConverted = stats?.migraineConverted || 0;
+  const pilesConverted = stats?.pilesConverted || 0;
 
   return (
     <div className="space-y-6">
       {/* Date Filter Bar */}
       <div className={`flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 p-4 ${cardCls}`} style={cardStyle}>
         <div className="flex items-center gap-2">
-           <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
-             <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-           </div>
-           <div>
-             <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wider">{t('Dashboard Overview')}</h2>
-             <div className="flex items-center gap-2">
-               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{t('Filtering for')}: {getPeriodLabel().toUpperCase()}</p>
-               {lastUpdated && (
-                 <span className="text-[9px] text-gray-300 font-medium">· Updated {lastUpdated.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-               )}
-             </div>
-           </div>
+          <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+            <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wider">{t('Dashboard Overview')}</h2>
+            <div className="flex items-center gap-2">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{t('Filtering for')}: {getPeriodLabel().toUpperCase()}</p>
+              {lastUpdated && (
+                <span className="text-[9px] text-gray-300 font-medium">· Updated {lastUpdated.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+              )}
+            </div>
+          </div>
         </div>
-        
+
         <div className="w-full lg:w-auto flex flex-col sm:flex-row gap-3">
-            <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar shrink-0">
+          <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar shrink-0">
             <div className="inline-flex items-center gap-1 rounded-xl bg-gray-100 p-1">
               {DATE_FILTERS.map(filter => (
                 <button key={filter.id} onClick={() => selectDatePreset(filter.id)}
-                  className={`h-8 px-3 rounded-lg text-[10px] sm:text-[11px] font-black transition-all whitespace-nowrap ${
-                    datePreset === filter.id ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}>
+                  className={`h-8 px-3 rounded-lg text-[10px] sm:text-[11px] font-black transition-all whitespace-nowrap ${datePreset === filter.id ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    }`}>
                   {t(filter.label).toUpperCase()}
                 </button>
               ))}
@@ -347,7 +350,7 @@ export default function Dashboard() {
           )}
           <button onClick={() => downloadLeadsCSV(false)} disabled={!!csvLoading}
             className="flex items-center gap-1.5 h-9 px-4 rounded-xl text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition disabled:opacity-60 shrink-0">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
             {csvLoading === 'filtered' ? `${t('Downloading...')} ` : `${t('Leads CSV')}`}
           </button>
         </div>
@@ -358,7 +361,7 @@ export default function Dashboard() {
         <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
-              <svg className="w-5 h-5 text-emerald-200" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <svg className="w-5 h-5 text-emerald-200" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
             </div>
             <div>
               <h2 className="text-white font-bold text-base">{t('Today at a Glance')}</h2>
@@ -390,17 +393,17 @@ export default function Dashboard() {
       {canManage && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: t('Leads'), icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>, path: '/leads', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
-            { label: t('Verification'), icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>, path: '/verification', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
-            { label: t('Ready to Ship'), icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>, path: '/ready-to-shipment', color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100' },
-            { label: t('Notifications'), icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>, path: '/notifications', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
+            { label: t('Leads'), icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>, path: '/leads', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
+            { label: t('Verification'), icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>, path: '/verification', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+            { label: t('Ready to Ship'), icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1" /><path d="M16 8h4l3 5v3h-7V8z" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></svg>, path: '/ready-to-shipment', color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100' },
+            { label: t('Notifications'), icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>, path: '/notifications', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
           ].map(action => (
             <button key={action.path} onClick={() => navigate(action.path)}
               className={`${cardCls} flex items-center gap-3 !py-3.5 !px-4 cursor-pointer border ${action.border} hover:shadow-md hover:-translate-y-0.5 transition-all active:scale-[0.98]`}
               style={{ ...cardStyle, borderColor: undefined }}>
               <div className={`w-10 h-10 rounded-xl ${action.bg} ${action.color} flex items-center justify-center shrink-0`}>{action.icon}</div>
               <span className="text-sm font-bold text-gray-700">{action.label}</span>
-              <svg className="w-4 h-4 text-gray-300 ml-auto" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+              <svg className="w-4 h-4 text-gray-300 ml-auto" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></svg>
             </button>
           ))}
         </div>
@@ -408,7 +411,7 @@ export default function Dashboard() {
 
       {/* Stat Cards Grouped Logically by Rows */}
       <div className="space-y-6 sm:space-y-8">
-        
+
         {/* Row 1: Lead Pipeline */}
         <div>
           <div className="flex items-center gap-2 mb-3">
@@ -417,44 +420,80 @@ export default function Dashboard() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 sm:gap-4">
             <div onClick={() => downloadLeadsCSV(true)} className="cursor-pointer relative" title="Download all leads as CSV">
-              <StatCard 
-                label={t('Total Leads')} 
-                value={stats?.totalLeads} 
-                icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} 
-                color="border-green-500" 
-                sub={csvLoading === 'all' ? `⏳ ${t('Downloading...')}` : `⬇ ${t('Click to download CSV')}`} 
+              <StatCard
+                label={t('Total Leads')}
+                value={stats?.totalLeads}
+                icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>}
+                color="border-green-500"
+                sub={csvLoading === 'all' ? `⏳ ${t('Downloading...')}` : `⬇ ${t('Click to download CSV')}`}
               />
             </div>
-            <StatCard 
-              label={datePreset === 'all' ? t('New Leads (Total)') : `${t('New Leads')} (${getPeriodLabel()})`} 
-              value={stats?.newLeadsToday} 
-              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>} 
-              color="border-blue-500" 
+            <StatCard
+              label={datePreset === 'all' ? t('New Leads (Total)') : `${t('New Leads')} (${getPeriodLabel()})`}
+              value={stats?.newLeadsToday}
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>}
+              color="border-blue-500"
             />
             <StatCard
               label={`${t('Migraine')} ${t('Leads')}`}
               value={migraineLeadCount}
-              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 4.5c-2.5 0-4.5 2-4.5 4.5v1.25A3.25 3.25 0 0 0 5 13.4c0 1.8 1.45 3.25 3.25 3.25h.25V19h7v-2.35h.25A3.25 3.25 0 0 0 19 13.4a3.25 3.25 0 0 0-2.5-3.15V9c0-2.5-2-4.5-4.5-4.5z"/><path d="M10 9.25h4M9.5 12h5M10 14.75h4"/></svg>}
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 4.5c-2.5 0-4.5 2-4.5 4.5v1.25A3.25 3.25 0 0 0 5 13.4c0 1.8 1.45 3.25 3.25 3.25h.25V19h7v-2.35h.25A3.25 3.25 0 0 0 19 13.4a3.25 3.25 0 0 0-2.5-3.15V9c0-2.5-2-4.5-4.5-4.5z" /><path d="M10 9.25h4M9.5 12h5M10 14.75h4" /></svg>}
               color="border-pink-500"
-              sub={`${getPeriodLabel()} ${t('lead count')}`}
               progress={migraineLeadPercent}
+              progressLabel={`${migraineLeadPercent}% of new leads · VR: ${migraineConversionRate}%`}
             />
             <StatCard
               label={`${t('Piles')} ${t('Leads')}`}
               value={pilesLeadCount}
-              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 21s6-5.3 6-11a6 6 0 1 0-12 0c0 5.7 6 11 6 11z"/><circle cx="12" cy="10" r="2.5"/></svg>}
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 21s6-5.3 6-11a6 6 0 1 0-12 0c0 5.7 6 11 6 11z" /><circle cx="12" cy="10" r="2.5" /></svg>}
               color="border-amber-500"
-              sub={`${getPeriodLabel()} ${t('lead count')}`}
               progress={pilesLeadPercent}
+              progressLabel={`${pilesLeadPercent}% of new leads · VR: ${pilesConversionRate}%`}
             />
-            <StatCard 
-              label={t('Ready to Shipment')} 
-              value={stats?.readyToShipmentCount} 
-              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>} 
-              color="border-purple-500" 
+            <StatCard
+              label={t('Ready to Shipment')}
+              value={stats?.readyToShipmentCount}
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1" /><path d="M16 8h4l3 5v3h-7V8z" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></svg>}
+              color="border-purple-500"
             />
           </div>
         </div>
+
+        {/* Lead Conversion Rate Row — Admin/Manager only */}
+        {canManage && (
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e] animate-pulse" />
+              <span className="text-[10px] font-black tracking-widest text-gray-400 dark:text-slate-400 uppercase select-none">{t('Lead Verification Rate')}</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              <StatCard
+                label={`${t('Overall Conversion')} (${getPeriodLabel()})`}
+                value={`${overallConversionRate}%`}
+                icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>}
+                color="border-emerald-500"
+                progress={overallConversionRate}
+                progressLabel={`${stats?.convertedLeads || 0} verified / ${stats?.newLeadsToday || 0} new leads`}
+              />
+              <StatCard
+                label={`${t('Migraine')} ${t('Conversion Rate')}`}
+                value={`${migraineConversionRate}%`}
+                icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 4.5c-2.5 0-4.5 2-4.5 4.5v1.25A3.25 3.25 0 0 0 5 13.4c0 1.8 1.45 3.25 3.25 3.25h.25V19h7v-2.35h.25A3.25 3.25 0 0 0 19 13.4a3.25 3.25 0 0 0-2.5-3.15V9c0-2.5-2-4.5-4.5-4.5z" /><path d="M10 9.25h4M9.5 12h5M10 14.75h4" /></svg>}
+                color="border-pink-500"
+                progress={migraineConversionRate}
+                progressLabel={`${migraineConverted} verified / ${migraineLeadCount} migraine leads`}
+              />
+              <StatCard
+                label={`${t('Piles')} ${t('Conversion Rate')}`}
+                value={`${pilesConversionRate}%`}
+                icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 21s6-5.3 6-11a6 6 0 1 0-12 0c0 5.7 6 11 6 11z" /><circle cx="12" cy="10" r="2.5" /></svg>}
+                color="border-amber-500"
+                progress={pilesConversionRate}
+                progressLabel={`${pilesConverted} verified / ${pilesLeadCount} piles leads`}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Row 2: Shipping Preparation */}
         <div>
@@ -463,19 +502,19 @@ export default function Dashboard() {
             <span className="text-[10px] font-black tracking-widest text-gray-400 dark:text-slate-400 uppercase select-none">{t('Shipping Preparation')}</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-            <StatCard 
-              label={t('New Ready to Ship')} 
-              value={stats?.newReadyToShipCount || 0} 
-              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>} 
-              color="border-indigo-500" 
+            <StatCard
+              label={t('New Ready to Ship')}
+              value={stats?.newReadyToShipCount || 0}
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>}
+              color="border-indigo-500"
               progress={stats?.readyToShipmentCount ? Math.round(((stats?.newReadyToShipCount || 0) / stats?.readyToShipmentCount) * 100) : 0}
               progressLabel={t('Share of Backlog')}
             />
-            <StatCard 
-              label={t('Old Ready to Ship')} 
-              value={stats?.oldReadyToShipCount || 0} 
-              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M2.5 2v6h6M21.5 22v-6h-6"/><path d="M22 11.5A10 10 0 0 0 3.2 7.2M2 12.5a10 10 0 0 0 18.8 4.2"/></svg>} 
-              color="border-pink-500" 
+            <StatCard
+              label={t('Old Ready to Ship')}
+              value={stats?.oldReadyToShipCount || 0}
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M2.5 2v6h6M21.5 22v-6h-6" /><path d="M22 11.5A10 10 0 0 0 3.2 7.2M2 12.5a10 10 0 0 0 18.8 4.2" /></svg>}
+              color="border-pink-500"
               progress={stats?.readyToShipmentCount ? Math.round(((stats?.oldReadyToShipCount || 0) / stats?.readyToShipmentCount) * 100) : 0}
               progressLabel={t('Share of Backlog')}
             />
@@ -489,19 +528,19 @@ export default function Dashboard() {
             <span className="text-[10px] font-black tracking-widest text-gray-400 dark:text-slate-400 uppercase select-none">{t('Orders Intake')}</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-            <StatCard 
-              label={t('New Orders')} 
-              value={stats?.newOrdersCount || 0} 
-              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>} 
-              color="border-cyan-500" 
+            <StatCard
+              label={t('New Orders')}
+              value={stats?.newOrdersCount || 0}
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>}
+              color="border-cyan-500"
               progress={((stats?.newOrdersCount || 0) + (stats?.oldOrdersCount || 0)) ? Math.round(((stats?.newOrdersCount || 0) / ((stats?.newOrdersCount || 0) + (stats?.oldOrdersCount || 0))) * 100) : 0}
               progressLabel={t('Share of Orders')}
             />
-            <StatCard 
-              label={t('Old Orders')} 
-              value={stats?.oldOrdersCount || 0} 
-              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M2.5 2v6h6M21.5 22v-6h-6"/><path d="M22 11.5A10 10 0 0 0 3.2 7.2M2 12.5a10 10 0 0 0 18.8 4.2"/></svg>} 
-              color="border-amber-500" 
+            <StatCard
+              label={t('Old Orders')}
+              value={stats?.oldOrdersCount || 0}
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M2.5 2v6h6M21.5 22v-6h-6" /><path d="M22 11.5A10 10 0 0 0 3.2 7.2M2 12.5a10 10 0 0 0 18.8 4.2" /></svg>}
+              color="border-amber-500"
               progress={((stats?.newOrdersCount || 0) + (stats?.oldOrdersCount || 0)) ? Math.round(((stats?.oldOrdersCount || 0) / ((stats?.newOrdersCount || 0) + (stats?.oldOrdersCount || 0))) * 100) : 0}
               progressLabel={t('Share of Orders')}
             />
@@ -515,33 +554,33 @@ export default function Dashboard() {
             <span className="text-[10px] font-black tracking-widest text-gray-400 dark:text-slate-400 uppercase select-none">{t('Fulfillment & Revenue')}</span>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <StatCard 
-              label={`${t('Delivered')} (${getPeriodLabel()})`} 
-              value={stats?.deliveredCount || 0} 
-              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>} 
-              color="border-emerald-500" 
+            <StatCard
+              label={`${t('Delivered')} (${getPeriodLabel()})`}
+              value={stats?.deliveredCount || 0}
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>}
+              color="border-emerald-500"
             />
-            <StatCard 
-              label={`${t('New Order Delivered')} (${getPeriodLabel()})`} 
-              value={stats?.newDeliveredCount || 0} 
-              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>} 
-              color="border-emerald-400" 
+            <StatCard
+              label={`${t('New Order Delivered')} (${getPeriodLabel()})`}
+              value={stats?.newDeliveredCount || 0}
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>}
+              color="border-emerald-400"
               progress={stats?.deliveredCount ? Math.round(((stats?.newDeliveredCount || 0) / stats?.deliveredCount) * 100) : 0}
               progressLabel={t('Share of Deliveries')}
             />
-            <StatCard 
-              label={`${t('Old Order Delivered')} (${getPeriodLabel()})`} 
-              value={stats?.oldDeliveredCount || 0} 
-              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>} 
-              color="border-teal-400" 
+            <StatCard
+              label={`${t('Old Order Delivered')} (${getPeriodLabel()})`}
+              value={stats?.oldDeliveredCount || 0}
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>}
+              color="border-teal-400"
               progress={stats?.deliveredCount ? Math.round(((stats?.oldDeliveredCount || 0) / stats?.deliveredCount) * 100) : 0}
               progressLabel={t('Share of Deliveries')}
             />
-            <StatCard 
-              label={`${t('Revenue')} (${getPeriodLabel()})`} 
-              value={`₹${(stats?.deliveredRevenue || 0).toLocaleString()}`} 
-              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>} 
-              color="border-teal-500" 
+            <StatCard
+              label={`${t('Revenue')} (${getPeriodLabel()})`}
+              value={`₹${(stats?.deliveredRevenue || 0).toLocaleString()}`}
+              icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>}
+              color="border-teal-500"
             />
           </div>
         </div>
@@ -554,14 +593,14 @@ export default function Dashboard() {
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
-                <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
               </div>
               <div>
                 <p className="text-white font-semibold text-sm">Personal Attendance</p>
                 <p className="text-green-300/60 text-xs mt-0.5">
                   {checkedIn && checkedOut ? `In: ${fmtTime(attStatus.checkIn)} · Out: ${fmtTime(attStatus.checkOut)}`
                     : checkedIn ? `Checked in at ${fmtTime(attStatus.checkIn)}`
-                    : 'Not checked in yet'}
+                      : 'Not checked in yet'}
                 </p>
               </div>
             </div>
@@ -570,17 +609,17 @@ export default function Dashboard() {
                 <button onClick={handleCheckIn} disabled={attLoading}
                   className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60"
                   style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
-                  {attLoading ? 'Processing...' : <><svg className="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> Clock In</>}
+                  {attLoading ? 'Processing...' : <><svg className="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg> Clock In</>}
                 </button>
               ) : !checkedOut ? (
                 <button onClick={handleCheckOut} disabled={attLoading}
                   className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60"
                   style={{ background: 'linear-gradient(135deg, #ea580c, #c2410c)' }}>
-                  {attLoading ? 'Processing...' : <><svg className="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> Clock Out</>}
+                  {attLoading ? 'Processing...' : <><svg className="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg> Clock Out</>}
                 </button>
               ) : (
                 <span className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-500/20 text-green-300 text-sm font-semibold">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/></svg>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path d="M9 11l3 3L22 4" /></svg>
                   Day Complete
                 </span>
               )}
@@ -601,7 +640,7 @@ export default function Dashboard() {
               { label: "Call Again", value: staffStats?.todayCallAgain ?? 0, icon: icons.callAgain, bg: "bg-yellow-50", text: "text-yellow-600" },
               { label: "Lead Add", value: staffStats?.leadsAdded ?? 0, icon: icons.leadAdd, bg: "bg-blue-50", text: "text-blue-600" },
               { label: "Verified", value: staffStats?.verifiedCount ?? 0, icon: icons.verify, bg: "bg-emerald-50", text: "text-emerald-600" },
-              { label: "On Hold", value: staffStats?.onHoldCount ?? 0, icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>, bg: "bg-amber-50", text: "text-amber-600" },
+              { label: "On Hold", value: staffStats?.onHoldCount ?? 0, icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>, bg: "bg-amber-50", text: "text-amber-600" },
               { label: "Interested", value: staffStats?.todayInterested ?? 0, icon: icons.interested, bg: "bg-green-50", text: "text-green-600" },
               { label: "Not Interested", value: staffStats?.todayNotInterested ?? 0, icon: icons.notInterested, bg: "bg-gray-50", text: "text-gray-500" },
             ].map(({ label, value, icon, bg, text }) => (
@@ -617,8 +656,6 @@ export default function Dashboard() {
         </>
       )}
 
-
-
       {/* Earnings & Activity Chart Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className={`lg:col-span-1 ${cardCls}`} style={cardStyle}>
@@ -628,18 +665,18 @@ export default function Dashboard() {
               <button onClick={() => setCommMonth(p => {
                 const m = p.month - 1;
                 return m < 0 ? { month: 11, year: p.year - 1 } : { month: m, year: p.year };
-              })} className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"><svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+              })} className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"><svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6" /></svg></button>
               <span className="text-[10px] font-bold text-gray-600 min-w-[70px] text-center uppercase tracking-tight">
                 {new Date(commMonth.year, commMonth.month).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
               </span>
               <button onClick={() => setCommMonth(p => {
                 const m = p.month + 1;
                 return m > 11 ? { month: 0, year: p.year + 1 } : { month: m, year: p.year };
-              })} className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"><svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
+              })} className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"><svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" /></svg></button>
             </div>
           </div>
           {commLoading ? (
-             <div className="flex items-center justify-center py-10"><div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
+            <div className="flex items-center justify-center py-10"><div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
           ) : commission ? (
             <div className="space-y-4">
               {(user?.role === 'admin' || user?.role === 'manager') && (
@@ -688,7 +725,7 @@ export default function Dashboard() {
                   const y = 92 - (d.count / max) * 84;
                   return `${x},${y}`;
                 }).join(' L ');
-                
+
                 return (
                   <>
                     {/* Y-axis scale labels (HTML, outside SVG to avoid distortion) */}
@@ -729,14 +766,13 @@ export default function Dashboard() {
                             <span className="text-gray-400">{new Date(new Date().getFullYear(), new Date().getMonth(), d.day).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>{' '}
                             <span className="font-bold text-white">{d.count} {d.count === 1 ? 'verification' : 'verifications'}</span>
                           </div>
-                          <div 
-                            className={`absolute w-2.5 h-2.5 rounded-full border-2 border-white shadow-sm transition-all ${
-                              d.day === todayDay 
-                                ? 'bg-emerald-500 opacity-100 scale-110' 
+                          <div
+                            className={`absolute w-2.5 h-2.5 rounded-full border-2 border-white shadow-sm transition-all ${d.day === todayDay
+                                ? 'bg-emerald-500 opacity-100 scale-110'
                                 : 'bg-green-500 opacity-0 group-hover/dot:opacity-100 scale-0 group-hover/dot:scale-110'
-                            }`}
-                            style={{ 
-                              left: '50%', 
+                              }`}
+                            style={{
+                              left: '50%',
                               bottom: `${8 + (d.count / max) * 84}%`,
                               transform: 'translate(-50%, 50%)'
                             }}
@@ -768,7 +804,7 @@ export default function Dashboard() {
             { key: 'cnp', label: `CNP List (${getPeriodLabel()})`, icon: icons.cnp, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-100', list: todayLists.cnpList },
             { key: 'callAgain', label: `Call Again List (${getPeriodLabel()})`, icon: icons.callAgain, color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-100', list: todayLists.callAgainList },
             { key: 'interested', label: `Interested List (${getPeriodLabel()})`, icon: icons.interested, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100', list: todayLists.interestedList },
-            { key: 'onHold', label: `On Hold List (${getPeriodLabel()})`, icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', list: todayLists.onHoldList },
+            { key: 'onHold', label: `On Hold List (${getPeriodLabel()})`, icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', list: todayLists.onHoldList },
             { key: 'notInterested', label: `Not Interested List (${getPeriodLabel()})`, icon: icons.notInterested, color: 'text-gray-500', bg: 'bg-gray-50', border: 'border-gray-100', list: todayLists.notInterestedList },
           ].map(({ key, label, icon, color, bg, border, list }) => (
             <div key={key} className={cardCls} style={cardStyle}>
@@ -809,8 +845,8 @@ export default function Dashboard() {
 
       {/* Tasks Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        
-        
+
+
       </div>
 
       {/* Shipment Analytics — Admin/Manager only */}
@@ -828,11 +864,10 @@ export default function Dashboard() {
                 <button
                   key={period}
                   onClick={() => setTeamOverviewPeriod(period)}
-                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md transition-all ${
-                    teamOverviewPeriod === period 
-                      ? 'bg-white text-blue-600 shadow-sm border border-gray-200/50' 
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-md transition-all ${teamOverviewPeriod === period
+                      ? 'bg-white text-blue-600 shadow-sm border border-gray-200/50'
                       : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
-                  }`}
+                    }`}
                 >
                   {period === 'today' ? 'Today' : period === 'month' ? 'Monthly' : period.toUpperCase()}
                 </button>
