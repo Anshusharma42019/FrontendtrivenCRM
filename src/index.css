@@ -226,7 +226,7 @@ button {
   font-family: 'Outfit', sans-serif;
   font-weight: 700;
   font-size: 0.85rem;
-  color: #0f172a;
+  color: #0f172a !important; /* Force dark text even in dark mode because background is light */
   margin: 0;
   line-height: 1.2;
   text-transform: uppercase;
@@ -236,14 +236,14 @@ button {
 .toast-message {
   font-size: 0.8rem;
   font-weight: 500;
-  color: #64748b;
+  color: #475569 !important; /* Force gray text */
   margin: 0.25rem 0 0 0;
   line-height: 1.4;
   word-break: break-word;
 }
 
 .toast-close {
-  color: #94a3b8;
+  color: #94a3b8 !important;
   padding: 0.35rem;
   border-radius: 0.75rem;
   transition: all 0.2s;

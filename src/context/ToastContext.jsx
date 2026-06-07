@@ -19,7 +19,8 @@ export function ToastProvider({ children }) {
     setToasts((prev) => [...prev, newToast]);
     
     if (type !== 'persistent') {
-      setTimeout(() => remove(id), 4000);
+      const duration = type === 'success' || type === 'info' ? 10000 : 4000;
+      setTimeout(() => remove(id), duration);
     }
     return id;
   }, [remove]);

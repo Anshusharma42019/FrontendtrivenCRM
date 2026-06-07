@@ -3,6 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useToast } from '../context/ToastContext';
 import { getNotifications } from '../services/notification.service';
 import { globalSearch, getLead } from '../services/lead.service';
 import * as attendanceSvc from '../services/attendance.service';
@@ -78,8 +79,10 @@ export default function Layout() {
   ];
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   const { lang, setLang, t: translate } = useLanguage();
+  const { success: toastSuccess, info: toastInfo } = useToast();
   const [attStatus, setAttStatus] = useState(null);
   const [attLoading, setAttLoading] = useState(false);
+  const lastNotifRef = useRef(null);
   const [commissionStats, setCommissionStats] = useState(null);
   const [shiftTime, setShiftTime] = useState('00h 00m 00s');
 
@@ -276,7 +279,41 @@ export default function Layout() {
     const poll = async () => {
       try {
         const res = await getNotifications({ limit: 1 });
-        if (active) setUnreadCount(res.unreadCount || 0);
+        if (active) {
+          setUnreadCount(res.unreadCount || 0);
+          if (res.notifications && res.notifications.length > 0) {
+            const latest = res.notifications[0];
+            console.log('Polled Notification:', latest._id, 'Last:', lastNotifRef.current, 'Type:', latest.type);
+            if (lastNotifRef.current && lastNotifRef.current !== latest._id) {
+              console.log('NEW NOTIFICATION DETECTED!', latest);
+              if (latest.type === 'task' || latest.type === 'lead_assigned') {
+                console.log('TRIGGERING TOAST AND BEEP!');
+                toastSuccess(latest.message || 'New Lead or Task Assigned!', '🔔 NEW ALERT');
+                try {
+                  const AudioContext = window.AudioContext || window.webkitAudioContext;
+                  if (AudioContext) {
+                    const ctx = new AudioContext();
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(800, ctx.currentTime);
+                    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                    osc.start();
+                    gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5);
+                    osc.stop(ctx.currentTime + 0.5);
+                  }
+                } catch(e){
+                  console.error('Audio beep error:', e);
+                }
+              } else {
+                toastInfo(latest.message || 'You have a new notification', latest.title || 'Notification');
+              }
+            }
+            lastNotifRef.current = latest._id;
+          }
+        }
       } catch (e) {
         if (e?.response?.status === 401) { active = false; clearInterval(t); }
       }
