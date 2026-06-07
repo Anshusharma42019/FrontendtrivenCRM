@@ -273,6 +273,11 @@ export default function Leads() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-gray-800 truncate">{lead.name}</p>
                       <p className="text-xs text-gray-400">{lead.phone}</p>
+                      {lead.problem && (
+                        <p className="text-[10px] text-emerald-600 truncate mt-0.5 font-medium bg-emerald-50 inline-block px-1.5 py-0.5 rounded">
+                          {lead.problem}
+                        </p>
+                      )}
                     </div>
 
                     <div className="hidden sm:flex flex-col items-end gap-1 shrink-0">
