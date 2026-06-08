@@ -124,11 +124,11 @@ export default function Layout() {
     return () => clearInterval(t);
   }, [loadAttendance]);
 
-  // Auto refresh page every 1 minute
+  // Auto refresh page every 3 minutes
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       window.location.reload();
-    }, 60000);
+    }, 180000);
     return () => clearTimeout(timeoutId);
   }, []);
 
