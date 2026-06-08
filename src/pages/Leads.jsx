@@ -60,7 +60,7 @@ export default function Leads() {
   const [searchParams, setSearchParams] = useSearchParams();
   const pendingOpenId = searchParams.get('openId');
 
-  const { error: toastError } = useToast();
+  const { success: toastSuccess, error: toastError } = useToast();
   const navigate = useNavigate();
   const canManage = user?.role === 'admin' || user?.role === 'manager' || user?.role === 'support';
   const canEdit = canManage || user?.role === 'sales';
