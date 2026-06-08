@@ -88,26 +88,6 @@ export default function Leads() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto refresh lead data without reloading the whole page
-  useEffect(() => {
-    let intervalId;
-    if (user) {
-      const fourMinuteRoles = ['manager', 'sales', 'support', 'logistics', 'doctor'];
-      let delay = null;
-      if (fourMinuteRoles.includes(user.role)) delay = 240000; // 4 mins
-      else if (user.role === 'admin') delay = 180000; // 3 mins
-
-      if (delay) {
-        intervalId = setInterval(() => {
-          load();
-        }, delay);
-      }
-    }
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [user, load]);
-
   useEffect(() => {
     if (pendingOpenId) {
       getLead(pendingOpenId).then(full => {

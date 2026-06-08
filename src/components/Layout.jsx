@@ -124,7 +124,6 @@ export default function Layout() {
     return () => clearInterval(t);
   }, [loadAttendance]);
 
-
   useEffect(() => {
     if (user && ['sales', 'support', 'logistics'].includes(user.role)) {
       const now = new Date();
