@@ -124,6 +124,14 @@ export default function Layout() {
     return () => clearInterval(t);
   }, [loadAttendance]);
 
+  // Auto refresh page every 1 minute
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      window.location.reload();
+    }, 60000);
+    return () => clearTimeout(timeoutId);
+  }, []);
+
   useEffect(() => {
     if (user && ['sales', 'support', 'logistics'].includes(user.role)) {
       const now = new Date();
