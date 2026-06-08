@@ -124,13 +124,23 @@ export default function Layout() {
     return () => clearInterval(t);
   }, [loadAttendance]);
 
-  // Auto refresh page every 3 minutes
+  // Auto refresh page based on role
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      window.location.reload();
-    }, 180000);
-    return () => clearTimeout(timeoutId);
-  }, []);
+    let timeoutId;
+    if (user) {
+      const fourMinuteRoles = ['manager', 'sales', 'support', 'logistics', 'doctor'];
+      if (fourMinuteRoles.includes(user.role)) {
+        // 4 minutes for manager, staff(sales), support, logistics, doctor
+        timeoutId = setTimeout(() => window.location.reload(), 240000);
+      } else if (user.role === 'admin') {
+        // 3 minutes for admin (from previous request)
+        timeoutId = setTimeout(() => window.location.reload(), 180000);
+      }
+    }
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [user]);
 
   useEffect(() => {
     if (user && ['sales', 'support', 'logistics'].includes(user.role)) {
