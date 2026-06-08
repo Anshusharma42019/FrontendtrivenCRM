@@ -66,9 +66,15 @@ API.interceptors.response.use(
       } catch (refreshError) {
         console.error('[API Refresh] Token refresh failed:', refreshError.message);
         isRefreshing = false;
-        localStorage.removeItem('crmTokens');
-        localStorage.removeItem('crmUser');
-        window.location.href = '/login';
+        
+        const status = refreshError.response?.status;
+        // Only log out if the refresh token is explicitly rejected (4xx) or missing
+        if (refreshError.message === 'No refresh token available' || (status >= 400 && status < 500)) {
+          localStorage.removeItem('crmTokens');
+          localStorage.removeItem('crmUser');
+          window.location.href = '/login';
+        }
+        
         return Promise.reject(refreshError);
       }
     }

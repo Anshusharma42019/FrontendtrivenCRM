@@ -6,7 +6,7 @@ import { createTask } from '../services/task.service';
 const TASK_EMPTY = { title: '', description: '', problem: '', reminderAt: '', cityVillageType: 'city', cityVillage: '', houseNo: '', postOffice: '', district: '', landmark: '', pincode: '', state: '', age: '', weight: '', height: '', otherProblems: '', problemDuration: '' };
 const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition";
 
-function TaskModal({ lead, assignedTo, onClose }) {
+function TaskModal({ lead, assignedTo, recordId, onClose }) {
   const [form, setForm] = useState({ ...TASK_EMPTY, lead: lead?._id || '', assignedTo: assignedTo || '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -18,7 +18,9 @@ function TaskModal({ lead, assignedTo, onClose }) {
       if (!payload.assignedTo) delete payload.assignedTo;
       if (!payload.reminderAt) delete payload.reminderAt;
       await createTask(payload);
-      onClose();
+      if (recordId) await updateCallAgain(recordId, { status: 'done' });
+      if (lead?._id || lead) await updateLead(lead?._id || lead, { status: 'contacted' });
+      onClose(true);
     } catch (err) { setError(err.response?.data?.message || 'Something went wrong'); }
     finally { setLoading(false); }
   };
@@ -192,32 +194,33 @@ export default function CallAgain() {
         ) : (
           <div className="divide-y divide-gray-50">
             {filtered.map((record, i) => (
-              <div key={record._id} className="px-5 py-4 flex items-center gap-3 hover:bg-amber-50/30 transition-colors">
-                <span className="text-[11px] font-bold text-gray-400 w-5 text-center shrink-0">{i + 1}</span>
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white shadow-sm">
-                  {record.lead?.name?.charAt(0)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-800 text-sm">{record.lead?.name}</p>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="text-[11px] text-gray-500 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">{record.lead?.phone}</span>
-                    {record.assignedTo && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-green-700 bg-green-50 px-2 py-0.5 rounded-full border border-green-100">
-                        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-                        </svg>
-                        {record.assignedTo.name}
-                      </span>
-                    )}
-                    {record.createdBy && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                        Added by: {record.createdBy.name}
-                      </span>
-                    )}
+              <div key={record._id} className="px-5 py-4 hover:bg-amber-50/30 transition-colors">
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] font-bold text-gray-400 w-5 text-center shrink-0">{i + 1}</span>
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center font-bold text-sm shrink-0 uppercase text-white shadow-sm">
+                    {record.lead?.name?.charAt(0)}
                   </div>
-                </div>
-                <div className="flex gap-1.5 shrink-0">
-                  <button disabled={updating === record._id} onClick={() => setTaskModal({ lead: record.lead, assignedTo: record.assignedTo?._id || '' })}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-800 text-sm">{record.lead?.name}</p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="text-[11px] text-gray-500 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100">{record.lead?.phone}</span>
+                      {record.assignedTo && (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-green-700 bg-green-50 px-2 py-0.5 rounded-full border border-green-100">
+                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                          </svg>
+                          {record.assignedTo.name}
+                        </span>
+                      )}
+                      {record.createdBy && (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                          Added by: {record.createdBy.name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                  <button disabled={updating === record._id} onClick={() => setTaskModal({ lead: record.lead, assignedTo: record.assignedTo?._id || '', recordId: record._id })}
                     className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100 transition">
                     + Task
                   </button>
@@ -245,6 +248,18 @@ export default function CallAgain() {
                     Converted
                   </button>
                 </div>
+                </div>
+
+                {record.notes?.length > 0 && (
+                  <div className="mt-3 ml-11 pl-2">
+                    <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-100/50">
+                      <p className="text-[11px] text-amber-800/80 font-medium leading-relaxed">
+                        <span className="font-bold text-amber-700 uppercase tracking-wider mr-2">Note:</span>
+                        {record.notes[record.notes.length - 1].text}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -252,7 +267,7 @@ export default function CallAgain() {
       </div>
 
       {taskModal && (
-        <TaskModal lead={taskModal.lead} assignedTo={taskModal.assignedTo} onClose={() => setTaskModal(null)} />
+        <TaskModal lead={taskModal.lead} assignedTo={taskModal.assignedTo} recordId={taskModal.recordId} onClose={(refresh) => { setTaskModal(null); if (refresh) load(); }} />
       )}
     </div>
   );

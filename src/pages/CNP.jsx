@@ -117,7 +117,7 @@ export default function CNP() {
         if (isCallAgain) await updateCallAgain(cnpRecordId, { status: 'done' }).catch(() => {});
         else await deleteCnpRecord(cnpRecordId).catch(() => {});
       }
-      if (payload.lead) await updateLead(payload.lead, { cnp: false }).catch(() => {});
+      if (payload.lead) await updateLead(payload.lead, { cnp: false, status: 'contacted' }).catch(() => {});
       setTaskModal(false);
       setSelected(null);
       load(dateFilter, callAgainDateFilter, department);
@@ -481,11 +481,11 @@ export default function CNP() {
               </div>
             )}
 
-            {selected.lead?.notes?.length > 0 && (
+            {(selected.notes?.length > 0 || selected.lead?.notes?.length > 0) && (
               <div className="mt-4">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Notes</p>
                 <div className="space-y-2">
-                  {[...selected.lead.notes].reverse().slice(0, 3).map((n, i) => (
+                  {[...(selected.notes?.length ? selected.notes : selected.lead?.notes || [])].reverse().slice(0, 3).map((n, i) => (
                     <div key={i} className="p-3 rounded-xl bg-gray-50 border border-gray-100">
                       <p className="text-xs text-gray-600 leading-relaxed">{n.text}</p>
                       <p className="text-[9px] text-gray-400 mt-1 font-bold uppercase">{new Date(n.createdAt).toLocaleString()}</p>

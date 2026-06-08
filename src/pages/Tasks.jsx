@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { getTasks, getDailyTasks, createTask, updateTask, deleteTask, addTaskNote, deleteCnpRecord, getTask } from '../services/task.service';
 import API from '../api';
-import { getLeads, updateLead } from '../services/lead.service';
+import { getLeads, updateLead, createCallAgain } from '../services/lead.service';
 import { getUsers } from '../services/user.service';
 import Modal from '../components/ui/Modal';
 
@@ -254,11 +254,57 @@ export default function Tasks() {
     load();
   };
 
+  const handleQuickAction = async (action) => {
+    if (!selected) return;
+    const actionNames = { cnp: 'CNP', mark_loss: 'Mark to Loss', callagain: 'Call Again' };
+    if (!confirm(`Are you sure you want to ${actionNames[action]} this task?`)) return;
+    
+    setLoading(true);
+    const leadId = selected.lead?._id || selected.lead;
+    try {
+      let finalNotes = selected.notes || [];
+      if (noteText.trim()) {
+        try {
+          const updated = await addTaskNote(selected._id, noteText.trim());
+          finalNotes = updated.notes;
+          setNoteText('');
+        } catch { /* ignore */ }
+      }
+
+      if (action === 'cnp') {
+        await updateTask(selected._id, { status: 'cnp' }).catch(() => {});
+        if (leadId) await updateLead(leadId, { cnp: true }).catch(() => {});
+        setSelected(prev => ({ ...prev, status: 'cnp', notes: finalNotes }));
+      } else if (action === 'mark_loss') {
+        await updateTask(selected._id, { status: 'cancel_call' }).catch(() => {});
+        if (leadId) await updateLead(leadId, { status: 'closed_lost' }).catch(() => {});
+        setSelected(prev => ({ ...prev, status: 'cancel_call', notes: finalNotes }));
+      } else if (action === 'callagain') {
+        await updateTask(selected._id, { status: 'cancelled' }).catch(() => {});
+        if (leadId) await createCallAgain(leadId, finalNotes).catch(() => {});
+        setSelected(prev => ({ ...prev, status: 'cancelled', notes: finalNotes }));
+      }
+      load();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const filteredItems = useMemo(() => {
-    const items = (tab === 'daily' ? daily : tasks).filter(t =>
+    let items = (tab === 'daily' ? daily : tasks).filter(t =>
       !HIDDEN_TASK_STATUSES.has(t.status) &&
       !HIDDEN_TASK_LEAD_STATUSES.has(t.lead?.status)
     );
+    
+    // Sort items so newest are at the top (by createdAt, fallback to ObjectId timestamp)
+    items = [...items].sort((a, b) => {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : parseInt(a._id.substring(0, 8), 16);
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : parseInt(b._id.substring(0, 8), 16);
+      return timeB - timeA;
+    });
+
     if (!search) return items;
     const q = search.toLowerCase();
     return items.filter(task => 
@@ -336,6 +382,11 @@ export default function Tasks() {
         </div>
 
         {/* List */}
+        <div className="flex items-center justify-between px-2 mb-1 shrink-0">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+            Showing {filteredItems.length} {filteredItems.length === 1 ? 'Task' : 'Tasks'}
+          </span>
+        </div>
         <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
           {filteredItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-dashed border-gray-200">
@@ -360,6 +411,10 @@ export default function Tasks() {
                     
                     <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${isCompleted ? 'bg-gray-300' : 'bg-emerald-500'}`} />
                     
+                    <div className="text-xs font-black text-gray-300 w-6 text-right shrink-0 select-none">
+                      {i + 1}.
+                    </div>
+
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0 ${isCompleted ? 'bg-gray-300' : color}`}>
                       {initials(task.lead?.name || task.title)}
                     </div>
@@ -487,6 +542,38 @@ export default function Tasks() {
                   Save Note
                 </button>
               </div>
+
+              {!['completed', 'cnp', 'cancel_call', 'cancelled'].includes(selected.status) && (
+                <div className="grid grid-cols-3 gap-2 mt-4">
+                  <button onClick={() => handleQuickAction('cnp')} disabled={loading}
+                    className="py-3 rounded-xl text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 transition shadow-md shadow-orange-100 disabled:opacity-50">
+                    CNP
+                  </button>
+                  <button onClick={() => handleQuickAction('callagain')} disabled={loading}
+                    className="py-3 rounded-xl text-xs font-bold text-white bg-amber-500 hover:bg-amber-600 transition shadow-md shadow-amber-100 disabled:opacity-50">
+                    Call Again
+                  </button>
+                  <button onClick={() => handleQuickAction('mark_loss')} disabled={loading}
+                    className="py-3 rounded-xl text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition shadow-md shadow-red-100 disabled:opacity-50">
+                    Mark to Loss
+                  </button>
+                </div>
+              )}
+              {selected.status === 'cnp' && (
+                <div className="flex items-center justify-center bg-orange-50 text-orange-600 rounded-xl py-3 mt-4 text-xs font-bold">
+                  ✓ Marked as CNP
+                </div>
+              )}
+              {selected.status === 'cancel_call' && (
+                <div className="flex items-center justify-center bg-red-50 text-red-600 rounded-xl py-3 mt-4 text-xs font-bold">
+                  ✓ Marked as Loss
+                </div>
+              )}
+              {selected.status === 'cancelled' && (
+                <div className="flex items-center justify-center bg-amber-50 text-amber-600 rounded-xl py-3 mt-4 text-xs font-bold">
+                  ✓ Moved to Call Again
+                </div>
+              )}
             </div>
           </div>
 
@@ -558,9 +645,28 @@ export default function Tasks() {
               </div>
 
               <div className="pt-4 pb-2 flex flex-col gap-2">
-                {selected.status !== 'completed' && (
-                  <button onClick={() => handleComplete(selected._id)}
-                    className="w-full py-4 rounded-xl text-sm font-bold text-white bg-emerald-500 shadow-lg">Complete Task</button>
+                {!['completed', 'cnp', 'cancel_call', 'cancelled'].includes(selected.status) && (
+                  <>
+                    <div className="grid grid-cols-3 gap-2 mb-1">
+                      <button onClick={() => handleQuickAction('cnp')} disabled={loading}
+                        className="py-3 bg-orange-500 text-white rounded-xl text-[10px] font-bold uppercase shadow-sm disabled:opacity-50">CNP</button>
+                      <button onClick={() => handleQuickAction('callagain')} disabled={loading}
+                        className="py-3 bg-amber-500 text-white rounded-xl text-[10px] font-bold uppercase shadow-sm disabled:opacity-50">Call Again</button>
+                      <button onClick={() => handleQuickAction('mark_loss')} disabled={loading}
+                        className="py-3 bg-red-500 text-white rounded-xl text-[10px] font-bold uppercase shadow-sm disabled:opacity-50">Loss</button>
+                    </div>
+                    <button onClick={() => handleComplete(selected._id)}
+                      className="w-full py-4 rounded-xl text-sm font-bold text-white bg-emerald-500 shadow-lg">Complete Task</button>
+                  </>
+                )}
+                {selected.status === 'cnp' && (
+                  <div className="w-full py-3 bg-orange-50 text-orange-600 rounded-xl text-sm font-bold text-center">✓ Marked as CNP</div>
+                )}
+                {selected.status === 'cancel_call' && (
+                  <div className="w-full py-3 bg-red-50 text-red-600 rounded-xl text-sm font-bold text-center">✓ Marked as Loss</div>
+                )}
+                {selected.status === 'cancelled' && (
+                  <div className="w-full py-3 bg-amber-50 text-amber-600 rounded-xl text-sm font-bold text-center">✓ Moved to Call Again</div>
                 )}
                 <div className="grid grid-cols-2 gap-2">
                   <button onClick={() => openEdit(selected)} className="py-4 rounded-xl text-sm font-bold bg-gray-100 text-gray-600">Edit</button>
