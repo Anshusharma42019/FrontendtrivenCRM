@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import * as srSvc from '../services/shiprocket.service';
+import * as smxSvc from '../services/shipmaxx.service';
 
 const cardCls = 'bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-shadow';
 const cardStyle = { border: '1px solid rgba(0,0,0,0.05)' };
@@ -116,8 +117,10 @@ export default function OrderStatusBoard({
   defaultStatus = 'DELIVERED',
   onStatsChange,
   filterParams,
+  platform = 'shiprocket',
 }) {
   const { t } = useLanguage();
+  const svc = platform === 'shipmaxx' ? smxSvc : srSvc;
   const [deliveredStats, setDeliveredStats] = useState({ count: 0, revenue: 0, statusBreakdown: [] });
   const [datePreset, setDatePreset] = useState(defaultPreset);
   const [filterFrom, setFilterFrom] = useState('');
@@ -135,7 +138,7 @@ export default function OrderStatusBoard({
   const navigate = useNavigate();
 
   const loadDelivered = useCallback((params = {}) => {
-    srSvc.getDeliveredStats(params).then(res => {
+    svc.getDeliveredStats(params).then(res => {
       const { count, revenue, statusBreakdown } = res.data?.data || {};
       const stats = { count: count || 0, revenue: revenue || 0, statusBreakdown: statusBreakdown || [] };
       setDeliveredStats(stats);
@@ -143,13 +146,13 @@ export default function OrderStatusBoard({
     }).catch((err) => {
       console.error('[OrderStatusBoard] Error loading delivered stats:', err.response?.data?.message || err.message);
     });
-  }, [onStatsChange]);
+  }, [onStatsChange, svc]);
 
   const loadStatusOrders = useCallback((status, params = {}) => {
     setStatusLoading(true);
     setStatusError('');
     setStatusOrders([]);
-    srSvc.getStatusOrders({ ...params, status, limit: 100 }).then(res => {
+    svc.getStatusOrders({ ...params, status, limit: 100 }).then(res => {
       const list = res.data?.data?.data || [];
       setStatusOrders(list);
       const c = {};
@@ -159,7 +162,7 @@ export default function OrderStatusBoard({
       setStatusOrders([]);
       setStatusError(e?.response?.data?.message || e.message || 'Unable to load orders');
     }).finally(() => setStatusLoading(false));
-  }, []);
+  }, [svc]);
 
   // Effective parameters: either passed from prop or generated from local state
   const getParams = useCallback(() => {
@@ -186,7 +189,7 @@ export default function OrderStatusBoard({
     setSavingNote(mongoId);
     setNoteError(prev => ({ ...prev, [mongoId]: '' }));
     try {
-      const res = await srSvc.saveOrderNote(mongoId, text, 'general', selectedStatus);
+      const res = await svc.saveOrderNote(mongoId, text, 'general', selectedStatus);
       setComments(prev => ({ ...prev, [mongoId]: res.data?.data || [] }));
       setNoteInput(prev => ({ ...prev, [mongoId]: '' }));
     } catch (err) {
@@ -207,10 +210,15 @@ export default function OrderStatusBoard({
     setSyncing(true);
     setSyncMsg('');
     try {
-      await srSvc.syncShiprocket();
-      const backfill = await srSvc.backfillDeliveredAt();
-      const fixed = backfill.data?.data;
-      setSyncMsg(`Sync complete! Fixed: ${fixed?.subTotalFixed || 0} amounts, ${fixed?.deliveredAtFixed || 0} dates`);
+      if (platform === 'shipmaxx') {
+        const res = await smxSvc.syncShipmaxx();
+        setSyncMsg(`Sync complete! Updated ${res.data?.data?.updatedCount || 0} orders.`);
+      } else {
+        await srSvc.syncShiprocket();
+        const backfill = await srSvc.backfillDeliveredAt();
+        const fixed = backfill.data?.data;
+        setSyncMsg(`Sync complete! Fixed: ${fixed?.subTotalFixed || 0} amounts, ${fixed?.deliveredAtFixed || 0} dates`);
+      }
       applyDateFilter();
     } catch (e) {
       setSyncMsg(e?.response?.data?.message || 'Sync failed');

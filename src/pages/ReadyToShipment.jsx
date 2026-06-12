@@ -51,6 +51,7 @@ export default function ReadyToShipment() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [customDate, setCustomDate] = useState('');
   const [repairing, setRepairing] = useState(false);
+  const [shipProvider, setShipProvider] = useState(() => localStorage.getItem('shipProvider') || 'shiprocket');
   const [showStats, setShowStats] = useState(false);
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -112,6 +113,20 @@ export default function ReadyToShipment() {
       setRecords(Array.isArray(data) ? data : []);
     } catch { /* ignore */ }
     finally { setRepairing(false); }
+  };
+
+  useEffect(() => {
+    API.get('/integrations/shipping-provider').then(r => {
+      const p = r.data?.data?.provider;
+      if (p) { setShipProvider(p); localStorage.setItem('shipProvider', p); }
+    }).catch(() => {});
+  }, []);
+
+  const toggleProvider = async () => {
+    const next = shipProvider === 'shiprocket' ? 'shipmaxx' : 'shiprocket';
+    setShipProvider(next);
+    localStorage.setItem('shipProvider', next);
+    try { await API.post('/integrations/shipping-provider', { provider: next }); } catch { /* ignore */ }
   };
 
   useEffect(() => { load(); }, [load, department]);
@@ -208,6 +223,15 @@ export default function ReadyToShipment() {
               {DEPARTMENTS.map(d => <option key={d} value={d}>{d.toUpperCase()}</option>)}
             </select>
           )}
+          {/* Shipping Provider Toggle */}
+          <button onClick={toggleProvider}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all shrink-0 ${
+              shipProvider === 'shipmaxx'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                : 'bg-orange-500 text-white border-orange-500 shadow-md'
+            }`}>
+            🚚 {shipProvider === 'shipmaxx' ? 'ShipMaxx' : 'Shiprocket'}
+          </button>
           <button onClick={handleRepair} disabled={repairing}
             className="px-3 py-2 rounded-xl text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 transition disabled:opacity-50 whitespace-nowrap shrink-0">
             {repairing ? 'Syncing...' : '🔄 Sync Verified'}
@@ -380,14 +404,16 @@ export default function ReadyToShipment() {
             <button
               onClick={() => {
                 setSelected(null);
-                navigate('/shiprocket', {
-                  state: { delivery_postcode: selected.pincode || '', rts: selected }
-                });
+                if (shipProvider === 'shipmaxx') {
+                  navigate('/shipmaxx', { state: { rts: selected } });
+                } else {
+                  navigate('/shiprocket', { state: { delivery_postcode: selected.pincode || '', rts: selected } });
+                }
               }}
-              className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-emerald-900/10"
-              style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)' }}>
+              className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md"
+              style={{ background: shipProvider === 'shipmaxx' ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : 'linear-gradient(135deg,#16a34a,#15803d)' }}>
               <TruckIcon />
-              Check Serviceability & Ship
+              {shipProvider === 'shipmaxx' ? 'Ship via ShipMaxx' : 'Check Serviceability & Ship'}
             </button>
           </div>
         </div>
@@ -451,11 +477,16 @@ export default function ReadyToShipment() {
                 <button
                   onClick={() => {
                     setSelected(null);
-                    navigate('/shiprocket', { state: { delivery_postcode: selected.pincode || '', rts: selected } });
+                    if (shipProvider === 'shipmaxx') {
+                      navigate('/shipmaxx', { state: { rts: selected } });
+                    } else {
+                      navigate('/shiprocket', { state: { delivery_postcode: selected.pincode || '', rts: selected } });
+                    }
                   }}
-                  className="flex-1 py-4 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/10 transition-all active:scale-[0.98]"
-                  style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
-                  <TruckIcon className="w-5 h-5" /> CHECK SERVICEABILITY
+                  className="flex-1 py-4 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 shadow-lg transition-all active:scale-[0.98]"
+                  style={{ background: shipProvider === 'shipmaxx' ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : 'linear-gradient(135deg, #16a34a, #15803d)' }}>
+                  <TruckIcon className="w-5 h-5" />
+                  {shipProvider === 'shipmaxx' ? 'SHIP VIA SHIPMAXX' : 'CHECK SERVICEABILITY'}
                 </button>
               </div>
             </div>

@@ -91,6 +91,10 @@ export const getWalletTransactions = (params) => api.get(`${BASE}/wallet/transac
 // ── NDR ───────────────────────────────────────────────────────────────────────
 export const getNDR = (params) => api.get(`${BASE}/ndr`, { params });
 export const ndrAction = (body) => api.post(`${BASE}/ndr/action`, body);
+export const getNdrNotes = (params) => api.get(`${BASE}/ndr/notes`, { params });
+export const createNdrNote = (body) => api.post(`${BASE}/ndr/notes`, body);
+export const updateNdrNote = (id, body) => api.put(`${BASE}/ndr/notes/${id}`, body);
+export const deleteNdrNote = (id) => api.delete(`${BASE}/ndr/notes/${id}`);
 
 // ── Next order ID ─────────────────────────────────────────────────────────────
 export const getNextOrderId = () => api.get(`${BASE}/next-order-id`);

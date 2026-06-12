@@ -371,7 +371,7 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
                       .filter(p=>p===1||p===Math.ceil(returnsTotal/RETURNS_PER_PAGE)||Math.abs(p-returnsPage)<=1)
                       .reduce((acc,p,i,arr)=>{ if(i>0&&p-arr[i-1]>1) acc.push('…'); acc.push(p); return acc; },[])
                       .map((p,i)=> p==='…'
-                        ? <span key={i} className="px-1 text-xs text-gray-400">…</span>
+                        ? <span key={`ellipsis-${i}`} className="px-1 text-xs text-gray-400">…</span>
                         : <button key={p} onClick={()=>{ setReturnsPage(p); fetchReturns(p); }}
                             className={`w-8 h-8 rounded-lg text-xs font-bold border transition ${returnsPage===p?'bg-orange-500 text-white border-orange-500':'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{p}</button>
                       )}
@@ -566,7 +566,7 @@ export default function ShiprocketReturns({ initialTab = 'returns' }) {
                         .filter(p=>p===1||p===Math.ceil(txTotal/TX_PER_PAGE)||Math.abs(p-txPage)<=1)
                         .reduce((acc,p,i,arr)=>{ if(i>0&&p-arr[i-1]>1) acc.push('…'); acc.push(p); return acc; },[])
                         .map((p,i)=> p==='…'
-                          ? <span key={i} className="px-1 text-xs text-gray-400">…</span>
+                          ? <span key={`ellipsis-${i}`} className="px-1 text-xs text-gray-400">…</span>
                           : <button key={p} onClick={()=>{ setTxPage(p); fetchTransactions(txFrom,txTo,txStatus,p); }}
                               className={`w-8 h-8 rounded-lg text-xs font-bold border transition ${txPage===p?'bg-green-600 text-white border-green-600':'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{p}</button>
                         )}

@@ -24,6 +24,10 @@ import OrderDetail from './pages/OrderDetail';
 import AppointmentBook from './pages/AppointmentBook';
 import DoctorDashboard from './pages/DoctorDashboard';
 import ReorderCommission from './pages/ReorderCommission';
+import Shipmaxx from './pages/Shipmaxx';
+import NdrPage from './pages/NdrPage';
+import ShipmaxxNdr from './pages/ShipmaxxNdr';
+import ShipmaxxFollowup from './pages/ShipmaxxFollowup';
 
 function AppRoutes() {
   const { user } = useAuth();
@@ -88,10 +92,19 @@ function AppRoutes() {
           <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><Shiprocket initialSection="returns" initialReturnsTab="returns" /></ProtectedRoute>
         } />
         <Route path="shiprocket/ndr" element={
-          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><Shiprocket initialSection="returns" initialReturnsTab="ndr" /></ProtectedRoute>
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><NdrPage /></ProtectedRoute>
         } />
         <Route path="shiprocket/ndr/detail" element={
           <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics']}><NdrDetail /></ProtectedRoute>
+        } />
+        <Route path="shipmaxx" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics', 'support']}><Shipmaxx /></ProtectedRoute>
+        } />
+        <Route path="shipmaxx/ndr" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics', 'support']}><ShipmaxxNdr /></ProtectedRoute>
+        } />
+        <Route path="shipmaxx/followup" element={
+          <ProtectedRoute roles={['admin', 'manager', 'sales', 'logistics', 'support']}><ShipmaxxFollowup /></ProtectedRoute>
         } />
         <Route path="orders/:id" element={
           <ProtectedRoute roles={['admin', 'manager', 'sales', 'support', 'logistics']}><OrderDetail /></ProtectedRoute>
